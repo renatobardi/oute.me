@@ -15,7 +15,7 @@ COPY packages/ui/ ./packages/ui/
 COPY apps/web/ ./apps/web/
 COPY turbo.json ./
 RUN pnpm run build --filter=@oute/web
-RUN pnpm deploy --filter=@oute/web --prod /app/deployed
+RUN pnpm deploy --filter=@oute/web --prod --legacy /app/deployed
 
 # Production
 FROM node:24-slim AS runtime
