@@ -15,13 +15,7 @@ COPY packages/ui/ ./packages/ui/
 COPY apps/web/ ./apps/web/
 COPY turbo.json ./
 RUN pnpm run build --filter=@oute/web
-
-# Production deps only
-FROM base AS prod-deps
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-COPY apps/web/package.json ./apps/web/
-COPY packages/ui/package.json ./packages/ui/
-RUN pnpm install --frozen-lockfile --prod
+RUN pnpm deploy --filter=@oute/web --prod /app/deployed
 
 # Production
 FROM node:24-slim AS runtime
@@ -30,8 +24,8 @@ RUN addgroup --system --gid 1001 appgroup && \
 WORKDIR /app
 
 COPY --from=build --chown=appuser:appgroup /app/apps/web/build ./build
-COPY --from=build --chown=appuser:appgroup /app/apps/web/package.json ./
-COPY --from=prod-deps --chown=appuser:appgroup /app/node_modules ./node_modules
+COPY --from=build --chown=appuser:appgroup /app/deployed/node_modules ./node_modules
+COPY --from=build --chown=appuser:appgroup /app/deployed/package.json ./
 
 USER appuser
 
