@@ -3,8 +3,13 @@ import { sequence } from '@sveltejs/kit/hooks';
 import { verifyAuthToken } from '$lib/server/auth';
 import { rateLimit, securityHeaders } from '$lib/server/security';
 
-const redirectOutePro: Handle = async ({ event, resolve }) => {
+const redirectDomain: Handle = async ({ event, resolve }) => {
 	const host = event.request.headers.get('host') ?? '';
+	if (host.startsWith('www.')) {
+		const url = new URL(event.request.url);
+		url.hostname = url.hostname.replace('www.', '');
+		return Response.redirect(url.toString(), 301);
+	}
 	if (host.includes('oute.pro')) {
 		const url = new URL(event.request.url);
 		url.hostname = 'oute.me';
@@ -18,4 +23,4 @@ const authenticate: Handle = async ({ event, resolve }) => {
 	return resolve(event);
 };
 
-export const handle = sequence(redirectOutePro, rateLimit, authenticate, securityHeaders);
+export const handle = sequence(redirectDomain, rateLimit, authenticate, securityHeaders);
