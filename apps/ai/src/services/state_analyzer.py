@@ -27,8 +27,25 @@ async def analyze_and_update_state(
     try:
         analysis = await analyze_json(prompt)
     except Exception:
-        logger.exception("State analysis failed, keeping current state")
+        logger.warning(
+            "State analysis failed for interview — keeping current state. "
+            "Prompt length: %d chars",
+            len(prompt),
+        )
+        logger.exception("State analysis exception details")
         return current_state, calculate_maturity(current_state)
+
+    if not isinstance(analysis, dict):
+        logger.warning(
+            "State analysis returned non-dict response: %s",
+            repr(analysis)[:500],
+        )
+        return current_state, calculate_maturity(current_state)
+
+    logger.info(
+        "State analysis completed — domains_update keys: %s",
+        list(analysis.get("domains_update", {}).keys()) if isinstance(analysis.get("domains_update"), dict) else "none",
+    )
 
     updated = current_state.model_copy(deep=True)
 
