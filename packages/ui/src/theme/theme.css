@@ -1,0 +1,22 @@
+:root {
+	/* Backgrounds */
+	--color-dark-bg: #0f1117;
+	--color-dark-surface: #1a1d27;
+	--color-dark-sidebar: #2a2d3a;
+	--color-dark-border: rgba(255, 255, 255, 0.08);
+
+	/* Primary */
+	--color-primary-500: #6366f1;
+	--color-primary-600: #4f46e5;
+
+	/* Neutros */
+	--color-neutral-300: #d1d5db;
+	--color-neutral-500: #6b7280;
+	--color-neutral-700: #374151;
+
+	/* Semânticas */
+	--color-error: #ef4444;
+	--color-warning: #f59e0b;
+	--color-success: #10b981;
+	--color-info: #3b82f6;
+}

@@ -1,0 +1,146 @@
+name: PR Gate
+
+on:
+  pull_request:
+    branches: [develop, main]
+
+concurrency:
+  group: pr-${{ github.head_ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: "24"
+  PYTHON_VERSION: "3.12"
+  PNPM_VERSION: "10"
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # JavaScript / TypeScript (apps/web + packages/ui)
+  # ---------------------------------------------------------------------------
+  lint-ts:
+    name: Lint (TypeScript)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run lint
+
+  check-ts:
+    name: Type Check (Svelte)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run check
+
+  build-ts:
+    name: Build (TypeScript)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run build
+
+  test-ts:
+    name: Test (TypeScript)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run test
+
+  # ---------------------------------------------------------------------------
+  # Python (apps/ai)
+  # ---------------------------------------------------------------------------
+  lint-py:
+    name: Lint (Python)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - working-directory: apps/ai
+        run: uv sync --extra dev
+      - working-directory: apps/ai
+        run: uv run ruff check src/ tests/
+      - working-directory: apps/ai
+        run: uv run ruff format --check src/ tests/
+
+  typecheck-py:
+    name: Type Check (Python)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - working-directory: apps/ai
+        run: uv sync --extra dev
+      - working-directory: apps/ai
+        run: uv run mypy src/
+
+  test-py:
+    name: Test (Python)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - working-directory: apps/ai
+        run: uv sync --extra dev
+      - working-directory: apps/ai
+        run: uv run pytest --tb=short
+
+  # ---------------------------------------------------------------------------
+  # Summary status check (branch protection target)
+  # ---------------------------------------------------------------------------
+  pr-status:
+    name: PR Status Summary
+    runs-on: ubuntu-latest
+    if: always()
+    needs: [lint-ts, check-ts, build-ts, test-ts, lint-py, typecheck-py, test-py]
+    steps:
+      - name: Check all jobs
+        run: |
+          if [[ "${{ contains(needs.*.result, 'failure') }}" == "true" ]]; then
+            echo "One or more jobs failed"
+            exit 1
+          fi
+          if [[ "${{ contains(needs.*.result, 'cancelled') }}" == "true" ]]; then
+            echo "One or more jobs were cancelled"
+            exit 1
+          fi
+          echo "All checks passed"

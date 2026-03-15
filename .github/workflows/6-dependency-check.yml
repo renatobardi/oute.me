@@ -1,0 +1,38 @@
+name: Dependency Check
+
+on:
+  schedule:
+    - cron: "0 8 * * 1" # weekly on Monday at 08:00 UTC
+  workflow_dispatch:
+
+jobs:
+  outdated-js:
+    name: Outdated (JavaScript)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm outdated --recursive
+        continue-on-error: true
+
+  outdated-py:
+    name: Outdated (Python)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - working-directory: apps/ai
+        run: uv sync --extra dev
+      - working-directory: apps/ai
+        run: uv pip list --outdated
+        continue-on-error: true
