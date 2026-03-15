@@ -34,6 +34,11 @@ export function createChatState(
 	let domains = $state(initialDomains);
 	let currentStreamText = $state('');
 	let error = $state<string | null>(null);
+	let uploadError = $state<string | null>(null);
+
+	let totalTokensUsed = $derived(
+		messages.reduce((sum, m) => sum + Math.ceil(m.content.length / 4), 0)
+	);
 
 	async function sendMessage(text: string) {
 		if (isStreaming || !text.trim()) return;
@@ -116,6 +121,7 @@ export function createChatState(
 	}
 
 	async function uploadDocument(file: File): Promise<boolean> {
+		uploadError = null;
 		const formData = new FormData();
 		formData.append('file', file);
 
@@ -125,8 +131,15 @@ export function createChatState(
 				body: formData,
 			});
 
-			return response.ok;
-		} catch {
+			if (!response.ok) {
+				const errorText = await response.text().catch(() => 'Upload failed');
+				uploadError = `Erro no upload: ${errorText}`;
+				return false;
+			}
+
+			return true;
+		} catch (e) {
+			uploadError = e instanceof Error ? e.message : 'Erro ao enviar documento';
 			return false;
 		}
 	}
@@ -152,6 +165,15 @@ export function createChatState(
 		},
 		set error(value: string | null) {
 			error = value;
+		},
+		get uploadError() {
+			return uploadError;
+		},
+		set uploadError(value: string | null) {
+			uploadError = value;
+		},
+		get totalTokensUsed() {
+			return totalTokensUsed;
 		},
 		sendMessage,
 		uploadDocument,

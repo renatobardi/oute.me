@@ -2,6 +2,36 @@ import sql from './db';
 import { createDefaultState } from '$lib/types/interview';
 import type { Interview, InterviewMessage, InterviewDocument, InterviewState } from '$lib/types/interview';
 
+const REQUIRED_DOMAINS = ['scope', 'timeline', 'budget', 'integrations', 'tech_stack'] as const;
+
+function validateInterviewState(state: InterviewState): { valid: boolean; errors: string[] } {
+	const errors: string[] = [];
+
+	if (!state.domains || typeof state.domains !== 'object') {
+		errors.push('Missing or invalid domains object');
+		return { valid: false, errors };
+	}
+
+	for (const domain of REQUIRED_DOMAINS) {
+		const d = state.domains[domain];
+		if (!d) {
+			errors.push(`Missing required domain: ${domain}`);
+			continue;
+		}
+		if (typeof d.answered !== 'number') {
+			errors.push(`Domain ${domain}: missing or invalid 'answered' (number)`);
+		}
+		if (typeof d.total !== 'number') {
+			errors.push(`Domain ${domain}: missing or invalid 'total' (number)`);
+		}
+		if (typeof d.vital_answered !== 'boolean') {
+			errors.push(`Domain ${domain}: missing or invalid 'vital_answered' (boolean)`);
+		}
+	}
+
+	return { valid: errors.length === 0, errors };
+}
+
 export async function createInterview(userId: string, title?: string): Promise<Interview> {
 	const defaultState = createDefaultState();
 	const [row] = await sql<Interview[]>`
@@ -33,6 +63,11 @@ export async function updateInterviewState(
 	state: InterviewState,
 	maturity: number
 ): Promise<void> {
+	const validation = validateInterviewState(state);
+	if (!validation.valid) {
+		throw new Error(`Invalid interview state: ${validation.errors.join('; ')}`);
+	}
+
 	await sql`
 		UPDATE public.interviews
 		SET state = ${sql.json(state)}, maturity = ${maturity}
