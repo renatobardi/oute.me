@@ -12,8 +12,9 @@ COPY apps/ai/src/ ./src/
 
 # Create non-root user
 RUN addgroup --system --gid 1001 appgroup && \
-    adduser --system --uid 1001 --ingroup appgroup appuser && \
-    chown -R appuser:appgroup /app
+    adduser --system --uid 1001 --ingroup appgroup --home /home/appuser appuser && \
+    mkdir -p /home/appuser/.local/share && \
+    chown -R appuser:appgroup /app /home/appuser
 
 USER appuser
 
