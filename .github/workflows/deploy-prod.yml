@@ -36,17 +36,23 @@ jobs:
           gcloud auth configure-docker ${{ env.GCP_REGION }}-docker.pkg.dev --quiet
           docker build \
             -f apps/web/Dockerfile \
-            -t ${{ env.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ env.AR_REPO }}/oute-web:${{ github.sha }} \
-            -t ${{ env.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ env.AR_REPO }}/oute-web:latest \
+            -t ${{ env.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ env.AR_REPO }}/oute-web:${{ github.sha }} \
+            -t ${{ env.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ env.AR_REPO }}/oute-web:latest \
             .
-          docker push ${{ env.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ env.AR_REPO }}/oute-web --all-tags
+          docker push ${{ env.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ env.AR_REPO }}/oute-web --all-tags
+
+      - name: Get AI service URL
+        id: ai-url
+        run: |
+          URL=$(gcloud run services describe oute-ai-prod --region=${{ env.GCP_REGION }} --format='value(status.url)' 2>/dev/null || echo "")
+          echo "url=${URL}" >> "$GITHUB_OUTPUT"
 
       - name: Deploy to Cloud Run
         uses: google-github-actions/deploy-cloudrun@v2
         with:
           service: oute-web-prod
           region: ${{ env.GCP_REGION }}
-          image: ${{ env.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ env.AR_REPO }}/oute-web:${{ github.sha }}
+          image: ${{ env.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ env.AR_REPO }}/oute-web:${{ github.sha }}
           flags: |
             --memory=512Mi
             --cpu=1
@@ -56,7 +62,16 @@ jobs:
             --concurrency=80
             --allow-unauthenticated
             --vpc-connector=oute-vpc-connector
-            --set-env-vars=NODE_ENV=production
+            --add-cloudsql-instances=${{ secrets.GCP_PROJECT_ID }}:${{ env.GCP_REGION }}:oute-postgres
+            --service-account=${{ secrets.GCP_SERVICE_ACCOUNT }}
+          env_vars: |
+            NODE_ENV=production
+            FIREBASE_PROJECT_ID=${{ secrets.GCP_PROJECT_ID }}
+            PUBLIC_FIREBASE_API_KEY=${{ secrets.PUBLIC_FIREBASE_API_KEY }}
+            PUBLIC_FIREBASE_AUTH_DOMAIN=${{ secrets.GCP_PROJECT_ID }}.firebaseapp.com
+            AI_SERVICE_URL=${{ steps.ai-url.outputs.url }}
+          secrets: |
+            DATABASE_URL=DATABASE_URL_PROD:latest
 
   deploy-ai:
     name: Deploy AI (PROD)
@@ -77,17 +92,17 @@ jobs:
           gcloud auth configure-docker ${{ env.GCP_REGION }}-docker.pkg.dev --quiet
           docker build \
             -f apps/ai/Dockerfile \
-            -t ${{ env.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ env.AR_REPO }}/oute-ai:${{ github.sha }} \
-            -t ${{ env.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ env.AR_REPO }}/oute-ai:latest \
+            -t ${{ env.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ env.AR_REPO }}/oute-ai:${{ github.sha }} \
+            -t ${{ env.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ env.AR_REPO }}/oute-ai:latest \
             .
-          docker push ${{ env.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ env.AR_REPO }}/oute-ai --all-tags
+          docker push ${{ env.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ env.AR_REPO }}/oute-ai --all-tags
 
       - name: Deploy to Cloud Run
         uses: google-github-actions/deploy-cloudrun@v2
         with:
           service: oute-ai-prod
           region: ${{ env.GCP_REGION }}
-          image: ${{ env.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ env.AR_REPO }}/oute-ai:${{ github.sha }}
+          image: ${{ env.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ env.AR_REPO }}/oute-ai:${{ github.sha }}
           flags: |
             --memory=2Gi
             --cpu=1
@@ -97,7 +112,14 @@ jobs:
             --concurrency=10
             --no-allow-unauthenticated
             --vpc-connector=oute-vpc-connector
-            --set-env-vars=ENVIRONMENT=production
+            --add-cloudsql-instances=${{ secrets.GCP_PROJECT_ID }}:${{ env.GCP_REGION }}:oute-postgres
+            --service-account=${{ secrets.GCP_SERVICE_ACCOUNT }}
+          env_vars: |
+            ENVIRONMENT=production
+            GOOGLE_CLOUD_STORAGE_BUCKET=oute-prod-uploads
+          secrets: |
+            DATABASE_URL=DATABASE_URL_PROD:latest
+            GEMINI_API_KEY=GEMINI_API_KEY:latest
 
   smoke-test:
     name: Smoke Test
