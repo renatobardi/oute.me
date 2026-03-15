@@ -2,12 +2,12 @@ FROM node:24-slim AS base
 RUN corepack enable && corepack prepare pnpm@10 --activate
 WORKDIR /app
 
-# Install dependencies
+# Install all dependencies
 FROM base AS deps
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY apps/web/package.json ./apps/web/
 COPY packages/ui/package.json ./packages/ui/
-RUN pnpm install --frozen-lockfile --prod=false
+RUN pnpm install --frozen-lockfile
 
 # Build
 FROM deps AS build
@@ -15,6 +15,13 @@ COPY packages/ui/ ./packages/ui/
 COPY apps/web/ ./apps/web/
 COPY turbo.json ./
 RUN pnpm run build --filter=@oute/web
+
+# Production deps only
+FROM base AS prod-deps
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY apps/web/package.json ./apps/web/
+COPY packages/ui/package.json ./packages/ui/
+RUN pnpm install --frozen-lockfile --prod
 
 # Production
 FROM node:24-slim AS runtime
@@ -24,6 +31,7 @@ WORKDIR /app
 
 COPY --from=build --chown=appuser:appgroup /app/apps/web/build ./build
 COPY --from=build --chown=appuser:appgroup /app/apps/web/package.json ./
+COPY --from=prod-deps --chown=appuser:appgroup /app/node_modules ./node_modules
 
 USER appuser
 
