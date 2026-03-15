@@ -136,14 +136,12 @@ phase1() {
     gcloud sql instances create "$SQL_INSTANCE" \
       --database-version="$SQL_VERSION" \
       --tier="$SQL_TIER_DEV" \
+      --edition=ENTERPRISE \
       --region="$REGION" \
       --storage-type=SSD \
       --storage-size=10GB \
       --storage-auto-increase \
-      --availability-type=zonal \
-      --no-assign-ip \
-      --network=default \
-      --enable-google-private-path
+      --availability-type=zonal
   fi
 
   # Databases

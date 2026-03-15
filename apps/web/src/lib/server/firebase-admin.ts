@@ -1,4 +1,4 @@
-import { initializeApp, cert, getApps, type App } from 'firebase-admin/app';
+import { initializeApp, applicationDefault, cert, getApps, type App } from 'firebase-admin/app';
 import { getAuth, type Auth } from 'firebase-admin/auth';
 import { env } from '$env/dynamic/private';
 
@@ -12,16 +12,21 @@ function getFirebaseAdmin(): App {
 	const clientEmail = env.FIREBASE_CLIENT_EMAIL;
 	const privateKey = env.FIREBASE_PRIVATE_KEY;
 
-	if (!projectId || !clientEmail || !privateKey) {
-		throw new Error('Missing Firebase Admin environment variables');
+	// If all credentials are provided, use cert (local dev)
+	if (projectId && clientEmail && privateKey) {
+		return initializeApp({
+			credential: cert({
+				projectId,
+				clientEmail,
+				privateKey: privateKey.replace(/\\n/g, '\n'),
+			}),
+		});
 	}
 
+	// Otherwise use Application Default Credentials (Cloud Run)
 	return initializeApp({
-		credential: cert({
-			projectId,
-			clientEmail,
-			privateKey: privateKey.replace(/\\n/g, '\n'),
-		}),
+		credential: applicationDefault(),
+		projectId: projectId || undefined,
 	});
 }
 

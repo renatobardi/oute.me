@@ -36,22 +36,37 @@ jobs:
           gcloud auth configure-docker ${{ env.GCP_REGION }}-docker.pkg.dev --quiet
           docker build \
             -f apps/web/Dockerfile \
-            -t ${{ env.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ env.AR_REPO }}/oute-web:${{ github.sha }} \
+            -t ${{ env.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ env.AR_REPO }}/oute-web:${{ github.sha }} \
             .
-          docker push ${{ env.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ env.AR_REPO }}/oute-web:${{ github.sha }}
+          docker push ${{ env.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ env.AR_REPO }}/oute-web:${{ github.sha }}
+
+      - name: Get AI service URL
+        id: ai-url
+        run: |
+          URL=$(gcloud run services describe oute-ai-dev --region=${{ env.GCP_REGION }} --format='value(status.url)' 2>/dev/null || echo "")
+          echo "url=${URL}" >> "$GITHUB_OUTPUT"
 
       - name: Deploy to Cloud Run
         uses: google-github-actions/deploy-cloudrun@v2
         with:
           service: oute-web-dev
           region: ${{ env.GCP_REGION }}
-          image: ${{ env.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ env.AR_REPO }}/oute-web:${{ github.sha }}
+          image: ${{ env.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ env.AR_REPO }}/oute-web:${{ github.sha }}
           flags: |
             --memory=256Mi
             --min-instances=0
             --max-instances=2
             --allow-unauthenticated
             --vpc-connector=oute-vpc-connector
+            --add-cloudsql-instances=${{ secrets.GCP_PROJECT_ID }}:${{ env.GCP_REGION }}:oute-postgres
+            --service-account=${{ secrets.GCP_SERVICE_ACCOUNT }}
+          env_vars: |
+            FIREBASE_PROJECT_ID=${{ secrets.GCP_PROJECT_ID }}
+            PUBLIC_FIREBASE_API_KEY=${{ secrets.PUBLIC_FIREBASE_API_KEY }}
+            PUBLIC_FIREBASE_AUTH_DOMAIN=${{ secrets.GCP_PROJECT_ID }}.firebaseapp.com
+            AI_SERVICE_URL=${{ steps.ai-url.outputs.url }}
+          secrets: |
+            DATABASE_URL=DATABASE_URL_DEV:latest
 
   deploy-ai:
     name: Deploy AI (DEV)
@@ -72,22 +87,30 @@ jobs:
           gcloud auth configure-docker ${{ env.GCP_REGION }}-docker.pkg.dev --quiet
           docker build \
             -f apps/ai/Dockerfile \
-            -t ${{ env.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ env.AR_REPO }}/oute-ai:${{ github.sha }} \
+            -t ${{ env.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ env.AR_REPO }}/oute-ai:${{ github.sha }} \
             .
-          docker push ${{ env.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ env.AR_REPO }}/oute-ai:${{ github.sha }}
+          docker push ${{ env.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ env.AR_REPO }}/oute-ai:${{ github.sha }}
 
       - name: Deploy to Cloud Run
         uses: google-github-actions/deploy-cloudrun@v2
         with:
           service: oute-ai-dev
           region: ${{ env.GCP_REGION }}
-          image: ${{ env.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ env.AR_REPO }}/oute-ai:${{ github.sha }}
+          image: ${{ env.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ env.AR_REPO }}/oute-ai:${{ github.sha }}
           flags: |
             --memory=1Gi
             --min-instances=0
             --max-instances=2
             --no-allow-unauthenticated
             --vpc-connector=oute-vpc-connector
+            --add-cloudsql-instances=${{ secrets.GCP_PROJECT_ID }}:${{ env.GCP_REGION }}:oute-postgres
+            --service-account=${{ secrets.GCP_SERVICE_ACCOUNT }}
+          env_vars: |
+            ENVIRONMENT=development
+            GOOGLE_CLOUD_STORAGE_BUCKET=oute-dev-uploads
+          secrets: |
+            DATABASE_URL=DATABASE_URL_DEV:latest
+            GEMINI_API_KEY=GEMINI_API_KEY:latest
 
   health-check:
     name: Health Check
