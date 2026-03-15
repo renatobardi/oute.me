@@ -1,0 +1,7 @@
+.svelte-kit
+dist
+node_modules
+build
+*.md
+pnpm-lock.yaml
+apps/ai/

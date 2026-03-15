@@ -1,0 +1,33 @@
+{
+	"name": "oute.me",
+	"private": true,
+	"type": "module",
+	"packageManager": "pnpm@10.30.3",
+	"engines": {
+		"node": ">=24.0.0",
+		"pnpm": ">=10.0.0"
+	},
+	"scripts": {
+		"dev": "turbo run dev",
+		"build": "turbo run build",
+		"lint": "turbo run lint",
+		"lint:py": "cd apps/ai && uv run ruff check src/ tests/",
+		"format": "turbo run format",
+		"format:py": "cd apps/ai && uv run ruff format src/ tests/",
+		"test": "turbo run test",
+		"test:py": "cd apps/ai && uv run pytest",
+		"check": "turbo run check",
+		"typecheck:py": "cd apps/ai && uv run mypy src/"
+	},
+	"devDependencies": {
+		"@eslint/js": "^9.28.0",
+		"eslint": "^9.28.0",
+		"eslint-plugin-svelte": "^3.9.0",
+		"globals": "^16.2.0",
+		"prettier": "^3.5.3",
+		"prettier-plugin-svelte": "^3.5.1",
+		"turbo": "^2.5.4",
+		"typescript": "^5.8.3",
+		"typescript-eslint": "^8.33.1"
+	}
+}

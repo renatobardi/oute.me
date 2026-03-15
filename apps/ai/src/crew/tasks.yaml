@@ -1,0 +1,195 @@
+consolidate_requirements:
+  description: >
+    Analise o estado da entrevista e o resumo da conversa para consolidar
+    todos os requisitos técnicos identificados.
+
+    Estado da entrevista:
+    {interview_state}
+
+    Resumo da conversa:
+    {conversation_summary}
+
+    Contexto de documentos:
+    {documents_context}
+
+    Organize os requisitos em:
+    1. Requisitos funcionais
+    2. Requisitos não-funcionais
+    3. Integrações necessárias
+    4. Restrições técnicas
+    5. Tecnologias mencionadas ou inferidas
+  expected_output: >
+    Um documento JSON com a estrutura:
+    {
+      "functional_requirements": ["..."],
+      "non_functional_requirements": ["..."],
+      "integrations": ["..."],
+      "constraints": ["..."],
+      "technologies": ["..."],
+      "complexity_assessment": "low|medium|high|very_high"
+    }
+  agent: architecture_interviewer
+
+search_similar_projects:
+  description: >
+    Com base nos requisitos consolidados, busque projetos similares na base
+    de conhecimento vetorial. Use a ferramenta de busca vetorial para encontrar
+    projetos com escopo, tecnologias e complexidade comparáveis.
+
+    Requisitos consolidados:
+    {consolidated_requirements}
+
+    Gere uma query de busca eficiente e analise os resultados encontrados,
+    extraindo métricas úteis como custo médio, prazo e tamanho de equipe.
+  expected_output: >
+    Um documento JSON com:
+    {
+      "similar_projects": [
+        {
+          "summary": "...",
+          "relevance_score": 0.0,
+          "metrics": {"cost": 0, "duration_weeks": 0, "team_size": 0}
+        }
+      ],
+      "market_benchmarks": {
+        "avg_cost_per_hour": 0,
+        "typical_duration_weeks": 0,
+        "typical_team_size": 0
+      }
+    }
+  agent: rag_analyst
+
+design_architecture:
+  description: >
+    Com base nos requisitos consolidados e projetos similares, proponha
+    uma arquitetura técnica e cronograma de implementação.
+
+    Requisitos:
+    {consolidated_requirements}
+
+    Projetos similares:
+    {similar_projects}
+
+    Defina:
+    1. Visão geral da arquitetura
+    2. Milestones com duração, entregáveis e dependências
+    3. Recomendações tecnológicas com justificativa
+    4. Riscos técnicos com mitigação
+  expected_output: >
+    Um documento JSON com:
+    {
+      "architecture_overview": "...",
+      "milestones": [
+        {
+          "name": "...",
+          "description": "...",
+          "duration_weeks": 0,
+          "deliverables": ["..."],
+          "dependencies": ["..."]
+        }
+      ],
+      "tech_recommendations": [
+        {"category": "...", "technology": "...", "justification": "..."}
+      ],
+      "risks": [
+        {"description": "...", "impact": "high|medium|low", "mitigation": "...", "probability": "high|medium|low"}
+      ]
+    }
+  agent: software_architect
+
+estimate_costs:
+  description: >
+    Com base na arquitetura proposta e métricas de projetos similares,
+    elabore 3 cenários de custos.
+
+    Arquitetura:
+    {architecture}
+
+    Projetos similares:
+    {similar_projects}
+
+    Para cada cenário (conservador, moderado, otimista), defina:
+    - Total de horas estimadas
+    - Taxa horária sugerida
+    - Custo total
+    - Duração em semanas
+    - Tamanho da equipe
+    - Nível de confiança (0.0 a 1.0)
+  expected_output: >
+    Um documento JSON com:
+    {
+      "scenarios": [
+        {
+          "name": "conservador",
+          "description": "...",
+          "total_hours": 0,
+          "hourly_rate": 0.0,
+          "total_cost": 0.0,
+          "duration_weeks": 0,
+          "team_size": 0,
+          "confidence": 0.0
+        }
+      ]
+    }
+  agent: cost_specialist
+
+review_and_summarize:
+  description: >
+    Revise toda a estimativa para garantir consistência e gere um sumário
+    executivo.
+
+    Requisitos:
+    {consolidated_requirements}
+
+    Arquitetura:
+    {architecture}
+
+    Cenários de custo:
+    {cost_scenarios}
+
+    Verifique:
+    1. Consistência entre milestones e custos
+    2. Cobertura de todos os requisitos
+    3. Realismo dos prazos
+    4. Completude das mitigações de risco
+
+    Gere um sumário executivo de 3-5 parágrafos.
+  expected_output: >
+    Um documento JSON com:
+    {
+      "validation": {
+        "is_consistent": true,
+        "issues_found": [],
+        "adjustments_made": []
+      },
+      "executive_summary": "..."
+    }
+  agent: reviewer
+
+prepare_knowledge:
+  description: >
+    Prepare os dados da estimativa para armazenamento na base de conhecimento.
+    Extraia informações-chave que serão úteis para busca futura.
+
+    Resultado completo da estimativa:
+    {full_estimate}
+
+    Gere um texto resumido que capture:
+    - Tipo de projeto e escopo
+    - Tecnologias utilizadas
+    - Faixa de custo e prazo
+    - Complexidade e tamanho da equipe
+  expected_output: >
+    Um documento JSON com:
+    {
+      "knowledge_text": "...",
+      "metadata": {
+        "project_type": "...",
+        "technologies": ["..."],
+        "complexity": "...",
+        "cost_range": {"min": 0, "max": 0},
+        "duration_range": {"min_weeks": 0, "max_weeks": 0},
+        "team_size_range": {"min": 0, "max": 0}
+      }
+    }
+  agent: knowledge_manager
