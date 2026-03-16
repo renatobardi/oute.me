@@ -2,10 +2,19 @@
 	import { goto } from '$app/navigation';
 	import { Button } from '@oute/ui';
 	import { auth } from '$lib/firebase';
-	import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
+	import { GoogleAuthProvider, signInWithPopup, type AuthError } from 'firebase/auth';
 
 	let loading = $state(false);
 	let error = $state('');
+
+	const errorMessages: Record<string, string> = {
+		'auth/popup-closed-by-user': 'Popup fechado antes de concluir o login.',
+		'auth/popup-blocked': 'Popup bloqueado pelo navegador. Permita popups para este site.',
+		'auth/cancelled-popup-request': 'Login cancelado.',
+		'auth/unauthorized-domain': 'Domínio não autorizado no Firebase. Adicione este domínio em Authentication → Settings → Authorized domains.',
+		'auth/internal-error': 'Erro interno do Firebase. Verifique se a API Key e o Auth Domain estão corretos.',
+		'auth/invalid-api-key': 'API Key do Firebase inválida. Verifique a variável PUBLIC_FIREBASE_API_KEY.',
+	};
 
 	async function loginWithGoogle() {
 		loading = true;
@@ -16,8 +25,10 @@
 			await signInWithPopup(auth, provider);
 			await goto('/interviews');
 		} catch (err) {
-			error = 'Falha ao fazer login. Tente novamente.';
-			console.error('Login error:', err);
+			const authErr = err as AuthError;
+			const code = authErr?.code || '';
+			error = errorMessages[code] || `Falha ao fazer login (${code || 'unknown'}). Tente novamente.`;
+			console.error('Login error:', code, authErr?.message);
 		} finally {
 			loading = false;
 		}
