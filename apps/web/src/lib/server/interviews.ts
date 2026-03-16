@@ -36,7 +36,7 @@ export async function createInterview(userId: string, title?: string): Promise<I
 	const defaultState = createDefaultState();
 	const [row] = await sql<Interview[]>`
 		INSERT INTO public.interviews (user_id, title, state)
-		VALUES (${userId}, ${title ?? null}, ${sql.json(defaultState)})
+		VALUES (${userId}, ${title ?? null}, ${sql.json(defaultState as unknown as Record<string, unknown>)})
 		RETURNING *
 	`;
 	return row;
@@ -70,7 +70,7 @@ export async function updateInterviewState(
 
 	await sql`
 		UPDATE public.interviews
-		SET state = ${sql.json(state)}, maturity = ${maturity}
+		SET state = ${sql.json(state as unknown as Record<string, unknown>)}, maturity = ${maturity}
 		WHERE id = ${interviewId}
 	`;
 }
