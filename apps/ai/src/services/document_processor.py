@@ -39,9 +39,9 @@ async def extract_text(file_bytes: bytes, mime_type: str, filename: str) -> str:
 def _extract_pdf(file_bytes: bytes) -> str:
     import pymupdf
 
-    doc = pymupdf.open(stream=file_bytes, filetype="pdf")
-    text = "\n".join(page.get_text() for page in doc)
-    doc.close()
+    doc = pymupdf.open(stream=file_bytes, filetype="pdf")  # type: ignore[no-untyped-call]
+    text = "\n".join(page.get_text() for page in doc)  # type: ignore[attr-defined]
+    doc.close()  # type: ignore[no-untyped-call]
     return text[:MAX_EXTRACTED_LENGTH]
 
 
@@ -73,7 +73,7 @@ def _extract_csv(file_bytes: bytes) -> str:
     import pandas as pd
 
     df = pd.read_csv(io.BytesIO(file_bytes))
-    return df.to_string(max_rows=200)[:MAX_EXTRACTED_LENGTH]
+    return str(df.to_string(max_rows=200))[:MAX_EXTRACTED_LENGTH]
 
 
 def _extract_pptx(file_bytes: bytes) -> str:
@@ -108,11 +108,15 @@ async def _extract_image(file_bytes: bytes, mime_type: str) -> str:
         " para estimativa de um projeto de software."
         " Inclua textos, diagramas, fluxos, e qualquer informação técnica visível."
     )
-    b64 = base64.standard_b64encode(file_bytes).decode("utf-8")
-    contents = Content(parts=[
-        Part(text=prompt),
-        Part(inline_data={"mime_type": mime_type, "data": b64}),
-    ])
+    from google.genai.types import Blob
+
+    b64_data = base64.standard_b64encode(file_bytes)
+    contents = Content(
+        parts=[
+            Part(text=prompt),
+            Part(inline_data=Blob(mime_type=mime_type, data=b64_data)),
+        ]
+    )
     response = await client.aio.models.generate_content(
         model="gemini-2.5-flash-lite",
         contents=contents,

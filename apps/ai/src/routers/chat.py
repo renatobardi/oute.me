@@ -1,3 +1,5 @@
+from collections.abc import AsyncGenerator
+
 from fastapi import APIRouter, UploadFile
 from sse_starlette.sse import EventSourceResponse
 from starlette.responses import JSONResponse
@@ -11,7 +13,7 @@ router = APIRouter()
 
 @router.post("/message")
 async def chat_message(request: ChatRequest) -> EventSourceResponse:
-    async def event_generator():  # type: ignore[no-untyped-def]
+    async def event_generator() -> AsyncGenerator[str, None]:
         async for event in process_message(request):
             yield event
 
@@ -26,8 +28,10 @@ async def process_document(file: UploadFile) -> JSONResponse:
 
     extracted = await extract_text(file_bytes, mime_type, filename)
 
-    return JSONResponse({
-        "extracted_text": extracted,
-        "filename": filename,
-        "status": "completed" if not extracted.startswith("[Erro") else "failed",
-    })
+    return JSONResponse(
+        {
+            "extracted_text": extracted,
+            "filename": filename,
+            "status": "completed" if not extracted.startswith("[Erro") else "failed",
+        }
+    )

@@ -28,8 +28,7 @@ async def analyze_and_update_state(
         analysis = await analyze_json(prompt)
     except Exception:
         logger.warning(
-            "State analysis failed for interview — keeping current state. "
-            "Prompt length: %d chars",
+            "State analysis failed for interview — keeping current state. Prompt length: %d chars",
             len(prompt),
         )
         logger.exception("State analysis exception details")
@@ -42,10 +41,9 @@ async def analyze_and_update_state(
         )
         return current_state, calculate_maturity(current_state)
 
-    logger.info(
-        "State analysis completed — domains_update keys: %s",
-        list(analysis.get("domains_update", {}).keys()) if isinstance(analysis.get("domains_update"), dict) else "none",
-    )
+    domains_upd = analysis.get("domains_update")
+    domain_keys = list(domains_upd.keys()) if isinstance(domains_upd, dict) else "none"
+    logger.info("State analysis completed — domains_update keys: %s", domain_keys)
 
     updated = current_state.model_copy(deep=True)
 
