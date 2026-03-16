@@ -61,15 +61,15 @@ async def _run_pipeline(
                     metadata = json.loads(metadata)
                 except json.JSONDecodeError:
                     metadata = {}
-            metadata["interview_id"] = interview_id  # type: ignore[index]
-            metadata["estimate_job_id"] = job_id  # type: ignore[index]
+            metadata["interview_id"] = interview_id
+            metadata["estimate_job_id"] = job_id
 
             if knowledge:
                 await store_vector(
                     source_type="estimate",
                     source_id=interview_id,
                     content=str(knowledge),
-                    metadata=metadata,  # type: ignore[arg-type]
+                    metadata=metadata,
                 )
         except Exception:
             logger.exception("Failed to store knowledge vector for job %s", job_id)

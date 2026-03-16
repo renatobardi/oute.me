@@ -1,8 +1,13 @@
+from __future__ import annotations
+
 import json
-from datetime import datetime, timedelta, timezone
-from typing import Protocol
+from datetime import UTC, datetime, timedelta
+from typing import TYPE_CHECKING, Protocol
 
 from src.config import settings
+
+if TYPE_CHECKING:
+    import asyncpg
 
 JOB_TTL_HOURS = 24
 
@@ -48,14 +53,14 @@ class PostgresStateBackend:
     def __init__(self, database_url: str) -> None:
         self._database_url = database_url
 
-    async def _get_pool(self):  # type: ignore[no-untyped-def]
+    async def _get_pool(self) -> asyncpg.Pool:
         from src.services.database import get_pool
 
         return await get_pool()
 
     async def create_job(self, job_id: str, payload: dict[str, object]) -> None:
         pool = await self._get_pool()
-        expires = datetime.now(timezone.utc) + timedelta(hours=JOB_TTL_HOURS)
+        expires = datetime.now(UTC) + timedelta(hours=JOB_TTL_HOURS)
         await pool.execute(
             """INSERT INTO ai.job_state (job_id, status, payload, expires_at)
                VALUES ($1, 'pending', $2::jsonb, $3)""",
@@ -95,4 +100,4 @@ class PostgresStateBackend:
 def create_state_backend() -> StateBackend:
     if settings.redis_url:
         return RedisStateBackend(settings.redis_url)
-    return PostgresStateBackend(settings.database_url)  # type: ignore[return-value]
+    return PostgresStateBackend(settings.database_url)

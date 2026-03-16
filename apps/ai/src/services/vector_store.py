@@ -47,4 +47,5 @@ async def store_vector(
         str(embedding),
         json.dumps(metadata),
     )
-    return str(row["id"])  # type: ignore[index]
+    assert row is not None, "INSERT RETURNING should always return a row"
+    return str(row["id"])
