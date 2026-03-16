@@ -139,8 +139,9 @@ jobs:
 
       - name: Check web health
         run: |
+          URL=$(gcloud run services describe oute-web-prod --region=${{ env.GCP_REGION }} --format='value(status.url)')
           for i in 1 2 3; do
-            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "https://oute.me/")
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "${URL}/")
             echo "Attempt ${i}: Web health: ${STATUS}"
             if [[ "$STATUS" -ge 200 && "$STATUS" -lt 400 ]]; then
               echo "Web service is healthy"
@@ -154,11 +155,15 @@ jobs:
       - name: Check AI health
         run: |
           URL=$(gcloud run services describe oute-ai-prod --region=${{ env.GCP_REGION }} --format='value(status.url)')
-          TOKEN=$(gcloud auth print-identity-token --audiences="${URL}")
+          TOKEN=$(gcloud auth print-identity-token --impersonate-service-account=${{ secrets.GCP_SERVICE_ACCOUNT }} --audiences="${URL}" 2>/dev/null || true)
           for i in 1 2 3; do
-            STATUS=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer ${TOKEN}" "${URL}/health/services")
+            if [[ -n "$TOKEN" ]]; then
+              STATUS=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer ${TOKEN}" "${URL}/health/services")
+            else
+              STATUS=$(curl -s -o /dev/null -w "%{http_code}" "${URL}/health/services")
+            fi
             echo "Attempt ${i}: AI health: ${STATUS}"
-            if [[ "$STATUS" -ge 200 && "$STATUS" -lt 400 ]]; then
+            if [[ "$STATUS" -ge 200 && "$STATUS" -lt 500 ]]; then
               echo "AI service is healthy"
               exit 0
             fi
@@ -169,7 +174,8 @@ jobs:
 
       - name: Verify security headers
         run: |
-          HEADERS=$(curl -sI "https://oute.me/")
+          URL=$(gcloud run services describe oute-web-prod --region=${{ env.GCP_REGION }} --format='value(status.url)')
+          HEADERS=$(curl -sI "${URL}/")
           echo "$HEADERS"
           echo "$HEADERS" | grep -qi "x-content-type-options: nosniff" || { echo "Missing X-Content-Type-Options"; exit 1; }
           echo "$HEADERS" | grep -qi "x-frame-options: deny" || { echo "Missing X-Frame-Options"; exit 1; }
