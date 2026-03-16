@@ -99,7 +99,7 @@ export const POST: RequestHandler = async ({ locals, params, request }) => {
 					const { done, value } = await reader.read();
 					if (done) break;
 
-					buffer += decoder.decode(value, { stream: true });
+					buffer += decoder.decode(value, { stream: true }).replace(/\r\n/g, '\n');
 					const events = buffer.split('\n\n');
 					buffer = events.pop() || '';
 
