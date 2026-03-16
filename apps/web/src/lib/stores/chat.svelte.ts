@@ -1,5 +1,6 @@
 import type { InterviewMessage } from '$lib/types/interview';
 import type { DomainState } from '$lib/types/interview';
+import { auth } from '$lib/firebase';
 
 interface ChatMessage {
 	id: string;
@@ -8,7 +9,24 @@ interface ChatMessage {
 	timestamp: string;
 }
 
-function formatTime(date: Date | string): string {
+interface ChatDocument {
+	id: string;
+	filename: string;
+	status: 'pending' | 'processing' | 'completed' | 'failed';
+	mime_type: string;
+}
+
+async function getAuthHeaders(): Promise<Record<string, string>> {
+	try {
+		const token = await auth.currentUser?.getIdToken(false);
+		if (!token) return {};
+		return { Authorization: `Bearer ${token}` };
+	} catch {
+		return {};
+	}
+}
+
+function formatTime(date: Date | string | number): string {
 	return new Date(date).toLocaleTimeString('pt-BR', {
 		hour: '2-digit',
 		minute: '2-digit',
@@ -19,7 +37,8 @@ export function createChatState(
 	interviewId: string,
 	initialMessages: InterviewMessage[],
 	initialMaturity: number,
-	initialDomains: Record<string, DomainState>
+	initialDomains: Record<string, DomainState>,
+	initialDocuments: ChatDocument[]
 ) {
 	let messages = $state<ChatMessage[]>(
 		initialMessages.map((m) => ({
@@ -35,6 +54,7 @@ export function createChatState(
 	let currentStreamText = $state('');
 	let error = $state<string | null>(null);
 	let uploadError = $state<string | null>(null);
+	let documents = $state<ChatDocument[]>(initialDocuments);
 
 	let totalTokensUsed = $derived(
 		messages.reduce((sum, m) => sum + Math.ceil(m.content.length / 4), 0)
@@ -56,9 +76,10 @@ export function createChatState(
 		messages = [...messages, userMsg];
 
 		try {
+			const authHeaders = await getAuthHeaders();
 			const response = await fetch(`/api/chat/${interviewId}/message`, {
 				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
+				headers: { 'Content-Type': 'application/json', ...authHeaders },
 				body: JSON.stringify({ message: text }),
 			});
 
@@ -122,12 +143,14 @@ export function createChatState(
 
 	async function uploadDocument(file: File): Promise<boolean> {
 		uploadError = null;
+		const authHeaders = await getAuthHeaders();
 		const formData = new FormData();
 		formData.append('file', file);
 
 		try {
 			const response = await fetch(`/api/chat/${interviewId}/upload`, {
 				method: 'POST',
+				headers: { ...authHeaders },
 				body: formData,
 			});
 
@@ -135,6 +158,16 @@ export function createChatState(
 				const errorText = await response.text().catch(() => 'Upload failed');
 				uploadError = `Erro no upload: ${errorText}`;
 				return false;
+			}
+
+			const data = await response.json();
+			if (data.document) {
+				documents = [...documents, {
+					id: data.document.id,
+					filename: data.document.filename,
+					status: data.document.status,
+					mime_type: file.type,
+				}];
 			}
 
 			return true;
@@ -171,6 +204,9 @@ export function createChatState(
 		},
 		set uploadError(value: string | null) {
 			uploadError = value;
+		},
+		get documents() {
+			return documents;
 		},
 		get totalTokensUsed() {
 			return totalTokensUsed;
