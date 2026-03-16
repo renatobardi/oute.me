@@ -10,7 +10,13 @@
 		data.interview.id,
 		data.messages,
 		data.interview.maturity,
-		data.interview.state.domains
+		data.interview.state.domains,
+		data.documents.map((d: { id: string; filename: string; status: string; mime_type: string }) => ({
+			id: d.id,
+			filename: d.filename,
+			status: d.status as 'pending' | 'processing' | 'completed' | 'failed',
+			mime_type: d.mime_type,
+		}))
 	);
 
 	let inputText = $state('');
@@ -71,6 +77,12 @@
 		await chat.uploadDocument(file);
 		if (fileInput) fileInput.value = '';
 	}
+
+	function autoResize(e: Event) {
+		const el = e.target as HTMLTextAreaElement;
+		el.style.height = 'auto';
+		el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+	}
 </script>
 
 <svelte:head>
@@ -115,14 +127,14 @@
 			</div>
 		{/if}
 
-		{#if data.documents.length > 0}
+		{#if chat.documents.length > 0}
 			<div class="sidebar-section">
 				<h3 class="sidebar-label">Documentos</h3>
 				<div class="documents-list">
-					{#each data.documents as doc (doc.id)}
+					{#each chat.documents as doc (doc.id)}
 						<DocumentCard
 							filename={doc.filename}
-							status={doc.status as 'pending' | 'processing' | 'completed' | 'failed'}
+							status={doc.status}
 							mimeType={doc.mime_type}
 						/>
 					{/each}
@@ -201,6 +213,7 @@
 			<textarea
 				bind:value={inputText}
 				onkeydown={handleKeydown}
+				oninput={autoResize}
 				placeholder="Descreva seu projeto..."
 				rows={1}
 				disabled={chat.isStreaming}
