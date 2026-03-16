@@ -67,6 +67,7 @@ jobs:
             --vpc-connector=oute-vpc-connector
             --add-cloudsql-instances=${{ secrets.GCP_PROJECT_ID }}:${{ env.GCP_REGION }}:oute-postgres
             --service-account=${{ secrets.GCP_SERVICE_ACCOUNT }}
+            --traffic=100
           env_vars: |
             NODE_ENV=production
             FIREBASE_PROJECT_ID=${{ secrets.GCP_PROJECT_ID }}
@@ -185,17 +186,17 @@ jobs:
           echo "$HEADERS" | grep -qi "x-frame-options: deny" || { echo "Missing X-Frame-Options"; exit 1; }
           echo "Security headers verified"
 
-      - name: Verify oute.pro redirect
+      - name: Verify oute.me redirect
         run: |
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" "https://oute.pro/" 2>/dev/null || echo "000")
-          echo "oute.pro redirect status: ${STATUS}"
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" "https://oute.me/" 2>/dev/null || echo "000")
+          echo "oute.me redirect status: ${STATUS}"
           if [[ "$STATUS" == "301" ]]; then
-            LOCATION=$(curl -sI "https://oute.pro/" 2>/dev/null | grep -i "location:" | tr -d '\r')
+            LOCATION=$(curl -sI "https://oute.me/" 2>/dev/null | grep -i "location:" | tr -d '\r')
             echo "Redirect to: ${LOCATION}"
-            echo "$LOCATION" | grep -qi "oute.me" || { echo "Redirect target is not oute.me"; exit 1; }
-            echo "oute.pro redirect verified"
+            echo "$LOCATION" | grep -qi "oute.pro" || { echo "Redirect target is not oute.pro"; exit 1; }
+            echo "oute.me redirect verified"
           else
-            echo "Skipping oute.pro check (DNS may not be configured yet)"
+            echo "Skipping oute.me check (DNS may not be configured yet)"
           fi
 
   rollback:
