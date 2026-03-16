@@ -22,7 +22,13 @@
 
 		try {
 			const provider = new GoogleAuthProvider();
-			await signInWithPopup(auth, provider);
+			const result = await signInWithPopup(auth, provider);
+			const idToken = await result.user.getIdToken();
+			await fetch('/api/auth/session', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ idToken }),
+			});
 			await goto('/interviews');
 		} catch (err) {
 			const authErr = err as AuthError;
