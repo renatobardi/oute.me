@@ -13,7 +13,7 @@ router = APIRouter()
 
 @router.post("/message")
 async def chat_message(request: ChatRequest) -> EventSourceResponse:
-    async def event_generator() -> AsyncGenerator[str, None]:
+    async def event_generator() -> AsyncGenerator[dict[str, str], None]:
         async for event in process_message(request):
             yield event
 
