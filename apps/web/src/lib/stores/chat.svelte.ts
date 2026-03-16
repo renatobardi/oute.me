@@ -155,8 +155,8 @@ export function createChatState(
 			});
 
 			if (!response.ok) {
-				const errorText = await response.text().catch(() => 'Upload failed');
-				uploadError = `Erro no upload: ${errorText}`;
+				const errorData = await response.json().catch(() => ({ error: 'Upload failed' }));
+				uploadError = `Erro no upload: ${errorData.error || 'Upload failed'}`;
 				return false;
 			}
 
