@@ -67,6 +67,7 @@ jobs:
             --vpc-connector=oute-vpc-connector
             --add-cloudsql-instances=${{ secrets.GCP_PROJECT_ID }}:${{ env.GCP_REGION }}:oute-postgres
             --service-account=${{ secrets.GCP_SERVICE_ACCOUNT }}
+            --traffic=100
           env_vars: |
             NODE_ENV=production
             FIREBASE_PROJECT_ID=${{ secrets.GCP_PROJECT_ID }}
