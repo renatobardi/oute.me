@@ -120,6 +120,7 @@ jobs:
           secrets: |
             DATABASE_URL=DATABASE_URL_PROD:latest
             GEMINI_API_KEY=GEMINI_API_KEY:latest
+            REDIS_URL=REDIS_URL:latest
 
   smoke-test:
     name: Smoke Test
