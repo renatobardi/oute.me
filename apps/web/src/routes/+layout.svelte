@@ -9,14 +9,12 @@
 
 	let { data, children }: Props = $props();
 
-	function handleLogout() {
-		import('$lib/firebase').then(({ auth }) =>
-			import('firebase/auth').then(({ signOut }) => {
-				signOut(auth).then(() => {
-					window.location.href = '/login';
-				});
-			})
-		);
+	async function handleLogout() {
+		const { auth } = await import('$lib/firebase');
+		const { signOut } = await import('firebase/auth');
+		await signOut(auth);
+		await fetch('/api/auth/session', { method: 'DELETE' });
+		window.location.href = '/login';
 	}
 </script>
 
