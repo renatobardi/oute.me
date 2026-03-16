@@ -10,9 +10,9 @@ const redirectDomain: Handle = async ({ event, resolve }) => {
 		url.hostname = url.hostname.replace('www.', '');
 		return Response.redirect(url.toString(), 301);
 	}
-	if (host.includes('oute.pro')) {
+	if (host.includes('oute.me')) {
 		const url = new URL(event.request.url);
-		url.hostname = 'oute.me';
+		url.hostname = 'oute.pro';
 		return Response.redirect(url.toString(), 301);
 	}
 	return resolve(event);

@@ -9,4 +9,7 @@ async def generate_embedding(text: str) -> list[float]:
         model=EMBEDDING_MODEL,
         contents=text,
     )
-    return list(result.embeddings[0].values)
+    embeddings = result.embeddings
+    if embeddings is None:
+        return []
+    return list(embeddings[0].values or [])

@@ -21,10 +21,10 @@ jobs:
     name: Deploy Web (DEV)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - id: auth
-        uses: google-github-actions/auth@v2
+        uses: google-github-actions/auth@v3
         with:
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
@@ -36,6 +36,9 @@ jobs:
           gcloud auth configure-docker ${{ env.GCP_REGION }}-docker.pkg.dev --quiet
           docker build \
             -f apps/web/Dockerfile \
+            --build-arg PUBLIC_FIREBASE_API_KEY=${{ secrets.PUBLIC_FIREBASE_API_KEY }} \
+            --build-arg PUBLIC_FIREBASE_AUTH_DOMAIN=${{ secrets.GCP_PROJECT_ID }}.firebaseapp.com \
+            --build-arg PUBLIC_FIREBASE_PROJECT_ID=${{ secrets.GCP_PROJECT_ID }} \
             -t ${{ env.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ env.AR_REPO }}/oute-web:${{ github.sha }} \
             .
           docker push ${{ env.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ env.AR_REPO }}/oute-web:${{ github.sha }}
@@ -47,7 +50,7 @@ jobs:
           echo "url=${URL}" >> "$GITHUB_OUTPUT"
 
       - name: Deploy to Cloud Run
-        uses: google-github-actions/deploy-cloudrun@v2
+        uses: google-github-actions/deploy-cloudrun@v3
         with:
           service: oute-web-dev
           region: ${{ env.GCP_REGION }}
@@ -72,10 +75,10 @@ jobs:
     name: Deploy AI (DEV)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - id: auth
-        uses: google-github-actions/auth@v2
+        uses: google-github-actions/auth@v3
         with:
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
@@ -92,7 +95,7 @@ jobs:
           docker push ${{ env.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ env.AR_REPO }}/oute-ai:${{ github.sha }}
 
       - name: Deploy to Cloud Run
-        uses: google-github-actions/deploy-cloudrun@v2
+        uses: google-github-actions/deploy-cloudrun@v3
         with:
           service: oute-ai-dev
           region: ${{ env.GCP_REGION }}
@@ -118,7 +121,7 @@ jobs:
     needs: [deploy-web, deploy-ai]
     steps:
       - id: auth
-        uses: google-github-actions/auth@v2
+        uses: google-github-actions/auth@v3
         with:
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}

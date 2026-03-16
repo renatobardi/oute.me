@@ -14,6 +14,10 @@
 		approved: 'var(--color-success, #10b981)',
 		active: 'var(--color-success, #10b981)',
 		completed: 'var(--color-success, #10b981)',
+		ready: 'var(--color-info, #3b82f6)',
+		estimating: 'var(--color-primary-500, #6366f1)',
+		estimated: 'var(--color-success, #10b981)',
+		archived: 'var(--color-neutral-500, #6b7280)',
 	};
 
 	const statusLabels: Record<string, string> = {
@@ -24,6 +28,10 @@
 		approved: 'Aprovado',
 		active: 'Ativo',
 		completed: 'Concluído',
+		ready: 'Pronto',
+		estimating: 'Estimando',
+		estimated: 'Estimado',
+		archived: 'Arquivado',
 	};
 
 	let color = $derived(statusColors[status] || 'var(--color-warning, #f59e0b)');
