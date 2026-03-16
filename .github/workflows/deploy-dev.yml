@@ -36,6 +36,9 @@ jobs:
           gcloud auth configure-docker ${{ env.GCP_REGION }}-docker.pkg.dev --quiet
           docker build \
             -f apps/web/Dockerfile \
+            --build-arg PUBLIC_FIREBASE_API_KEY=${{ secrets.PUBLIC_FIREBASE_API_KEY }} \
+            --build-arg PUBLIC_FIREBASE_AUTH_DOMAIN=${{ secrets.GCP_PROJECT_ID }}.firebaseapp.com \
+            --build-arg PUBLIC_FIREBASE_PROJECT_ID=${{ secrets.GCP_PROJECT_ID }} \
             -t ${{ env.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ env.AR_REPO }}/oute-web:${{ github.sha }} \
             .
           docker push ${{ env.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ env.AR_REPO }}/oute-web:${{ github.sha }}
