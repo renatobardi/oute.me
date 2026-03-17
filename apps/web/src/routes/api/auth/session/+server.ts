@@ -14,35 +14,36 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 		return json({ error: 'Missing idToken' }, { status: 400 });
 	}
 
+	let decoded;
 	try {
-		const decoded = await getAdminAuth().verifyIdToken(idToken);
+		decoded = await getAdminAuth().verifyIdToken(idToken);
 		if (!decoded.uid) {
 			return json({ error: 'Invalid token' }, { status: 401 });
 		}
-
-		const user = await getOrCreateUser(decoded.uid, decoded.email ?? '', decoded.name);
-
-		if (decoded.email_verified && !user.email_verified) {
-			await setUserEmailVerified(decoded.uid);
-			user.email_verified = true;
-		}
-
-		cookies.set(COOKIE_NAME, idToken, {
-			path: '/',
-			httpOnly: true,
-			secure: true,
-			sameSite: 'lax',
-			maxAge: MAX_AGE,
-		});
-
-		return json({
-			status: 'ok',
-			onboarding_complete: user.onboarding_complete,
-			active: user.active,
-		});
 	} catch {
 		return json({ error: 'Invalid token' }, { status: 401 });
 	}
+
+	const user = await getOrCreateUser(decoded.uid, decoded.email ?? '', decoded.name);
+
+	if (decoded.email_verified && !user.email_verified) {
+		await setUserEmailVerified(decoded.uid);
+		user.email_verified = true;
+	}
+
+	cookies.set(COOKIE_NAME, idToken, {
+		path: '/',
+		httpOnly: true,
+		secure: true,
+		sameSite: 'lax',
+		maxAge: MAX_AGE,
+	});
+
+	return json({
+		status: 'ok',
+		onboarding_complete: user.onboarding_complete,
+		active: user.active,
+	});
 };
 
 export const DELETE: RequestHandler = async ({ cookies }) => {
