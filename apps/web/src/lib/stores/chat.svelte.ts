@@ -84,6 +84,12 @@ export function createChatState(
 				body: JSON.stringify({ message: text, tone_instruction: activeTone.action }),
 			});
 
+			if (response.status === 401) {
+				error = 'Sessão expirada. Recarregue a página para continuar.';
+				isStreaming = false;
+				return;
+			}
+
 			if (!response.ok) {
 				throw new Error(`Erro: ${response.status}`);
 			}
