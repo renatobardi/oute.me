@@ -31,6 +31,16 @@ async def process_message(
             },
         )
 
+    # Emit done BEFORE state analysis so user sees response complete immediately
+    yield _sse_event(
+        "done",
+        {
+            "message_id": str(uuid.uuid4()),
+            "tokens_used": tokens_used,
+            "full_response": full_response,
+        },
+    )
+
     updated_state, maturity = await analyze_and_update_state(
         request.state,
         request.user_message,
@@ -44,15 +54,6 @@ async def process_message(
             "domains": {k: v.model_dump() for k, v in updated_state.domains.items()},
             "open_questions": updated_state.open_questions,
             "state": updated_state.model_dump(),
-        },
-    )
-
-    yield _sse_event(
-        "done",
-        {
-            "message_id": str(uuid.uuid4()),
-            "tokens_used": tokens_used,
-            "full_response": full_response,
         },
     )
 
