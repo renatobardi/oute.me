@@ -5,9 +5,10 @@
 	import {
 		signInWithEmailAndPassword,
 		createUserWithEmailAndPassword,
+		sendEmailVerification,
+		GoogleAuthProvider,
+		signInWithPopup,
 		type AuthError,
-		// GoogleAuthProvider,
-		// signInWithPopup,
 	} from 'firebase/auth';
 
 	let mode = $state<'login' | 'register'>('login');
@@ -25,7 +26,25 @@
 		'auth/invalid-email': 'E-mail inválido.',
 		'auth/too-many-requests': 'Muitas tentativas. Aguarde alguns minutos e tente novamente.',
 		'auth/network-request-failed': 'Falha de conexão. Verifique sua internet.',
+		'auth/popup-closed-by-user': 'Popup fechado antes de concluir o login.',
+		'auth/popup-blocked': 'Popup bloqueado pelo navegador. Permita popups para este site.',
+		'auth/cancelled-popup-request': 'Login cancelado.',
 	};
+
+	async function postSession(idToken: string) {
+		const res = await fetch('/api/auth/session', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ idToken }),
+		});
+		return res.ok ? await res.json() : null;
+	}
+
+	function redirectAfterLogin(data: { onboarding_complete: boolean; active: boolean } | null) {
+		if (!data || !data.onboarding_complete) return goto('/onboarding');
+		if (!data.active) return goto('/pending');
+		return goto('/interviews');
+	}
 
 	async function handleSubmit() {
 		if (!email || !password) {
@@ -38,19 +57,16 @@
 
 		try {
 			let userCredential;
-			if (mode === 'login') {
-				userCredential = await signInWithEmailAndPassword(auth, email, password);
-			} else {
+			if (mode === 'register') {
 				userCredential = await createUserWithEmailAndPassword(auth, email, password);
+				await sendEmailVerification(userCredential.user);
+			} else {
+				userCredential = await signInWithEmailAndPassword(auth, email, password);
 			}
 
 			const idToken = await userCredential.user.getIdToken();
-			await fetch('/api/auth/session', {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ idToken }),
-			});
-			await goto('/interviews');
+			const data = await postSession(idToken);
+			await redirectAfterLogin(data);
 		} catch (err) {
 			const authErr = err as AuthError;
 			const code = authErr?.code || '';
@@ -61,28 +77,24 @@
 		}
 	}
 
-	// async function loginWithGoogle() {
-	// 	loading = true;
-	// 	error = '';
-	// 	try {
-	// 		const provider = new GoogleAuthProvider();
-	// 		const result = await signInWithPopup(auth, provider);
-	// 		const idToken = await result.user.getIdToken();
-	// 		await fetch('/api/auth/session', {
-	// 			method: 'POST',
-	// 			headers: { 'Content-Type': 'application/json' },
-	// 			body: JSON.stringify({ idToken }),
-	// 		});
-	// 		await goto('/interviews');
-	// 	} catch (err) {
-	// 		const authErr = err as AuthError;
-	// 		const code = authErr?.code || '';
-	// 		error = errorMessages[code] || `Falha ao fazer login (${code || 'unknown'}). Tente novamente.`;
-	// 		console.error('Login error:', code, authErr?.message);
-	// 	} finally {
-	// 		loading = false;
-	// 	}
-	// }
+	async function loginWithGoogle() {
+		loading = true;
+		error = '';
+		try {
+			const provider = new GoogleAuthProvider();
+			const result = await signInWithPopup(auth, provider);
+			const idToken = await result.user.getIdToken();
+			const data = await postSession(idToken);
+			await redirectAfterLogin(data);
+		} catch (err) {
+			const authErr = err as AuthError;
+			const code = authErr?.code || '';
+			error = errorMessages[code] || `Falha ao fazer login (${code || 'unknown'}). Tente novamente.`;
+			console.error('Google login error:', code, authErr?.message);
+		} finally {
+			loading = false;
+		}
+	}
 </script>
 
 <svelte:head>
@@ -143,9 +155,11 @@
 			</Button>
 		</form>
 
-		<!-- <Button onclick={loginWithGoogle} disabled={loading} size="lg">
-			{loading ? 'Entrando…' : 'Entrar com Google'}
-		</Button> -->
+		<div class="divider"><span>ou</span></div>
+
+		<Button onclick={loginWithGoogle} disabled={loading} size="lg" style="width: 100%;">
+			Entrar com Google
+		</Button>
 	</div>
 </div>
 
@@ -251,6 +265,23 @@
 
 	.field input::placeholder {
 		color: var(--color-neutral-600, #4b5563);
+	}
+
+	.divider {
+		display: flex;
+		align-items: center;
+		width: 100%;
+		gap: 0.75rem;
+		color: var(--color-neutral-600, #4b5563);
+		font-size: 0.8125rem;
+	}
+
+	.divider::before,
+	.divider::after {
+		content: '';
+		flex: 1;
+		height: 1px;
+		background: rgba(255, 255, 255, 0.08);
 	}
 
 	.error {
