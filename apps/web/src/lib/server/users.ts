@@ -41,8 +41,15 @@ export async function getOrCreateUser(
 		INSERT INTO public.users (firebase_uid, email, display_name, is_admin)
 		VALUES (${firebaseUid}, ${email}, ${displayName ?? null}, ${adminFlag})
 		ON CONFLICT (email) DO UPDATE SET
-			firebase_uid = EXCLUDED.firebase_uid,
-			updated_at   = now()
+			firebase_uid        = EXCLUDED.firebase_uid,
+			display_name        = EXCLUDED.display_name,
+			onboarding_complete = false,
+			active              = false,
+			email_verified      = false,
+			full_name           = null,
+			company             = null,
+			role                = null,
+			updated_at          = now()
 		RETURNING *
 	`;
 	return created;
