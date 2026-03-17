@@ -7,7 +7,7 @@ set -euo pipefail
 # Uso: ./infra/gcp/setup.sh [--phase PHASE]
 #   --phase 1  APIs, Artifact Registry, Service Account, Cloud SQL, GCS
 #   --phase 2  VPC Connector, Memorystore (prod), WIF (GitHub Actions)
-#   --phase 3  Domain mappings (oute.me, oute.pro)
+#   --phase 3  Domain mappings (oute.pro)
 #   Sem flag  = executa todas as fases
 # =============================================================================
 
@@ -264,18 +264,7 @@ phase3() {
   echo ""
   echo "━━━ Phase 3: Domain Mappings ━━━"
 
-  # oute.me → Cloud Run prod
-  log "Creating domain mapping for oute.me..."
-  if gcloud run domain-mappings describe --domain=oute.me --region="$REGION" &>/dev/null 2>&1; then
-    warn "Domain mapping 'oute.me' already exists, skipping."
-  else
-    gcloud run domain-mappings create \
-      --service=oute-web-prod \
-      --domain=oute.me \
-      --region="$REGION"
-  fi
-
-  # oute.pro → Cloud Run prod (for 301 redirect via hooks.server.ts)
+  # oute.pro → Cloud Run prod (primary domain)
   log "Creating domain mapping for oute.pro..."
   if gcloud run domain-mappings describe --domain=oute.pro --region="$REGION" &>/dev/null 2>&1; then
     warn "Domain mapping 'oute.pro' already exists, skipping."

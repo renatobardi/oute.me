@@ -1,6 +1,7 @@
 <script lang="ts">
 	import '@oute/ui/theme.css';
 	import type { Snippet } from 'svelte';
+	import SettingsMenu from '$lib/components/SettingsMenu.svelte';
 
 	interface Props {
 		data: { user: { uid: string; email: string | null; displayName: string | null } | null };
@@ -8,21 +9,13 @@
 	}
 
 	let { data, children }: Props = $props();
-
-	async function handleLogout() {
-		const { auth } = await import('$lib/firebase');
-		const { signOut } = await import('firebase/auth');
-		await signOut(auth);
-		await fetch('/api/auth/session', { method: 'DELETE' });
-		window.location.href = '/login';
-	}
 </script>
 
 <div class="app">
 	<nav class="navbar">
 		<a href="/" class="logo">oute.me</a>
 		{#if data.user}
-			<button class="logout-btn" onclick={handleLogout}>Sair</button>
+			<SettingsMenu userName={data.user.displayName || data.user.email} />
 		{/if}
 	</nav>
 
@@ -60,21 +53,6 @@
 		font-weight: 700;
 		color: var(--color-primary-500, #6366f1);
 		text-decoration: none;
-	}
-
-	.logout-btn {
-		background: transparent;
-		border: 1px solid var(--color-dark-border, rgba(255, 255, 255, 0.08));
-		color: var(--color-neutral-300, #d1d5db);
-		padding: 0.375rem 0.75rem;
-		border-radius: 6px;
-		cursor: pointer;
-		font-size: 0.875rem;
-		transition: background-color 0.2s;
-	}
-
-	.logout-btn:hover {
-		background-color: rgba(255, 255, 255, 0.05);
 	}
 
 	.content {

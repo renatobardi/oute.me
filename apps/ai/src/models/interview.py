@@ -29,6 +29,7 @@ class ChatRequest(BaseModel):
     history: list[MessageEntry] = []
     user_message: str
     documents_context: str | None = None
+    tone_instruction: str | None = None
 
 
 class StateUpdate(BaseModel):

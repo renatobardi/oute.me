@@ -38,7 +38,8 @@ export function createChatState(
 	initialMessages: InterviewMessage[],
 	initialMaturity: number,
 	initialDomains: Record<string, DomainState>,
-	initialDocuments: ChatDocument[]
+	initialDocuments: ChatDocument[],
+	toneAction: string | null = null
 ) {
 	let messages = $state<ChatMessage[]>(
 		initialMessages.map((m) => ({
@@ -80,7 +81,7 @@ export function createChatState(
 			const response = await fetch(`/api/chat/${interviewId}/message`, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json', ...authHeaders },
-				body: JSON.stringify({ message: text }),
+				body: JSON.stringify({ message: text, tone_instruction: toneAction }),
 			});
 
 			if (!response.ok) {
@@ -97,7 +98,7 @@ export function createChatState(
 				const { done, value } = await reader.read();
 				if (done) break;
 
-				buffer += decoder.decode(value, { stream: true });
+				buffer += decoder.decode(value, { stream: true }).replace(/\r\n/g, '\n');
 				const events = buffer.split('\n\n');
 				buffer = events.pop() || '';
 
@@ -155,8 +156,8 @@ export function createChatState(
 			});
 
 			if (!response.ok) {
-				const errorText = await response.text().catch(() => 'Upload failed');
-				uploadError = `Erro no upload: ${errorText}`;
+				const errorData = await response.json().catch(() => ({ error: 'Upload failed' }));
+				uploadError = `Erro no upload: ${errorData.error || 'Upload failed'}`;
 				return false;
 			}
 

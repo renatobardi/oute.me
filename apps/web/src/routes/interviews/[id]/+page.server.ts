@@ -2,6 +2,7 @@ import type { PageServerLoad } from './$types';
 import { error, redirect } from '@sveltejs/kit';
 import { getOrCreateUser } from '$lib/server/users';
 import { getInterview, getMessages, getDocuments } from '$lib/server/interviews';
+import { getUserActiveTone } from '$lib/server/tones';
 
 export const load: PageServerLoad = async ({ locals, params }) => {
 	if (!locals.user) {
@@ -15,10 +16,11 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 		throw error(404, 'Entrevista não encontrada');
 	}
 
-	const [messages, documents] = await Promise.all([
+	const [messages, documents, activeTone] = await Promise.all([
 		getMessages(params.id),
 		getDocuments(params.id),
+		getUserActiveTone(user.id),
 	]);
 
-	return { interview, messages, documents };
+	return { interview, messages, documents, toneAction: activeTone?.action ?? null };
 };

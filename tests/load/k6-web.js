@@ -18,7 +18,7 @@ export const options = {
 	},
 };
 
-const BASE_URL = __ENV.BASE_URL || 'https://oute.me';
+const BASE_URL = __ENV.BASE_URL || 'https://oute.pro';
 
 export default function () {
 	// Home page

@@ -48,9 +48,10 @@ export const POST: RequestHandler = async ({ locals, params, request }) => {
 	}
 
 	const storagePath = `interviews/${params.id}/${Date.now()}_${file.name}`;
-	const doc = await addDocument(params.id, file.name, file.type, storagePath);
 
+	let doc: { id: string } | undefined;
 	try {
+		doc = await addDocument(params.id, file.name, file.type, storagePath);
 		const result = await postFile('/chat/process-document', file, file.name);
 
 		await updateDocumentStatus(
@@ -66,8 +67,11 @@ export const POST: RequestHandler = async ({ locals, params, request }) => {
 				status: result.status,
 			},
 		});
-	} catch {
-		await updateDocumentStatus(doc.id, 'failed');
+	} catch (err) {
+		console.error(`[Upload] Failed for interview ${params.id}:`, err);
+		if (doc?.id) {
+			await updateDocumentStatus(doc.id, 'failed').catch(() => {});
+		}
 		return jsonError(502, 'Failed to process document');
 	}
 };

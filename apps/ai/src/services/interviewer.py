@@ -10,8 +10,10 @@ from src.services.state_analyzer import analyze_and_update_state
 
 async def process_message(
     request: ChatRequest,
-) -> AsyncGenerator[str, None]:
-    system_prompt = build_system_prompt(request.state, request.documents_context)
+) -> AsyncGenerator[dict[str, str], None]:
+    system_prompt = build_system_prompt(
+        request.state, request.documents_context, request.tone_instruction
+    )
 
     history = [{"role": msg.role, "content": msg.content} for msg in request.history]
 
@@ -55,5 +57,5 @@ async def process_message(
     )
 
 
-def _sse_event(event: str, data: dict[str, object]) -> str:
-    return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+def _sse_event(event: str, data: dict[str, object]) -> dict[str, str]:
+    return {"event": event, "data": json.dumps(data, ensure_ascii=False)}
