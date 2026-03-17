@@ -2,7 +2,7 @@ import { browser } from '$app/environment';
 import { redirect } from '@sveltejs/kit';
 import type { LayoutLoad } from './$types';
 
-const PUBLIC_ROUTES = ['/', '/login'];
+const PUBLIC_ROUTES = ['/', '/login', '/onboarding', '/pending'];
 
 export const ssr = false;
 

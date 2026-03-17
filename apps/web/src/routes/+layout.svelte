@@ -4,7 +4,10 @@
 	import SettingsMenu from '$lib/components/SettingsMenu.svelte';
 
 	interface Props {
-		data: { user: { uid: string; email: string | null; displayName: string | null } | null };
+		data: {
+			user: { uid: string; email: string | null; displayName: string | null } | null;
+			isAdmin?: boolean;
+		};
 		children: Snippet;
 	}
 
@@ -15,7 +18,7 @@
 	<nav class="navbar">
 		<a href="/" class="logo">oute.me</a>
 		{#if data.user}
-			<SettingsMenu userName={data.user.displayName || data.user.email} />
+			<SettingsMenu userName={data.user.displayName || data.user.email} isAdmin={data.isAdmin ?? false} />
 		{/if}
 	</nav>
 

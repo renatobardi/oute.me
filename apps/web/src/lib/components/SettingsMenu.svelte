@@ -9,11 +9,14 @@
 		is_default: boolean;
 	}
 
+	import { goto } from '$app/navigation';
+
 	interface Props {
 		userName: string | null;
+		isAdmin?: boolean;
 	}
 
-	let { userName }: Props = $props();
+	let { userName, isAdmin = false }: Props = $props();
 
 	let isOpen = $state(false);
 	let showTonePanel = $state(false);
@@ -156,6 +159,16 @@
 					<div class="menu-divider"></div>
 				{/if}
 
+				{#if isAdmin}
+					<button class="menu-item admin" onclick={() => { closeMenu(); goto('/admin'); }}>
+						<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+							<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+						</svg>
+						<span>Administração</span>
+					</button>
+					<div class="menu-divider"></div>
+				{/if}
+
 				<button class="menu-item" onclick={openTonePanel}>
 					<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
 						<path d="M12 20h9" />
@@ -286,6 +299,10 @@
 	.menu-item .chevron {
 		margin-left: auto;
 		opacity: 0.5;
+	}
+
+	.menu-item.admin {
+		color: var(--color-primary-500, #6366f1);
 	}
 
 	.menu-item.logout {
