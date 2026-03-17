@@ -34,7 +34,7 @@ if [[ -z "$NOTIFICATION_EMAIL" ]]; then
 else
   log "Creating email notification channel..."
   CHANNEL_ID=$(gcloud alpha monitoring channels create \
-    --display-name="oute.me Alerts" \
+    --display-name="oute.pro Alerts" \
     --type=email \
     --channel-labels=email_address="$NOTIFICATION_EMAIL" \
     --project="$PROJECT_ID" \
@@ -207,5 +207,5 @@ echo ""
 warn "Next steps:"
 echo "  1. Visit https://console.cloud.google.com/monitoring?project=${PROJECT_ID}"
 echo "  2. Create a dashboard with Cloud Run + Cloud SQL metrics"
-echo "  3. Set up an uptime check for https://oute.me/"
+echo "  3. Set up an uptime check for https://oute.pro/"
 echo "  4. Review and adjust alert thresholds as needed"
