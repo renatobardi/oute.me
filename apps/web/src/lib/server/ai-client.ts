@@ -4,10 +4,16 @@ function getBaseUrl(): string {
 	return env.AI_SERVICE_URL || 'http://localhost:8000';
 }
 
+let cachedToken: { token: string; expires: number } | null = null;
+const TOKEN_TTL_MS = 50 * 60 * 1000; // 50min (tokens valem 1h)
+
 async function getAuthHeaders(): Promise<Record<string, string>> {
+	const now = Date.now();
+	if (cachedToken && now < cachedToken.expires) {
+		return { Authorization: `Bearer ${cachedToken.token}` };
+	}
+
 	const baseUrl = getBaseUrl();
-	// In Cloud Run, fetch an identity token for service-to-service auth
-	// The metadata server is available automatically in GCP environments
 	try {
 		const metadataUrl = `http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/identity?audience=${baseUrl}`;
 		const res = await fetch(metadataUrl, {
@@ -15,6 +21,7 @@ async function getAuthHeaders(): Promise<Record<string, string>> {
 		});
 		if (res.ok) {
 			const token = await res.text();
+			cachedToken = { token, expires: now + TOKEN_TTL_MS };
 			return { Authorization: `Bearer ${token}` };
 		}
 	} catch {

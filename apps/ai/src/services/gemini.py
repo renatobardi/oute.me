@@ -36,6 +36,8 @@ async def stream_chat(
 
     config = GenerateContentConfig(
         system_instruction=system_prompt,
+        temperature=0.7,
+        max_output_tokens=1024,
     )
 
     deadline = asyncio.get_event_loop().time() + max_seconds

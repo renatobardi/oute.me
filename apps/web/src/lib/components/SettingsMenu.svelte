@@ -27,7 +27,7 @@
 
 	async function getAuthHeaders(): Promise<Record<string, string>> {
 		try {
-			const token = await auth.currentUser?.getIdToken(true);
+			const token = await auth.currentUser?.getIdToken(false);
 			if (!token) return {};
 			return { Authorization: `Bearer ${token}` };
 		} catch {
@@ -44,7 +44,7 @@
 		try {
 			const headers = await getAuthHeaders();
 			const res = await fetch('/api/tones', { headers });
-			if (res.redirected || res.status === 302 || res.status === 401) {
+			if (res.status === 401) {
 				tonesError = 'Sessão expirada. Recarregue a página.';
 				return;
 			}
@@ -52,9 +52,6 @@
 				const data = await res.json();
 				tones = data.tones;
 				activeToneId = data.active_tone_id;
-				if (tones.length === 0) {
-					tonesError = 'Nenhum tom disponível.';
-				}
 			} else {
 				tonesError = 'Erro ao carregar tons.';
 			}

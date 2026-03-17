@@ -1,12 +1,11 @@
 import type { RequestHandler } from '@sveltejs/kit';
 import { requireAuth } from '$lib/server/api-utils';
-import { getOrCreateUser } from '$lib/server/users';
 import { getAvailableTones, getUserActiveTone } from '$lib/server/tones';
 import { json } from '@sveltejs/kit';
 
 export const GET: RequestHandler = async ({ locals }) => {
-	const auth = requireAuth(locals);
-	const user = await getOrCreateUser(auth.uid, auth.email, auth.name);
+	requireAuth(locals);
+	const user = locals.dbUser!;
 
 	const [tones, activeTone] = await Promise.all([
 		getAvailableTones(),
