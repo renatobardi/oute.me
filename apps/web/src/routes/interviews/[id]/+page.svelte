@@ -2,9 +2,13 @@
 	import { goto } from '$app/navigation';
 	import { ChatBubble, MaturityBar, DocumentCard, Button, StatusBadge } from '@oute/ui';
 	import { createChatState } from '$lib/stores/chat.svelte';
+	import { activeTone } from '$lib/stores/tone.svelte';
 	import { MATURITY_THRESHOLD } from '$lib/types/interview';
 
 	let { data } = $props();
+
+	// Inicializa o store compartilhado de tom com o valor carregado do servidor
+	activeTone.action = data.toneAction ?? null;
 
 	const chat = createChatState(
 		data.interview.id,
@@ -16,8 +20,7 @@
 			filename: d.filename,
 			status: d.status as 'pending' | 'processing' | 'completed' | 'failed',
 			mime_type: d.mime_type,
-		})),
-		data.toneAction ?? null
+		}))
 	);
 
 	let inputText = $state('');
