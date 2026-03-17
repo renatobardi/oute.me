@@ -17,7 +17,7 @@ def _get_client() -> genai.Client:
     return _client
 
 
-MODEL = "gemini-2.5-flash-lite"
+MODEL = "gemini-2.5-flash"
 
 
 async def stream_chat(

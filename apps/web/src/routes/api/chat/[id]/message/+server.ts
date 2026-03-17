@@ -50,14 +50,17 @@ export const POST: RequestHandler = async ({ locals, params, request }) => {
 
 	const body = await request.json();
 	const userMessage = body.message as string;
+	const toneInstruction = (body.tone_instruction as string) || null;
 	if (!userMessage?.trim()) {
 		throw error(400, 'Message is required');
 	}
 
 	await addMessage(params.id, 'user', userMessage);
 
-	const recentMessages = await getRecentMessages(params.id);
-	const documents = await getDocuments(params.id);
+	const [recentMessages, documents] = await Promise.all([
+		getRecentMessages(params.id),
+		getDocuments(params.id),
+	]);
 
 	const documentsContext = documents
 		.filter((d) => d.extracted_text && d.status === 'completed')
@@ -70,6 +73,7 @@ export const POST: RequestHandler = async ({ locals, params, request }) => {
 		history: recentMessages.map((m) => ({ role: m.role, content: m.content })),
 		user_message: userMessage,
 		documents_context: documentsContext || null,
+		tone_instruction: toneInstruction,
 	};
 
 	const aiResponse = await proxySSE('/chat/message', chatRequest);
