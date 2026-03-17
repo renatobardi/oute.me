@@ -1,4 +1,5 @@
 import json
+import logging
 import uuid
 from collections.abc import AsyncGenerator
 
@@ -6,6 +7,8 @@ from src.models.interview import ChatRequest
 from src.services.gemini import stream_chat
 from src.services.prompts import build_system_prompt
 from src.services.state_analyzer import analyze_and_update_state
+
+logger = logging.getLogger(__name__)
 
 
 async def process_message(
@@ -20,16 +23,24 @@ async def process_message(
     full_response = ""
     tokens_used = 0
 
-    async for chunk in stream_chat(system_prompt, history, request.user_message):
-        full_response += chunk
-        tokens_used += len(chunk.split())
+    try:
+        async for chunk in stream_chat(system_prompt, history, request.user_message):
+            full_response += chunk
+            tokens_used += len(chunk.split())
+            yield _sse_event(
+                "message_chunk",
+                {
+                    "text": chunk,
+                    "interview_id": request.interview_id,
+                },
+            )
+    except Exception:
+        logger.exception("stream_chat failed for interview %s", request.interview_id)
         yield _sse_event(
-            "message_chunk",
-            {
-                "text": chunk,
-                "interview_id": request.interview_id,
-            },
+            "error",
+            {"message": "O serviço de IA está temporariamente indisponível. Tente novamente em instantes."},
         )
+        return
 
     # Emit done BEFORE state analysis so user sees response complete immediately
     yield _sse_event(

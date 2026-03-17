@@ -119,7 +119,9 @@ export function createChatState(
 					try {
 						const data = JSON.parse(dataMatch[1]);
 
-						if (eventType === 'message_chunk') {
+						if (eventType === 'error') {
+							error = (data.message as string) ?? 'Erro ao processar resposta.';
+						} else if (eventType === 'message_chunk') {
 							currentStreamText += data.text;
 						} else if (eventType === 'state_update') {
 							maturity = data.maturity;
