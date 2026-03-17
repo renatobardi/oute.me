@@ -1,0 +1,92 @@
+name: Migrate DEV
+
+# Roda automaticamente após deploy em develop.
+# Conecta ao Cloud SQL via Auth Proxy (Unix socket) — mesmo formato do Cloud Run.
+#
+# Secret necessário no Secret Manager:
+#   DATABASE_URL_DEV_MIGRATE = postgresql://USER:PASS@/oute_develop?host=/cloudsql/PROJECT:REGION:INSTANCE
+
+on:
+  workflow_run:
+    workflows: [Deploy DEV]
+    types: [completed]
+    branches: [develop]
+
+  # Permite rodar manualmente (ex: para aplicar uma migration avulsa)
+  workflow_dispatch:
+
+concurrency:
+  group: migrate-dev
+  cancel-in-progress: false
+
+env:
+  GCP_REGION: us-central1
+  CLOUD_SQL_INSTANCE: oute-postgres
+  PNPM_VERSION: 10.30.3
+  NODE_VERSION: 24
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  migrate:
+    name: Migrate DEV
+    runs-on: ubuntu-latest
+    # Só executa se o deploy anterior foi bem-sucedido (quando trigado por workflow_run)
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - id: auth
+        uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Start Cloud SQL Auth Proxy (Unix socket)
+        run: |
+          curl -fsSL -o cloud-sql-proxy \
+            https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy/v2.14.1/cloud-sql-proxy.linux.amd64
+          chmod +x cloud-sql-proxy
+          sudo mkdir -p /cloudsql
+          sudo chmod 777 /cloudsql
+          ./cloud-sql-proxy \
+            --unix-socket=/cloudsql \
+            ${{ secrets.GCP_PROJECT_ID }}:${{ env.GCP_REGION }}:${{ env.CLOUD_SQL_INSTANCE }} &
+          sleep 3
+
+      - name: Fetch DATABASE_URL
+        run: |
+          DB_URL=$(gcloud secrets versions access latest --secret=DATABASE_URL_DEV_MIGRATE)
+          echo "::add-mask::${DB_URL}"
+          echo "DATABASE_URL=${DB_URL}" >> "$GITHUB_ENV"
+
+      - name: Migration status (antes)
+        run: pnpm migrate:status
+
+      - name: Apply pending migrations
+        run: pnpm migrate up
+
+      - name: Migration status (depois)
+        if: always()
+        run: pnpm migrate:status
