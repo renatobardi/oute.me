@@ -10,6 +10,7 @@
 	}
 
 	import { goto } from '$app/navigation';
+	import { activeTone } from '$lib/stores/tone.svelte';
 
 	interface Props {
 		userName: string | null;
@@ -62,6 +63,9 @@
 			});
 			if (!res.ok) {
 				activeToneId = prev;
+			} else {
+				const tone = tones.find((t) => t.id === toneId);
+				if (tone) activeTone.action = tone.action;
 			}
 		} catch {
 			activeToneId = prev;

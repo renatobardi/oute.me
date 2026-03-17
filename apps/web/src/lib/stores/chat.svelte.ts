@@ -1,6 +1,7 @@
 import type { InterviewMessage } from '$lib/types/interview';
 import type { DomainState } from '$lib/types/interview';
 import { auth } from '$lib/firebase';
+import { activeTone } from '$lib/stores/tone.svelte';
 
 interface ChatMessage {
 	id: string;
@@ -38,8 +39,7 @@ export function createChatState(
 	initialMessages: InterviewMessage[],
 	initialMaturity: number,
 	initialDomains: Record<string, DomainState>,
-	initialDocuments: ChatDocument[],
-	toneAction: string | null = null
+	initialDocuments: ChatDocument[]
 ) {
 	let messages = $state<ChatMessage[]>(
 		initialMessages.map((m) => ({
@@ -81,7 +81,7 @@ export function createChatState(
 			const response = await fetch(`/api/chat/${interviewId}/message`, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json', ...authHeaders },
-				body: JSON.stringify({ message: text, tone_instruction: toneAction }),
+				body: JSON.stringify({ message: text, tone_instruction: activeTone.action }),
 			});
 
 			if (!response.ok) {
