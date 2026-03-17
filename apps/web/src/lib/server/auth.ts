@@ -6,6 +6,7 @@ export interface AuthUser {
 	uid: string;
 	email: string;
 	name?: string;
+	emailVerified: boolean;
 }
 
 /**
@@ -36,6 +37,7 @@ export async function verifyAuthToken(event: RequestEvent): Promise<AuthUser | n
 			uid: decoded.uid,
 			email: decoded.email ?? '',
 			name: decoded.name,
+			emailVerified: decoded.email_verified ?? false,
 		};
 	} catch {
 		return null;
