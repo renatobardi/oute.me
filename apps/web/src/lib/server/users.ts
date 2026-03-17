@@ -40,6 +40,9 @@ export async function getOrCreateUser(
 	const [created] = await sql<DbUser[]>`
 		INSERT INTO public.users (firebase_uid, email, display_name, is_admin)
 		VALUES (${firebaseUid}, ${email}, ${displayName ?? null}, ${adminFlag})
+		ON CONFLICT (email) DO UPDATE SET
+			firebase_uid = EXCLUDED.firebase_uid,
+			updated_at   = now()
 		RETURNING *
 	`;
 	return created;
