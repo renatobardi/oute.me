@@ -1,7 +1,6 @@
 import type { RequestHandler } from './$types';
 import { error } from '@sveltejs/kit';
 import { requireAuth } from '$lib/server/api-utils';
-import { getOrCreateUser } from '$lib/server/users';
 import {
 	getInterview,
 	getRecentMessages,
@@ -32,8 +31,8 @@ function sseErrorEvent(message: string): Uint8Array {
 }
 
 export const POST: RequestHandler = async ({ locals, params, request }) => {
-	const auth = requireAuth(locals);
-	const user = await getOrCreateUser(auth.uid, auth.email, auth.name);
+	requireAuth(locals);
+	const user = locals.dbUser!;
 
 	if (!checkRateLimit(user.id)) {
 		throw error(429, 'Too many messages. Please wait before sending another.');
