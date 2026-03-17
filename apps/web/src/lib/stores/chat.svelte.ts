@@ -19,7 +19,7 @@ interface ChatDocument {
 
 async function getAuthHeaders(): Promise<Record<string, string>> {
 	try {
-		const token = await auth.currentUser?.getIdToken(false);
+		const token = await auth.currentUser?.getIdToken(true);
 		if (!token) return {};
 		return { Authorization: `Bearer ${token}` };
 	} catch {
@@ -78,11 +78,23 @@ export function createChatState(
 
 		try {
 			const authHeaders = await getAuthHeaders();
+			if (!authHeaders.Authorization) {
+				error = 'Sessão expirada. Recarregue a página para continuar.';
+				isStreaming = false;
+				return;
+			}
+
 			const response = await fetch(`/api/chat/${interviewId}/message`, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json', ...authHeaders },
 				body: JSON.stringify({ message: text, tone_instruction: activeTone.action }),
 			});
+
+			if (response.redirected || response.status === 302 || response.status === 401) {
+				error = 'Sessão expirada. Recarregue a página para continuar.';
+				isStreaming = false;
+				return;
+			}
 
 			if (!response.ok) {
 				throw new Error(`Erro: ${response.status}`);

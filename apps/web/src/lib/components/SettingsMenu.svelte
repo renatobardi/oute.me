@@ -27,7 +27,7 @@
 
 	async function getAuthHeaders(): Promise<Record<string, string>> {
 		try {
-			const token = await auth.currentUser?.getIdToken(false);
+			const token = await auth.currentUser?.getIdToken(true);
 			if (!token) return {};
 			return { Authorization: `Bearer ${token}` };
 		} catch {
@@ -35,17 +35,31 @@
 		}
 	}
 
+	let tonesError = $state<string | null>(null);
+
 	async function loadTones() {
 		if (tones.length > 0) return;
 		loading = true;
+		tonesError = null;
 		try {
 			const headers = await getAuthHeaders();
 			const res = await fetch('/api/tones', { headers });
+			if (res.redirected || res.status === 302 || res.status === 401) {
+				tonesError = 'Sessão expirada. Recarregue a página.';
+				return;
+			}
 			if (res.ok) {
 				const data = await res.json();
 				tones = data.tones;
 				activeToneId = data.active_tone_id;
+				if (tones.length === 0) {
+					tonesError = 'Nenhum tom disponível.';
+				}
+			} else {
+				tonesError = 'Erro ao carregar tons.';
 			}
+		} catch {
+			tonesError = 'Erro de conexão ao carregar tons.';
 		} finally {
 			loading = false;
 		}
@@ -134,6 +148,8 @@
 
 				{#if loading}
 					<div class="loading">Carregando...</div>
+				{:else if tonesError}
+					<div class="loading">{tonesError}</div>
 				{:else}
 					<div class="tone-list">
 						{#each tones as tone (tone.id)}

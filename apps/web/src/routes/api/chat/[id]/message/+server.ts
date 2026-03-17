@@ -161,6 +161,7 @@ export const POST: RequestHandler = async ({ locals, params, request }) => {
 			'Content-Type': 'text/event-stream',
 			'Cache-Control': 'no-cache',
 			Connection: 'keep-alive',
+			'X-Accel-Buffering': 'no',
 		},
 	});
 };
