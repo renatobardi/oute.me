@@ -17,9 +17,16 @@
 		"test": "turbo run test",
 		"test:py": "cd apps/ai && uv run pytest",
 		"check": "turbo run check",
-		"typecheck:py": "cd apps/ai && uv run mypy src/"
+		"typecheck:py": "cd apps/ai && uv run mypy src/",
+		"migrate": "tsx database/migrate.ts",
+		"migrate:status": "tsx database/migrate.ts status",
+		"migrate:dry": "tsx database/migrate.ts up --dry-run"
+	},
+	"dependencies": {
+		"postgres": "^3.4.8"
 	},
 	"devDependencies": {
+		"tsx": "^4.19.3",
 		"@eslint/js": "^9.28.0",
 		"eslint": "^9.28.0",
 		"eslint-plugin-svelte": "^3.9.0",
