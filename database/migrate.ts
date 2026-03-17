@@ -200,7 +200,20 @@ async function main(): Promise<void> {
     process.exit(1)
   }
 
-  const sql = postgres(databaseUrl, { max: 1 })
+  // URLs com Unix socket (ex: postgresql://user:pass@/dbname?host=/cloudsql/...)
+  // têm host vazio e falham no parser de URL do Node.js. Detectar e repassar via opções.
+  const socketMatch = databaseUrl.match(
+    /^(?:postgresql|postgres):\/\/([^:]+):([^@]+)@\/([^?]+)\?host=(.+)$/
+  )
+  const sql = socketMatch
+    ? postgres({
+        user: socketMatch[1],
+        password: decodeURIComponent(socketMatch[2]),
+        database: socketMatch[3],
+        host: socketMatch[4],
+        max: 1,
+      })
+    : postgres(databaseUrl, { max: 1 })
 
   try {
     await bootstrap(sql)
