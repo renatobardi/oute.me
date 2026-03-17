@@ -38,14 +38,15 @@ export async function getOrCreateUser(
 
 	const adminFlag = isAdminEmail(email);
 	const [created] = await sql<DbUser[]>`
-		INSERT INTO public.users (firebase_uid, email, display_name, is_admin)
-		VALUES (${firebaseUid}, ${email}, ${displayName ?? null}, ${adminFlag})
+		INSERT INTO public.users (firebase_uid, email, display_name, is_admin, active, onboarding_complete, email_verified)
+		VALUES (${firebaseUid}, ${email}, ${displayName ?? null}, ${adminFlag}, ${adminFlag}, ${adminFlag}, ${adminFlag})
 		ON CONFLICT (email) DO UPDATE SET
 			firebase_uid        = EXCLUDED.firebase_uid,
 			display_name        = EXCLUDED.display_name,
-			onboarding_complete = false,
-			active              = false,
-			email_verified      = false,
+			is_admin            = EXCLUDED.is_admin,
+			active              = EXCLUDED.active,
+			onboarding_complete = EXCLUDED.onboarding_complete,
+			email_verified      = EXCLUDED.email_verified,
 			full_name           = null,
 			company             = null,
 			role                = null,
