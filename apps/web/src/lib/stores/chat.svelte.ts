@@ -38,7 +38,8 @@ export function createChatState(
 	initialMessages: InterviewMessage[],
 	initialMaturity: number,
 	initialDomains: Record<string, DomainState>,
-	initialDocuments: ChatDocument[]
+	initialDocuments: ChatDocument[],
+	toneAction: string | null = null
 ) {
 	let messages = $state<ChatMessage[]>(
 		initialMessages.map((m) => ({
@@ -80,7 +81,7 @@ export function createChatState(
 			const response = await fetch(`/api/chat/${interviewId}/message`, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json', ...authHeaders },
-				body: JSON.stringify({ message: text }),
+				body: JSON.stringify({ message: text, tone_instruction: toneAction }),
 			});
 
 			if (!response.ok) {

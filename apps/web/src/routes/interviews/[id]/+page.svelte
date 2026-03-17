@@ -16,7 +16,8 @@
 			filename: d.filename,
 			status: d.status as 'pending' | 'processing' | 'completed' | 'failed',
 			mime_type: d.mime_type,
-		}))
+		})),
+		data.toneAction ?? null
 	);
 
 	let inputText = $state('');

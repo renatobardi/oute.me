@@ -11,7 +11,9 @@ from src.services.state_analyzer import analyze_and_update_state
 async def process_message(
     request: ChatRequest,
 ) -> AsyncGenerator[dict[str, str], None]:
-    system_prompt = build_system_prompt(request.state, request.documents_context)
+    system_prompt = build_system_prompt(
+        request.state, request.documents_context, request.tone_instruction
+    )
 
     history = [{"role": msg.role, "content": msg.content} for msg in request.history]
 
