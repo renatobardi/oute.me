@@ -16,7 +16,7 @@
 
 <div class="app">
 	<nav class="navbar">
-		<a href="/" class="logo">oute.me</a>
+		<a href={data.user ? '/interviews' : '/'} class="logo">oute.me</a>
 		{#if data.user}
 			<SettingsMenu userName={data.user.displayName || data.user.email} isAdmin={data.isAdmin ?? false} />
 		{/if}
