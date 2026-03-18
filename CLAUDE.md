@@ -35,8 +35,8 @@ oute.me/
 |---|---|
 | Frontend + BFF | SvelteKit 5 + TypeScript |
 | Serviço de IA | FastAPI 0.115.x + Python 3.12 |
-| LLM | Gemini 2.5 Flash-Lite (google-generativeai) |
-| Embeddings | Gemini text-embedding-004 (768 dims) |
+| LLM | Gemini 2.5 Flash via Vertex AI SDK (ADC — sem API key) |
+| Embeddings | Vertex AI text-multilingual-embedding-002 (768 dims) |
 | Banco principal | PostgreSQL 16 + pgvector (Cloud SQL, oute-488706) |
 | Vetores | pgvector — tabela `ai.knowledge_vectors` |
 | Cache/State | Redis (prod: Memorystore) / PostgreSQL fallback (dev) |
@@ -54,7 +54,7 @@ oute.me/
 
 2. **FastAPI não tem endpoints públicos.** Todo acesso externo passa pelo BFF SvelteKit, que autentica o token Firebase antes de fazer proxy para o AI service.
 
-3. **CrewAI SOMENTE no pipeline batch de estimativa.** O chat de entrevista usa Gemini SDK diretamente (sem CrewAI) para manter baixa latência no streaming SSE.
+3. **CrewAI SOMENTE no pipeline batch de estimativa.** O chat de entrevista usa Vertex AI SDK diretamente (sem CrewAI) para manter baixa latência no streaming SSE.
 
 4. **Sem Docker Compose, sem VM.** Ambiente de dev é GCP Cloud Run (scale-to-zero). Optional: Cloud SQL Auth Proxy para quem quiser rodar apps localmente apontando para o banco dev.
 
@@ -150,9 +150,10 @@ POST   /api/estimates/[id]/approve  → aprova → cria project
 ```
 POST   /chat/message                → SSE com resposta + novo state
 POST   /chat/process-document       → extrai dados do documento
-POST   /estimate/run                → inicia CrewAI background job
+POST   /estimate/run                → enfileira job (Cloud Tasks prod / background task dev)
+POST   /estimate/execute            → handler Cloud Tasks — executa pipeline CrewAI
 GET    /estimate/status/[job_id]    → pending | running | done | failed
-GET    /health/services             → { postgres, redis, gemini }
+GET    /health/services             → { postgres, redis, vertex_ai }
 ```
 
 ### Formato SSE do chat
@@ -172,13 +173,13 @@ data: {"message_id": "uuid", "tokens_used": 312}
 ## Agentes IA
 
 ### Entrevistador (conversacional — NÃO usa CrewAI)
-- Gemini SDK direto, SSE turn-by-turn
+- Vertex AI SDK direto, SSE turn-by-turn (autenticação via ADC)
 - State mantido no banco (`interviews.state`), não na sessão
 - A cada turno: recebe state atual + histórico resumido + nova mensagem
 - A cada turno: atualiza domains, responses, maturity, open_questions
 
-### Pipeline de Estimativa (batch — CrewAI v1.10.1)
-Sequencial, ~90–130s, executado em background:
+### Pipeline de Estimativa (batch — CrewAI v1.10.1 + Cloud Tasks)
+Sequencial, ~90–130s, orquestrado via Cloud Tasks em produção:
 1. **Entrevistador de Arquitetura** — consolida requisitos técnicos
 2. **Analista RAG** — busca estimativas similares via pgvector
 3. **Arquiteto de Software** — propõe arquitetura e cronograma
@@ -186,14 +187,18 @@ Sequencial, ~90–130s, executado em background:
 5. **Revisor e Apresentador** — valida e gera sumário executivo
 6. **Gestor de Conhecimento** — embeda resultado no pgvector
 
+LLM dos agentes: `vertex_ai/gemini-2.5-flash-lite` (via LiteLLM + ADC)
+
+Dev (sem `CLOUD_TASKS_QUEUE`): fallback para background asyncio task.
+
 ### Processamento de Documentos
 | Tipo | Biblioteca |
 |---|---|
-| PDF | PyMuPDF |
-| DOCX | python-docx |
+| PDF | Document AI Layout Parser (se `DOCUMENT_AI_PROCESSOR_ID`) → fallback PyMuPDF |
+| DOCX | Document AI Layout Parser (se `DOCUMENT_AI_PROCESSOR_ID`) → fallback python-docx |
 | XLSX/CSV | openpyxl / pandas |
 | PPTX | python-pptx |
-| Imagem | Gemini Vision (multimodal) |
+| Imagem | Vertex AI Gemini Vision (multimodal) |
 | URL | httpx + BeautifulSoup4 |
 
 ---
@@ -267,11 +272,24 @@ PUBLIC_FIREBASE_AUTH_DOMAIN=...
 ### apps/ai
 ```
 DATABASE_URL=postgresql://...
-REDIS_URL=redis://...           # opcional — fallback para PG se ausente
-GEMINI_API_KEY=...
+REDIS_URL=redis://...                    # opcional — fallback para PG se ausente
 GOOGLE_CLOUD_STORAGE_BUCKET=oute-[env]-uploads
-STORAGE_LOCAL_PATH=./data/uploads  # apenas se não usar GCS
+STORAGE_LOCAL_PATH=./data/uploads        # apenas se não usar GCS
 ENVIRONMENT=development|production
+
+# Vertex AI — autenticação via ADC (Application Default Credentials)
+# Sem GEMINI_API_KEY. Cloud Run usa o Service Account do serviço automaticamente.
+GCP_PROJECT=oute-488706
+GCP_LOCATION=us-central1
+
+# Cloud Tasks — pipeline de estimativa (prod)
+# Se ausente: fallback para background asyncio task (dev)
+CLOUD_TASKS_QUEUE=estimate-pipeline
+AI_SERVICE_URL=https://oute-ai-[env]-[hash].run.app
+
+# Document AI Layout Parser — processamento avançado de PDF/DOCX (opcional)
+# Se ausente: fallback para PyMuPDF / python-docx
+DOCUMENT_AI_PROCESSOR_ID=...
 ```
 
 ---
@@ -327,11 +345,13 @@ Tokens CSS em `packages/ui/src/theme/theme.css`:
 |---|---|
 | ADR-01 | SvelteKit como BFF único (auth + DB + proxy SSE) |
 | ADR-02 | FastAPI com dois modos: SSE conversacional + batch CrewAI |
-| ADR-03 | pgvector + Gemini text-embedding-004 — sem Qdrant |
+| ADR-03 | pgvector + Vertex AI text-multilingual-embedding-002 — sem Qdrant |
 | ADR-04 | Redis com fallback PostgreSQL — sem MindsDB |
 | ADR-05 | Firebase Auth — sem Auth.js ou Supabase |
 | ADR-06 | GCP-only, sem VM, sem Docker Compose |
 | ADR-07 | pnpm workspaces + Turborepo |
 | ADR-08 | Dual domain: oute.me (GCP) + oute.pro (externo, 301 redirect) |
+| ADR-09 | Vertex AI SDK como cliente LLM padrão (ADC — sem GEMINI_API_KEY) |
+| ADR-10 | Cloud Tasks como orquestrador de jobs assíncronos de estimativa |
 
 Documento completo: `docs/architecture/ADD_v1.0.docx`

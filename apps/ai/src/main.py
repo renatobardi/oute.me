@@ -1,7 +1,10 @@
+import json
 import logging
+import sys
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
+import vertexai
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -14,15 +17,57 @@ from src.middleware import (
 from src.routers import chat, estimate, health
 from src.services.database import close_pool
 
-# Structured logging
-logging.basicConfig(
-    level=logging.INFO if settings.environment == "production" else logging.DEBUG,
-    format="%(asctime)s %(levelname)s %(name)s %(message)s",
-)
+
+def _configure_logging() -> None:
+    """JSON estruturado em produção (Cloud Logging parseia automaticamente).
+    Texto legível em desenvolvimento.
+    """
+    if settings.environment == "production":
+
+        class _JsonFormatter(logging.Formatter):
+            def format(self, record: logging.LogRecord) -> str:
+                entry: dict[str, object] = {
+                    "severity": record.levelname,
+                    "message": record.getMessage(),
+                    "logger": record.name,
+                }
+                if record.exc_info:
+                    entry["exception"] = self.formatException(record.exc_info)
+                if hasattr(record, "__dict__"):
+                    for k, v in record.__dict__.items():
+                        if k not in (
+                            "name", "msg", "args", "levelname", "levelno",
+                            "pathname", "filename", "module", "exc_info",
+                            "exc_text", "stack_info", "lineno", "funcName",
+                            "created", "msecs", "relativeCreated", "thread",
+                            "threadName", "processName", "process", "message",
+                        ):
+                            entry[k] = v
+                return json.dumps(entry, ensure_ascii=False, default=str)
+
+        handler = logging.StreamHandler(sys.stdout)
+        handler.setFormatter(_JsonFormatter())
+        logging.root.handlers = [handler]
+        logging.root.setLevel(logging.INFO)
+    else:
+        logging.basicConfig(
+            level=logging.DEBUG,
+            format="%(asctime)s %(levelname)s %(name)s %(message)s",
+        )
+
+
+_configure_logging()
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
+    # Inicializa Vertex AI com ADC (Application Default Credentials)
+    vertexai.init(project=settings.gcp_project, location=settings.gcp_location)
+    logger.info(
+        "Vertex AI inicializado",
+        extra={"gcp_project": settings.gcp_project, "gcp_location": settings.gcp_location},
+    )
     yield
     await close_pool()
 
