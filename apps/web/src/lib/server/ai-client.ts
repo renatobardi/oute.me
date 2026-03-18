@@ -74,6 +74,19 @@ export async function getJSON<T>(path: string): Promise<T> {
 	return response.json() as Promise<T>;
 }
 
+/**
+ * Fire-and-forget ping to wake up the AI service if it's scaled to zero.
+ * Call without await at the start of page server loads that will need the AI service.
+ */
+export function warmUpAiService(): void {
+	const url = `${getBaseUrl()}/health/services`;
+	getAuthHeaders()
+		.then((headers) => fetch(url, { headers, signal: AbortSignal.timeout(10_000) }))
+		.catch(() => {
+			// Intentionally silent — this is best-effort warm-up only
+		});
+}
+
 export async function postFile(
 	path: string,
 	file: Blob,
