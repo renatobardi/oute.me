@@ -49,8 +49,9 @@ export const securityHeaders: Handle = async ({ event, resolve }) => {
 		'camera=(), microphone=(), geolocation=(), payment=()'
 	);
 
-	// Isola o contexto de navegação de outros origins (mitiga Spectre e XS-Leaks)
-	response.headers.set('Cross-Origin-Opener-Policy', 'same-origin');
+	// same-origin-allow-popups: isola o contexto mas permite popups abertos pela página
+	// (same-origin quebraria signInWithPopup do Firebase Auth)
+	response.headers.set('Cross-Origin-Opener-Policy', 'same-origin-allow-popups');
 	response.headers.set('Cross-Origin-Resource-Policy', 'same-origin');
 
 	// Content Security Policy
