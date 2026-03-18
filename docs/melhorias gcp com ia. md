@@ -1,0 +1,273 @@
+# Melhorias em IA para GCP
+
+> Plano estratégico de adoção de produtos de IA do Google Cloud Platform no oute.me  
+> Criado em: 2026-03-18 | Status: `draft`
+
+-----
+
+## Contexto
+
+O oute.me já utiliza GCP AI de forma competente: Gemini 2.5 Flash-Lite para conversação, `text-embedding-004` para RAG, Gemini Vision para documentos e pgvector no Cloud SQL. Este plano documenta os gaps identificados e as oportunidades de melhoria com produtos nativos do GCP, priorizados por impacto e risco.
+
+-----
+
+## Oportunidades Identificadas
+
+### 1. Migrar `google-generativeai` → Vertex AI SDK
+
+**Prioridade:** 🔴 Alta  
+**Risco:** Baixo  
+**Esforço estimado:** 1–2 dias
+
+**Contexto**  
+O serviço de IA (`apps/ai`) usa o SDK público `google-generativeai`, que autentica via `GEMINI_API_KEY` em variável de ambiente. Em produção SaaS, isso introduz três problemas:
+
+1. **Cotas compartilhadas** — a Gemini API pública tem rate limits globais compartilhados, não por projeto GCP. Em pico de uso, o risco de throttling é real.
+1. **Superfície de segredo** — `GEMINI_API_KEY` como env var é uma superfície de ataque desnecessária dado que o Cloud Run já tem Workload Identity Federation configurado.
+1. **Sem integração nativa de observabilidade** — chamadas à Gemini API não aparecem automaticamente no Cloud Logging/Tracing do projeto `oute-488706`.
+
+**Solução**  
+Migrar para `google-cloud-aiplatform` (Vertex AI SDK). A autenticação passa a ser via Service Account do Cloud Run, sem nenhuma API key. Os modelos disponíveis são os mesmos (`gemini-2.5-flash-lite`, `text-embedding-004`).
+
+**Impacto no código**
+
+```python
+# Antes (google-generativeai)
+import google.generativeai as genai
+genai.configure(api_key=settings.GEMINI_API_KEY)
+model = genai.GenerativeModel("gemini-2.5-flash-lite")
+
+# Depois (Vertex AI SDK)
+import vertexai
+from vertexai.generative_models import GenerativeModel
+
+vertexai.init(project="oute-488706", location="us-central1")
+model = GenerativeModel("gemini-2.5-flash-lite")
+```
+
+**Variáveis de ambiente removidas**
+
+- `GEMINI_API_KEY` — eliminada. Autenticação via ADC (Application Default Credentials) do Cloud Run.
+
+**ADR sugerido:** ADR-09 — Vertex AI SDK como cliente LLM padrão
+
+-----
+
+### 2. Cloud Tasks para o Pipeline CrewAI
+
+**Prioridade:** 🔴 Alta  
+**Risco:** Médio  
+**Esforço estimado:** 3–5 dias  
+**Fase alvo:** Fase 3 (antes de ir para produção)
+
+**Contexto**  
+O pipeline de estimativa (~90–130s) é executado em background no FastAPI com estado persistido em Redis ou na tabela `ai.job_state`. Esse design tem um problema estrutural: o Cloud Run pode escalar a zero ou reciclar a instância durante a execução do job, perdendo o processo silenciosamente.
+
+**Solução**  
+Substituir a execução em background por **Cloud Tasks** com filas HTTP.
+
+Fluxo proposto:
+
+```
+SvelteKit BFF
+  POST /api/estimates
+    → cria task no Cloud Tasks (HTTP target: /estimate/run no FastAPI)
+    → retorna { job_id, status: "queued" }
+
+Cloud Tasks
+  → entrega task para FastAPI com retry automático (max_attempts: 3)
+  → dead-letter queue em caso de falha persistente
+
+FastAPI
+  POST /estimate/run  ← agora um handler de task Cloud Tasks
+    → executa pipeline CrewAI
+    → atualiza status via Cloud Tasks metadata
+```
+
+**Benefícios**
+
+- Elimina `ai.job_state` como workaround de estado de job
+- Retry automático com backoff exponencial configurável
+- Visibilidade no console GCP (fila, tentativas, falhas)
+- Timeout explícito por task (configurável até 30min)
+
+**Configuração mínima**
+
+```bash
+gcloud tasks queues create estimate-pipeline \
+  --location=us-central1 \
+  --max-attempts=3 \
+  --max-retry-duration=600s \
+  --min-backoff=10s \
+  --max-backoff=120s
+```
+
+**ADR sugerido:** ADR-10 — Cloud Tasks como orquestrador de jobs assíncronos
+
+-----
+
+### 3. Document AI Layout Parser
+
+**Prioridade:** 🟡 Média  
+**Risco:** Baixo  
+**Esforço estimado:** 2–3 dias  
+**Fase alvo:** Fase 4+
+
+**Contexto**  
+O processamento de documentos atual usa bibliotecas individuais (PyMuPDF, python-docx, openpyxl, BeautifulSoup), cada uma com seus próprios edge cases. Para documentos de estimativa — planilhas de custo, cronogramas em PDF, RFPs — a extração de estrutura semântica (tabelas, campos, hierarquias) é crítica para a qualidade do maturity score.
+
+**Solução**  
+Adicionar **Document AI Layout Parser** como processador primário para PDFs e DOCX complexos.
+
+```python
+from google.cloud import documentai
+
+def process_with_document_ai(file_bytes: bytes, mime_type: str) -> dict:
+    client = documentai.DocumentProcessorServiceClient()
+    processor_name = f"projects/oute-488706/locations/us/processors/{PROCESSOR_ID}"
+    
+    raw_document = documentai.RawDocument(
+        content=file_bytes,
+        mime_type=mime_type
+    )
+    request = documentai.ProcessRequest(
+        name=processor_name,
+        raw_document=raw_document
+    )
+    result = client.process_document(request=request)
+    return extract_structured_data(result.document)
+```
+
+**O que o Layout Parser entrega além do texto bruto**
+
+- Coordenadas de cada elemento (tabela, parágrafo, header)
+- Confidence scores por campo — usáveis para ponderar o `maturity_score` dos domínios
+- Detecção automática de tabelas com estrutura de linhas/colunas preservada
+- Processamento assíncrono nativo para documentos grandes
+
+**Custo estimado**  
+$1.50 / 1.000 páginas. Irrelevante para early stage.
+
+**Estratégia de adoção**  
+Manter os parsers atuais como fallback. Document AI entra como camada primária apenas para PDFs e DOCX com indicação de conteúdo tabular.
+
+-----
+
+### 4. Embeddings Multilíngues
+
+**Prioridade:** 🟡 Média  
+**Risco:** Muito Baixo  
+**Esforço estimado:** 4h
+
+**Contexto**  
+O modelo atual `text-embedding-004` é otimizado para inglês. Como o oute.me é brasileiro e pode receber documentos com conteúdo misto PT+EN (RFPs, contratos, especificações técnicas), os vetores gerados têm qualidade degradada para texto em português.
+
+**Solução**  
+Migrar para `text-multilingual-embedding-002` (768 dims, mesma dimensão que o modelo atual — sem necessidade de re-criar o índice IVFFlat).
+
+```python
+# Antes
+model = "models/text-embedding-004"
+
+# Depois
+model = "models/text-multilingual-embedding-002"
+```
+
+**Impacto:** Troca de uma linha. Zero mudança no schema do banco ou no índice pgvector.
+
+-----
+
+### 5. Cloud Monitoring com Métricas Customizadas de LLM
+
+**Prioridade:** 🟢 Baixa (estratégica)  
+**Risco:** Muito Baixo  
+**Esforço estimado:** 1 dia
+
+**Contexto**  
+O endpoint `/health/services` checa conectividade com postgres, redis e gemini, mas não há observabilidade de qualidade operacional dos LLMs. `tokens_used` é retornado no SSE mas não agregado. Sem isso, é impossível detectar degradação do Entrevistador ou custo crescente do pipeline.
+
+**Métricas a instrumentar**
+
+|Métrica                        |Onde coletar              |Alerta sugerido|
+|-------------------------------|--------------------------|---------------|
+|`tokens_used` por interview    |Evento `done` do SSE      |—              |
+|`tokens_used` por agente CrewAI|Finalização de cada agente|—              |
+|`maturity_score` médio por dia |Aprovação de estimativa   |< 0.65 por 24h |
+|Latência P95 do pipeline       |Job completion            |> 150s         |
+|Taxa de falha do pipeline      |Dead-letter queue         |> 5%           |
+
+**Implementação**
+
+```python
+from google.cloud import monitoring_v3
+import time
+
+def emit_metric(metric_name: str, value: float, labels: dict):
+    client = monitoring_v3.MetricServiceClient()
+    project_name = f"projects/oute-488706"
+    
+    series = monitoring_v3.TimeSeries()
+    series.metric.type = f"custom.googleapis.com/oute/{metric_name}"
+    series.metric.labels.update(labels)
+    
+    point = monitoring_v3.Point()
+    point.value.double_value = value
+    point.interval.end_time.seconds = int(time.time())
+    series.points = [point]
+    
+    client.create_time_series(name=project_name, time_series=[series])
+```
+
+-----
+
+## Produtos Descartados (com justificativa)
+
+|Produto                       |Razão                                                                             |
+|------------------------------|----------------------------------------------------------------------------------|
+|**Vertex AI Pipelines**       |Overkill para CrewAI sequencial. Cloud Tasks é suficiente e mais simples.         |
+|**Agent Builder / Dialogflow**|Conflita com a arquitetura do Entrevistador customizado.                          |
+|**AutoML**                    |Sem dataset proprietário ainda. Sem caso de uso claro.                            |
+|**BigQuery ML**               |Sem volume de dados que justifique análise estatística.                           |
+|**Vertex AI Search**          |pgvector + text-embedding é suficiente para early stage. Reavaliar com >100k docs.|
+
+-----
+
+## Roadmap de Implementação
+
+```
+Fase 1 (Fundação) ──────────────────────────────────────── ✅ em andamento
+Fase 2 (Interview Engine) ──────────────────────────────── ✅ em andamento
+
+Fase 3 (Estimate Pipeline)
+  ├── [GCP-AI-01] Migrar para Vertex AI SDK ───────────── 🔴 antes do deploy
+  └── [GCP-AI-02] Cloud Tasks para pipeline CrewAI ────── 🔴 antes do deploy
+
+Fase 4 (Project Management)
+  ├── [GCP-AI-03] Embeddings multilíngues ─────────────── 🟡 quick win (4h)
+  └── [GCP-AI-04] Document AI Layout Parser ───────────── 🟡 avaliar ROI
+
+Fase 5 (Produção)
+  └── [GCP-AI-05] Cloud Monitoring métricas LLM ──────── 🟢 pré-launch
+```
+
+-----
+
+## Issues Sugeridas no Linear
+
+|ID sugerido|Título                                                       |Fase  |
+|-----------|-------------------------------------------------------------|------|
+|OUTE-AI-01 |Migrar google-generativeai → Vertex AI SDK                   |Fase 3|
+|OUTE-AI-02 |Implementar Cloud Tasks para pipeline de estimativa          |Fase 3|
+|OUTE-AI-03 |Migrar embeddings para text-multilingual-embedding-002       |Fase 4|
+|OUTE-AI-04 |Avaliar Document AI Layout Parser para docs de estimativa    |Fase 4|
+|OUTE-AI-05 |Instrumentar métricas customizadas de LLM no Cloud Monitoring|Fase 5|
+
+-----
+
+## Referências
+
+- [Vertex AI SDK para Python](https://cloud.google.com/vertex-ai/docs/python-sdk/use-vertex-ai-python-sdk)
+- [Cloud Tasks — HTTP Targets](https://cloud.google.com/tasks/docs/creating-http-target-tasks)
+- [Document AI Layout Parser](https://cloud.google.com/document-ai/docs/layout-parse-chunk-documents)
+- [text-multilingual-embedding-002](https://cloud.google.com/vertex-ai/generative-ai/docs/model-reference/text-embeddings)
+- [Cloud Monitoring — Custom Metrics](https://cloud.google.com/monitoring/custom-metrics)
