@@ -7,6 +7,7 @@
 		signInWithEmailAndPassword,
 		createUserWithEmailAndPassword,
 		sendEmailVerification,
+		sendPasswordResetEmail,
 		GoogleAuthProvider,
 		signInWithPopup,
 		signInWithCredential,
@@ -21,6 +22,10 @@
 	let loading = $state(false);
 	let authPhase = $state<'idle' | 'firebase' | 'session' | 'done'>('idle');
 	let error = $state('');
+	let resetEmail = $state('');
+	let resetSent = $state(false);
+	let resetLoading = $state(false);
+	let showReset = $state(false);
 
 	const errorMessages: Record<string, string> = {
 		'auth/user-not-found': 'Nenhuma conta encontrada com este e-mail.',
@@ -143,6 +148,26 @@
 			loading = false;
 			authPhase = 'idle';
 			console.error('Google popup error:', code, authErr?.message);
+		}
+	}
+
+	// ── Recuperação de senha ────────────────────────────────────────────────
+	async function handlePasswordReset() {
+		if (!resetEmail) {
+			error = 'Informe o e-mail para redefinir a senha.';
+			return;
+		}
+		resetLoading = true;
+		error = '';
+		try {
+			await sendPasswordResetEmail(auth, resetEmail);
+			resetSent = true;
+		} catch (err) {
+			const authErr = err as AuthError;
+			const code = authErr?.code || '';
+			error = errorMessages[code] || 'Não foi possível enviar o e-mail. Verifique o endereço e tente novamente.';
+		} finally {
+			resetLoading = false;
 		}
 	}
 
@@ -271,7 +296,43 @@
 						{mode === 'login' ? 'Entrar' : 'Criar conta'}
 					{/if}
 				</Button>
+
+				{#if mode === 'login'}
+					<button
+						type="button"
+						class="forgot-link"
+						onclick={() => { showReset = !showReset; error = ''; resetSent = false; resetEmail = email; }}
+					>
+						Esqueceu a senha?
+					</button>
+				{/if}
 			</form>
+
+			{#if showReset && mode === 'login'}
+				<div class="reset-box">
+					{#if resetSent}
+						<p class="success">E-mail de redefinição enviado. Verifique sua caixa de entrada.</p>
+						<button type="button" class="forgot-link" onclick={() => { showReset = false; resetSent = false; }}>
+							Voltar ao login
+						</button>
+					{:else}
+						<p class="reset-label">Informe seu e-mail para receber o link de redefinição:</p>
+						<div class="reset-row">
+							<input
+								type="email"
+								bind:value={resetEmail}
+								placeholder="seu@email.com"
+								disabled={resetLoading}
+								class="reset-input"
+								autocomplete="email"
+							/>
+							<Button onclick={handlePasswordReset} disabled={resetLoading} size="sm">
+								{resetLoading ? 'Enviando…' : 'Enviar'}
+							</Button>
+						</div>
+					{/if}
+				</div>
+			{/if}
 
 			<div class="divider"><span>ou</span></div>
 
@@ -406,6 +467,66 @@
 
 	.error {
 		color: var(--color-error, #ef4444);
+		font-size: 0.875rem;
+		margin: 0;
+	}
+
+	.forgot-link {
+		background: none;
+		border: none;
+		color: var(--color-primary-500, #6366f1);
+		font-size: 0.875rem;
+		cursor: pointer;
+		padding: 0;
+		text-align: right;
+		align-self: flex-end;
+	}
+
+	.forgot-link:hover {
+		text-decoration: underline;
+	}
+
+	.reset-box {
+		display: flex;
+		flex-direction: column;
+		gap: 0.75rem;
+		width: 100%;
+		padding: 1rem;
+		background: rgba(99, 102, 241, 0.06);
+		border: 1px solid rgba(99, 102, 241, 0.2);
+		border-radius: 8px;
+	}
+
+	.reset-label {
+		font-size: 0.875rem;
+		color: var(--color-neutral-300, #d1d5db);
+		margin: 0;
+	}
+
+	.reset-row {
+		display: flex;
+		gap: 0.5rem;
+		align-items: center;
+	}
+
+	.reset-input {
+		flex: 1;
+		padding: 0.5rem 0.75rem;
+		background-color: rgba(255, 255, 255, 0.05);
+		border: 1px solid rgba(255, 255, 255, 0.1);
+		border-radius: 8px;
+		color: var(--color-neutral-100, #f3f4f6);
+		font-size: 0.9rem;
+		outline: none;
+		transition: border-color 0.15s;
+	}
+
+	.reset-input:focus {
+		border-color: var(--color-primary-500, #6366f1);
+	}
+
+	.success {
+		color: var(--color-success, #10b981);
 		font-size: 0.875rem;
 		margin: 0;
 	}
