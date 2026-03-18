@@ -1,4 +1,4 @@
-name: Migrate DEV
+name: Migrate DB DEV
 
 # Roda automaticamente após deploy em develop.
 # Conecta ao Cloud SQL via Auth Proxy (Unix socket) — mesmo formato do Cloud Run.
