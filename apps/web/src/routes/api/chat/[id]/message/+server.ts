@@ -66,6 +66,8 @@ export const POST: RequestHandler = async ({ locals, params, request }) => {
 		.map((d) => `[${d.filename}]: ${d.extracted_text}`)
 		.join('\n\n');
 
+	const isResumption = recentMessages.length > 1;
+
 	const chatRequest = {
 		interview_id: params.id,
 		state: interview.state,
@@ -73,6 +75,7 @@ export const POST: RequestHandler = async ({ locals, params, request }) => {
 		user_message: userMessage,
 		documents_context: documentsContext || null,
 		tone_instruction: toneInstruction,
+		is_resumption: isResumption,
 	};
 
 	const aiResponse = await proxySSE('/chat/message', chatRequest);

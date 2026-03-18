@@ -5,6 +5,7 @@ def build_system_prompt(
     state: InterviewState,
     documents_context: str | None = None,
     tone_instruction: str | None = None,
+    is_resumption: bool = False,
 ) -> str:
     domains_status = _format_domains(state)
     doc_section = ""
@@ -57,6 +58,9 @@ Coletar informações suficientes sobre o projeto do usuário nos 5 domínios ab
 - Setup confirmado: {"Sim" if state.setup_confirmed else "Não"}
 - Resumo da conversa: {state.conversation_summary or "Início da entrevista"}
 - Perguntas em aberto: {", ".join(state.open_questions) if state.open_questions else "Nenhuma"}
+{"" if not is_resumption else """
+## Retomada de Conversa
+O usuário está retomando uma entrevista que já estava em andamento. Continue de onde pararam de forma natural, sem anunciar explicitamente que é uma retomada. Use o resumo e o histórico acima como contexto."""}
 """
 
 
