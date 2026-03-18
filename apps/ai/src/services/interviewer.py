@@ -15,7 +15,7 @@ async def process_message(
     request: ChatRequest,
 ) -> AsyncGenerator[dict[str, str], None]:
     system_prompt = build_system_prompt(
-        request.state, request.documents_context, request.tone_instruction
+        request.state, request.documents_context, request.tone_instruction, request.is_resumption
     )
 
     history = [{"role": msg.role, "content": msg.content} for msg in request.history]

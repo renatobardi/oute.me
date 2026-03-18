@@ -30,6 +30,7 @@ class ChatRequest(BaseModel):
     user_message: str
     documents_context: str | None = None
     tone_instruction: str | None = None
+    is_resumption: bool = False
 
 
 class StateUpdate(BaseModel):
