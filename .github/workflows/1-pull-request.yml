@@ -27,6 +27,7 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - run: cp apps/web/.env.example apps/web/.env
       - run: pnpm run lint
 
   check-ts:
@@ -40,6 +41,7 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - run: cp apps/web/.env.example apps/web/.env
       - run: pnpm run check
 
   build-ts:
@@ -53,6 +55,7 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - run: cp apps/web/.env.example apps/web/.env
       - run: pnpm run build
 
   test-ts:
@@ -66,6 +69,7 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - run: cp apps/web/.env.example apps/web/.env
       - run: pnpm run test
 
   # ---------------------------------------------------------------------------
