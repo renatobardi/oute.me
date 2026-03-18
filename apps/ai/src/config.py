@@ -19,6 +19,9 @@ class Settings(BaseSettings):
     # Document AI — processador Layout Parser (opcional: fallback para parsers locais)
     document_ai_processor_id: str = ""
 
+    # Grok (xAI) — opcional, usado quando llm_model começa com "grok"
+    grok_api_key: str = ""
+
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 
 

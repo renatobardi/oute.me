@@ -41,6 +41,7 @@ async def run_pipeline(
     conversation_summary: str,
     documents_context: str,
     backend: StateBackend,
+    llm_model: str = "gemini-2.5-flash",
 ) -> None:
     """Executa o pipeline CrewAI e atualiza o estado do job.
 
@@ -84,8 +85,8 @@ async def run_pipeline(
 
         await backend.update_job(job_id, "done", result)
         duration_s = time.monotonic() - start_time
-        logger.info("Estimate job %s completed in %.1fs", job_id, duration_s)
-        await emit_metric("llm/pipeline_duration", duration_s, {"status": "done"})
+        logger.info("Estimate job %s completed in %.1fs (model: %s)", job_id, duration_s, llm_model)
+        await emit_metric("llm/pipeline_duration", duration_s, {"status": "done", "llm_model": llm_model})
 
     except Exception:
         duration_s = time.monotonic() - start_time
@@ -101,6 +102,7 @@ async def _dispatch_cloud_tasks(
     interview_state: dict[str, object],
     conversation_summary: str,
     documents_context: str,
+    llm_model: str = "gemini-2.5-flash",
 ) -> None:
     from google.cloud import tasks_v2
 
@@ -117,6 +119,7 @@ async def _dispatch_cloud_tasks(
         "interview_state": interview_state,
         "conversation_summary": conversation_summary,
         "documents_context": documents_context,
+        "llm_model": llm_model,
     }
 
     task = tasks_v2.Task(
@@ -141,6 +144,7 @@ async def start_estimate(
     conversation_summary: str,
     documents_context: str,
     backend: StateBackend,
+    llm_model: str = "gemini-2.5-flash",
 ) -> str:
     from src.config import settings
 
@@ -157,7 +161,7 @@ async def start_estimate(
     if settings.cloud_tasks_queue and settings.ai_service_url:
         # Prod: Cloud Tasks entrega a task para /estimate/execute
         await _dispatch_cloud_tasks(
-            job_id, interview_id, interview_state, conversation_summary, documents_context
+            job_id, interview_id, interview_state, conversation_summary, documents_context, llm_model
         )
     else:
         # Dev fallback: background asyncio task
@@ -170,6 +174,7 @@ async def start_estimate(
                 conversation_summary,
                 documents_context,
                 backend,
+                llm_model,
             )
         )
         _background_tasks.add(task)

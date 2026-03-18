@@ -23,7 +23,7 @@ import uuid
 from collections.abc import AsyncGenerator
 
 from src.models.interview import ChatRequest
-from src.services.gemini import stream_chat
+from src.services.llm import stream_chat
 from src.services.interview_initializer import (
     ensure_domains_initialized,
     get_uncovered_vital_domains,
@@ -62,7 +62,7 @@ async def process_message(
     tokens_used = 0
 
     try:
-        async for chunk in stream_chat(system_prompt, history, request.user_message):
+        async for chunk in await stream_chat(system_prompt, history, request.user_message, llm_model=request.llm_model):
             full_response += chunk
             tokens_used += len(chunk.split())
             yield _sse_event(
