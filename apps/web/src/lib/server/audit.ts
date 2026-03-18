@@ -22,7 +22,7 @@ export async function logAuditEvent(event: AuditEvent): Promise<void> {
 				${event.actorId ?? null},
 				${event.resourceType},
 				${event.resourceId ?? null},
-				${sql.json(event.details ?? {})},
+				${sql.json(JSON.parse(JSON.stringify(event.details ?? {})))},
 				${event.ipAddress ?? null},
 				${event.userAgent ?? null}
 			)

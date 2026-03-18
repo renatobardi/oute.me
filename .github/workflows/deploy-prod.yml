@@ -80,6 +80,7 @@ jobs:
             PUBLIC_GOOGLE_CLIENT_ID=${{ secrets.PUBLIC_GOOGLE_CLIENT_ID }}
           secrets: |
             DATABASE_URL=DATABASE_URL_PROD:latest
+            ADMIN_EMAILS=ADMIN_EMAILS_PROD:latest
 
       - name: Route 100% traffic to new web revision
         run: |
