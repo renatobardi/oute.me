@@ -24,6 +24,7 @@ function toAuthUser(decoded: DecodedIdToken): AuthUser {
  * - Cookie __session → verifySessionCookie com checkRevoked (navegação server-side)
  */
 export async function verifyAuthToken(event: RequestEvent): Promise<AuthUser | null> {
+	// Try Authorization header first (API calls)
 	const authorization = event.request.headers.get('authorization');
 
 	if (authorization?.startsWith('Bearer ')) {
