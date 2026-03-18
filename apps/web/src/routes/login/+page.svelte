@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { Button } from '@oute/ui';
 	import { auth } from '$lib/firebase';
@@ -8,13 +9,17 @@
 		sendEmailVerification,
 		GoogleAuthProvider,
 		signInWithPopup,
+		signInWithCredential,
 		type AuthError,
 	} from 'firebase/auth';
+	import { PUBLIC_GOOGLE_CLIENT_ID } from '$env/static/public';
+	import type {} from '$lib/types/google-one-tap';
 
 	let mode = $state<'login' | 'register'>('login');
 	let email = $state('');
 	let password = $state('');
 	let loading = $state(false);
+	let authPhase = $state<'idle' | 'firebase' | 'session' | 'done'>('idle');
 	let error = $state('');
 
 	const errorMessages: Record<string, string> = {
@@ -46,6 +51,102 @@
 		return goto('/interviews');
 	}
 
+	// ── One Tap credential callback ──────────────────────────────────────────
+	async function handleOneTapCredential(response: CredentialResponse) {
+		loading = true;
+		authPhase = 'firebase';
+		error = '';
+
+		try {
+			const googleCredential = GoogleAuthProvider.credential(response.credential);
+
+			authPhase = 'firebase';
+			const result = await signInWithCredential(auth, googleCredential);
+
+			authPhase = 'session';
+			const idToken = await result.user.getIdToken();
+			const data = await postSession(idToken);
+
+			authPhase = 'done';
+			await redirectAfterLogin(data);
+		} catch (err) {
+			const authErr = err as AuthError;
+			const code = authErr?.code || '';
+			error = errorMessages[code] || `Falha ao autenticar com Google (${code || 'unknown'}).`;
+			loading = false;
+			authPhase = 'idle';
+			console.error('One Tap error:', code, authErr?.message);
+		}
+	}
+
+	// ── One Tap init ─────────────────────────────────────────────────────────
+	function initOneTap() {
+		if (!window.google?.accounts?.id || !PUBLIC_GOOGLE_CLIENT_ID) return;
+
+		window.google.accounts.id.initialize({
+			client_id: PUBLIC_GOOGLE_CLIENT_ID,
+			callback: handleOneTapCredential,
+			auto_select: false,
+			cancel_on_tap_outside: true,
+			use_fedcm_for_prompt: false,
+			itp_support: true,
+			context: 'signin',
+		});
+
+		window.google.accounts.id.prompt((notification) => {
+			// One Tap não disponível neste browser/sessão — o botão fallback permanece visível
+			if (notification.isNotDisplayed() || notification.isSkippedMoment()) return;
+		});
+	}
+
+	onMount(() => {
+		if (window.google?.accounts?.id) {
+			initOneTap();
+		} else {
+			const script = document.querySelector('script[src*="accounts.google.com/gsi/client"]');
+			script?.addEventListener('load', initOneTap, { once: true });
+		}
+	});
+
+	// ── Botão fallback: tenta re-prompt One Tap antes de abrir popup ─────────
+	async function loginWithGoogle() {
+		if (window.google?.accounts?.id) {
+			window.google.accounts.id.prompt((notification) => {
+				if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
+					doPopupLogin();
+				}
+				// Se One Tap aparecer, handleOneTapCredential cuida do resto
+			});
+			return;
+		}
+		await doPopupLogin();
+	}
+
+	async function doPopupLogin() {
+		loading = true;
+		authPhase = 'firebase';
+		error = '';
+		try {
+			const provider = new GoogleAuthProvider();
+			const result = await signInWithPopup(auth, provider);
+
+			authPhase = 'session';
+			const idToken = await result.user.getIdToken();
+			const data = await postSession(idToken);
+
+			authPhase = 'done';
+			await redirectAfterLogin(data);
+		} catch (err) {
+			const authErr = err as AuthError;
+			const code = authErr?.code || '';
+			error = errorMessages[code] || `Falha ao fazer login (${code || 'unknown'}). Tente novamente.`;
+			loading = false;
+			authPhase = 'idle';
+			console.error('Google popup error:', code, authErr?.message);
+		}
+	}
+
+	// ── Email / senha ────────────────────────────────────────────────────────
 	async function handleSubmit() {
 		if (!email || !password) {
 			error = 'Preencha e-mail e senha.';
@@ -53,6 +154,7 @@
 		}
 
 		loading = true;
+		authPhase = 'firebase';
 		error = '';
 
 		try {
@@ -64,106 +166,124 @@
 				userCredential = await signInWithEmailAndPassword(auth, email, password);
 			}
 
+			authPhase = 'session';
 			const idToken = await userCredential.user.getIdToken();
 			const data = await postSession(idToken);
+
+			authPhase = 'done';
 			await redirectAfterLogin(data);
 		} catch (err) {
 			const authErr = err as AuthError;
 			const code = authErr?.code || '';
 			error = errorMessages[code] || `Falha ao autenticar (${code || 'unknown'}). Tente novamente.`;
+			loading = false;
+			authPhase = 'idle';
 			console.error('Auth error:', code, authErr?.message);
-		} finally {
-			loading = false;
-		}
-	}
-
-	async function loginWithGoogle() {
-		loading = true;
-		error = '';
-		try {
-			const provider = new GoogleAuthProvider();
-			const result = await signInWithPopup(auth, provider);
-			const idToken = await result.user.getIdToken();
-			const data = await postSession(idToken);
-			await redirectAfterLogin(data);
-		} catch (err) {
-			const authErr = err as AuthError;
-			const code = authErr?.code || '';
-			error = errorMessages[code] || `Falha ao fazer login (${code || 'unknown'}). Tente novamente.`;
-			console.error('Google login error:', code, authErr?.message);
-		} finally {
-			loading = false;
 		}
 	}
 </script>
 
 <svelte:head>
 	<title>Login — oute.me</title>
+	<script src="https://accounts.google.com/gsi/client" async></script>
 </svelte:head>
 
-<div class="login-page">
-	<div class="login-card">
-		<h1 class="brand">oute.me</h1>
-		<p class="tagline">Estimativa de projetos de software com IA</p>
-
-		<div class="tabs">
-			<button class="tab" class:active={mode === 'login'} onclick={() => { mode = 'login'; error = ''; }}>
-				Entrar
-			</button>
-			<button class="tab" class:active={mode === 'register'} onclick={() => { mode = 'register'; error = ''; }}>
-				Criar conta
-			</button>
+<!-- Shimmer — aparece enquanto a autenticação processa (One Tap, popup ou email) -->
+{#if loading && authPhase !== 'idle'}
+	<div class="auth-transition">
+		<div class="shimmer-topbar">
+			<div class="shimmer-block logo-block"></div>
+			<div class="shimmer-block avatar-block"></div>
 		</div>
-
-		<form onsubmit={(e) => { e.preventDefault(); handleSubmit(); }} class="form">
-			<div class="field">
-				<label for="email">E-mail</label>
-				<input
-					id="email"
-					type="email"
-					bind:value={email}
-					placeholder="seu@email.com"
-					disabled={loading}
-					autocomplete="email"
-					required
-				/>
+		<div class="shimmer-content">
+			<div class="shimmer-header-row">
+				<div class="shimmer-block title-block"></div>
+				<div class="shimmer-block btn-block"></div>
 			</div>
-
-			<div class="field">
-				<label for="password">Senha</label>
-				<input
-					id="password"
-					type="password"
-					bind:value={password}
-					placeholder={mode === 'register' ? 'Mínimo 6 caracteres' : '••••••••'}
-					disabled={loading}
-					autocomplete={mode === 'login' ? 'current-password' : 'new-password'}
-					required
-				/>
+			<div class="shimmer-grid">
+				{#each [1, 2, 3, 4] as _}
+					<div class="shimmer-card">
+						<div class="shimmer-block line-lg"></div>
+						<div class="shimmer-block line-sm" style="width: 55%"></div>
+						<div class="shimmer-block bar-block"></div>
+						<div class="shimmer-block line-xs" style="width: 40%"></div>
+					</div>
+				{/each}
 			</div>
-
-			{#if error}
-				<p class="error">{error}</p>
+		</div>
+		<p class="auth-status">
+			{#if authPhase === 'firebase'}Autenticando…
+			{:else if authPhase === 'session'}Iniciando sessão…
+			{:else}Entrando…
 			{/if}
-
-			<Button type="submit" disabled={loading} size="lg" style="width: 100%;">
-				{#if loading}
-					{mode === 'login' ? 'Entrando…' : 'Criando conta…'}
-				{:else}
-					{mode === 'login' ? 'Entrar' : 'Criar conta'}
-				{/if}
-			</Button>
-		</form>
-
-		<div class="divider"><span>ou</span></div>
-
-		<Button onclick={loginWithGoogle} disabled={loading} size="lg" style="width: 100%;">
-			Entrar com Google
-		</Button>
+		</p>
 	</div>
-</div>
+{:else}
+	<div class="login-page">
+		<div class="login-card">
+			<h1 class="brand">oute.me</h1>
+			<p class="tagline">Estimativa de projetos de software com IA</p>
+
+			<div class="tabs">
+				<button class="tab" class:active={mode === 'login'} onclick={() => { mode = 'login'; error = ''; }}>
+					Entrar
+				</button>
+				<button class="tab" class:active={mode === 'register'} onclick={() => { mode = 'register'; error = ''; }}>
+					Criar conta
+				</button>
+			</div>
+
+			<form onsubmit={(e) => { e.preventDefault(); handleSubmit(); }} class="form">
+				<div class="field">
+					<label for="email">E-mail</label>
+					<input
+						id="email"
+						type="email"
+						bind:value={email}
+						placeholder="seu@email.com"
+						disabled={loading}
+						autocomplete="email"
+						required
+					/>
+				</div>
+
+				<div class="field">
+					<label for="password">Senha</label>
+					<input
+						id="password"
+						type="password"
+						bind:value={password}
+						placeholder={mode === 'register' ? 'Mínimo 6 caracteres' : '••••••••'}
+						disabled={loading}
+						autocomplete={mode === 'login' ? 'current-password' : 'new-password'}
+						required
+					/>
+				</div>
+
+				{#if error}
+					<p class="error">{error}</p>
+				{/if}
+
+				<Button type="submit" disabled={loading} size="lg" style="width: 100%;">
+					{#if loading}
+						{mode === 'login' ? 'Entrando…' : 'Criando conta…'}
+					{:else}
+						{mode === 'login' ? 'Entrar' : 'Criar conta'}
+					{/if}
+				</Button>
+			</form>
+
+			<div class="divider"><span>ou</span></div>
+
+			<Button onclick={loginWithGoogle} disabled={loading} size="lg" style="width: 100%;">
+				Entrar com Google
+			</Button>
+		</div>
+	</div>
+{/if}
 
 <style>
+	/* ── Login card ─────────────────────────────────────────────────────────── */
 	.login-page {
 		display: flex;
 		align-items: center;
@@ -288,5 +408,97 @@
 		color: var(--color-error, #ef4444);
 		font-size: 0.875rem;
 		margin: 0;
+	}
+
+	/* ── Auth transition / shimmer ──────────────────────────────────────────── */
+	.auth-transition {
+		min-height: 100vh;
+		background-color: var(--color-dark-bg, #0f1117);
+		display: flex;
+		flex-direction: column;
+	}
+
+	.shimmer-topbar {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		padding: 0.75rem 1.5rem;
+		background-color: var(--color-dark-surface, #1a1d27);
+		border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+	}
+
+	.shimmer-content {
+		flex: 1;
+		padding: 2rem 1.5rem;
+		max-width: 1120px;
+		width: 100%;
+		margin: 0 auto;
+		box-sizing: border-box;
+	}
+
+	.shimmer-header-row {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		margin-bottom: 2rem;
+	}
+
+	.shimmer-grid {
+		display: grid;
+		grid-template-columns: repeat(2, 1fr);
+		gap: 1.25rem;
+	}
+
+	.shimmer-card {
+		background: var(--color-dark-surface, #1a1d27);
+		border: 1px solid rgba(255, 255, 255, 0.08);
+		border-radius: 12px;
+		padding: 1.25rem;
+		display: flex;
+		flex-direction: column;
+		gap: 0.75rem;
+		min-height: 140px;
+	}
+
+	/* Shimmer animation */
+	.shimmer-block {
+		background: linear-gradient(
+			90deg,
+			rgba(255, 255, 255, 0.04) 25%,
+			rgba(255, 255, 255, 0.09) 50%,
+			rgba(255, 255, 255, 0.04) 75%
+		);
+		background-size: 200% 100%;
+		animation: shimmer 1.5s infinite;
+		border-radius: 6px;
+	}
+
+	@keyframes shimmer {
+		0%   { background-position: 200% 0; }
+		100% { background-position: -200% 0; }
+	}
+
+	/* Shimmer block sizes */
+	.logo-block  { width: 80px;  height: 20px; }
+	.avatar-block { width: 32px; height: 32px; border-radius: 50%; }
+	.title-block { width: 200px; height: 24px; }
+	.btn-block   { width: 140px; height: 36px; border-radius: 8px; }
+	.line-lg     { width: 75%;   height: 16px; }
+	.line-sm     { height: 12px; }
+	.bar-block   { width: 100%;  height: 6px;  border-radius: 999px; margin-top: 4px; }
+	.line-xs     { height: 11px; margin-top: 2px; }
+
+	.auth-status {
+		text-align: center;
+		color: var(--color-neutral-500, #6b7280);
+		font-size: 0.8rem;
+		padding: 1rem;
+		margin: 0;
+	}
+
+	@media (max-width: 640px) {
+		.shimmer-grid {
+			grid-template-columns: 1fr;
+		}
 	}
 </style>
