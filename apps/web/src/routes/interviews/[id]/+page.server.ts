@@ -3,11 +3,17 @@ import { error, redirect } from '@sveltejs/kit';
 import { getOrCreateUser } from '$lib/server/users';
 import { getInterview, getMessages, getDocuments } from '$lib/server/interviews';
 import { getUserActiveTone } from '$lib/server/tones';
+import { warmUpAiService } from '$lib/server/ai-client';
 
 export const load: PageServerLoad = async ({ locals, params }) => {
 	if (!locals.user) {
 		throw redirect(302, '/');
 	}
+
+	// Warm up the AI service in the background while DB queries run.
+	// If the container is scaled to zero, this gives it a head start
+	// before the user sends their first message.
+	warmUpAiService();
 
 	const user = await getOrCreateUser(locals.user.uid, locals.user.email, locals.user.name);
 	const interview = await getInterview(params.id, user.id);
