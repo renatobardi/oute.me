@@ -1,4 +1,4 @@
-name: Migrate PROD
+name: Migrate DB PROD
 
 # Trigger exclusivamente manual — nunca roda automaticamente.
 # Requer aprovação do environment "production" no GitHub antes de aplicar.
