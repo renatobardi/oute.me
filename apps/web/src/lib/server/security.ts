@@ -58,12 +58,13 @@ export const securityHeaders: Handle = async ({ event, resolve }) => {
 		'Content-Security-Policy',
 		[
 			"default-src 'self'",
-			// Firebase Auth SDK requer gstatic e googleapis
-			"script-src 'self' 'unsafe-inline' https://www.gstatic.com",
+			// Firebase Auth SDK carrega scripts de gstatic e apis.google.com
+			"script-src 'self' 'unsafe-inline' https://www.gstatic.com https://apis.google.com",
 			"style-src 'self' 'unsafe-inline'",
 			"img-src 'self' data: https:",
 			"connect-src 'self' https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com",
-			"frame-src https://accounts.google.com",
+			// signInWithPopup abre popup em firebaseapp.com/__/auth/handler e accounts.google.com
+			"frame-src https://accounts.google.com https://*.firebaseapp.com",
 			"frame-ancestors 'none'",
 		].join('; ')
 	);
