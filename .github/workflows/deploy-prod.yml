@@ -65,6 +65,7 @@ jobs:
             --max-instances=5
             --timeout=300s
             --concurrency=80
+            --use-http2
             --allow-unauthenticated
             --vpc-connector=oute-vpc-connector
             --add-cloudsql-instances=${{ secrets.GCP_PROJECT_ID }}:${{ env.GCP_REGION }}:oute-postgres
