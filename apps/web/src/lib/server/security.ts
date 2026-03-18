@@ -75,8 +75,6 @@ export const securityHeaders: Handle = async ({ event, resolve }) => {
 			'Strict-Transport-Security',
 			'max-age=31536000; includeSubDomains; preload'
 		);
-		// Anuncia suporte a HTTP/3 (QUIC) — GFE já serve h3, isso o explicita aos clientes
-		response.headers.set('Alt-Svc', 'h3=":443"; ma=86400');
 	}
 
 	return response;

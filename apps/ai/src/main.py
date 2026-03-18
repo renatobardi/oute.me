@@ -43,6 +43,7 @@ app.add_middleware(RequestLoggingMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
+        "https://oute.me",
         "https://oute.pro",
         "http://localhost:5173",
     ],
