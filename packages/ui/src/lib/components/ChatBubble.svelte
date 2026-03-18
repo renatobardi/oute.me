@@ -34,7 +34,7 @@
 		html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
 
 		// Unordered lists
-		html = html.replace(/^[\-\*] (.+)$/gm, '<li>$1</li>');
+		html = html.replace(/^[-*] (.+)$/gm, '<li>$1</li>');
 		html = html.replace(/((?:<li>.*<\/li>\n?)+)/g, '<ul>$1</ul>');
 
 		// Ordered lists
@@ -64,7 +64,8 @@
 <div class="bubble bubble-{role}">
 	<div class="bubble-content">
 		{#if role === 'assistant'}
-			{@html renderedHtml}
+			<!-- eslint-disable-next-line svelte/no-at-html-tags -->
+		{@html renderedHtml}
 		{:else}
 			{content}
 		{/if}

@@ -4,6 +4,7 @@
 
 	let { data } = $props();
 
+	// svelte-ignore state_referenced_locally
 	let users = $state<DbUser[]>(data.users);
 	let toggling = $state<string | null>(null);
 
