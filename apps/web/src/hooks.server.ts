@@ -4,6 +4,39 @@ import { verifyAuthToken } from '$lib/server/auth';
 import { rateLimit, securityHeaders } from '$lib/server/security';
 import { getOrCreateUser, setUserEmailVerified } from '$lib/server/users';
 
+const cacheControl: Handle = async ({ event, resolve }) => {
+	const response = await resolve(event);
+	const { pathname } = event.url;
+
+	// Assets imutáveis com hash gerado pelo Vite — cache de 1 ano
+	if (pathname.startsWith('/_app/immutable/')) {
+		response.headers.set('Cache-Control', 'public, max-age=31536000, immutable');
+		return response;
+	}
+
+	// Assets estáticos sem hash — cache de 1 hora
+	if (/\.(ico|png|svg|woff2|webp|jpg|jpeg|gif)$/.test(pathname)) {
+		response.headers.set('Cache-Control', 'public, max-age=3600');
+		return response;
+	}
+
+	// API e SSE: nunca cachear
+	if (pathname.startsWith('/api/')) {
+		response.headers.set('Cache-Control', 'no-store');
+		return response;
+	}
+
+	// Páginas públicas — cache curto (60s) para reduzir cold starts
+	if (pathname === '/' || pathname === '/login') {
+		response.headers.set('Cache-Control', 'public, max-age=60');
+		return response;
+	}
+
+	// Páginas autenticadas (SSR com dados do usuário) — nunca cachear
+	response.headers.set('Cache-Control', 'private, no-store');
+	return response;
+};
+
 const redirectDomain: Handle = async ({ event, resolve }) => {
 	const host = event.request.headers.get('host') ?? '';
 	if (host.startsWith('www.')) {
@@ -82,4 +115,4 @@ const gateUser: Handle = async ({ event, resolve }) => {
 	return resolve(event);
 };
 
-export const handle = sequence(redirectDomain, rateLimit, authenticate, gateUser, securityHeaders);
+export const handle = sequence(redirectDomain, rateLimit, authenticate, gateUser, cacheControl, securityHeaders);

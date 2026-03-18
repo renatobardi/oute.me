@@ -9,36 +9,40 @@ export interface AuthUser {
 	emailVerified: boolean;
 }
 
+function toAuthUser(decoded: DecodedIdToken): AuthUser {
+	return {
+		uid: decoded.uid,
+		email: decoded.email ?? '',
+		name: decoded.name,
+		emailVerified: decoded.email_verified ?? false,
+	};
+}
+
 /**
- * Extrai e valida o token Firebase do header Authorization.
- * Retorna null se não autenticado ou token inválido.
+ * Extrai e valida o token Firebase:
+ * - Bearer token no header Authorization → verifyIdToken (chamadas de API client-side)
+ * - Cookie __session → verifySessionCookie com checkRevoked (navegação server-side)
  */
 export async function verifyAuthToken(event: RequestEvent): Promise<AuthUser | null> {
-	// Try Authorization header first (API calls)
 	const authorization = event.request.headers.get('authorization');
-	let token: string | undefined;
 
 	if (authorization?.startsWith('Bearer ')) {
-		token = authorization.slice(7);
+		const token = authorization.slice(7);
+		try {
+			const decoded = await getAdminAuth().verifyIdToken(token);
+			return toAuthUser(decoded);
+		} catch {
+			return null;
+		}
 	}
 
-	// Fall back to session cookie (page navigation)
-	if (!token) {
-		token = event.cookies.get('__session') || undefined;
-	}
-
-	if (!token) {
-		return null;
-	}
+	const sessionCookie = event.cookies.get('__session');
+	if (!sessionCookie) return null;
 
 	try {
-		const decoded: DecodedIdToken = await getAdminAuth().verifyIdToken(token);
-		return {
-			uid: decoded.uid,
-			email: decoded.email ?? '',
-			name: decoded.name,
-			emailVerified: decoded.email_verified ?? false,
-		};
+		// checkRevoked: true — invalida sessões revogadas via logout server-side
+		const decoded = await getAdminAuth().verifySessionCookie(sessionCookie, true);
+		return toAuthUser(decoded);
 	} catch {
 		return null;
 	}
