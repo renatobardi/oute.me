@@ -1,7 +1,9 @@
 <script lang="ts">
 	import '@oute/ui/theme.css';
+	import { onMount } from 'svelte';
 	import type { Snippet } from 'svelte';
 	import SettingsMenu from '$lib/components/SettingsMenu.svelte';
+	import { initRemoteConfig, getConfigValue } from '$lib/firebase';
 
 	interface Props {
 		data: {
@@ -12,6 +14,13 @@
 	}
 
 	let { data, children }: Props = $props();
+
+	let maintenanceMode = $state(false);
+
+	onMount(async () => {
+		await initRemoteConfig();
+		maintenanceMode = getConfigValue('maintenance_mode');
+	});
 </script>
 
 <div class="app">
@@ -21,6 +30,12 @@
 			<SettingsMenu userName={data.user.displayName || data.user.email} isAdmin={data.isAdmin ?? false} />
 		{/if}
 	</nav>
+
+	{#if maintenanceMode}
+		<div class="maintenance-banner">
+			🔧 O sistema está temporariamente em manutenção. Voltamos em breve.
+		</div>
+	{/if}
 
 	<main class="content">
 		{@render children()}
@@ -60,5 +75,14 @@
 
 	.content {
 		flex: 1;
+	}
+
+	.maintenance-banner {
+		background-color: var(--color-warning, #f59e0b);
+		color: #1a1a1a;
+		text-align: center;
+		padding: 0.625rem 1rem;
+		font-size: 0.9rem;
+		font-weight: 500;
 	}
 </style>

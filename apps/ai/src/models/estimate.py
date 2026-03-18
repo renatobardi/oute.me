@@ -49,6 +49,7 @@ class EstimateRequest(BaseModel):
     state: dict[str, object]
     conversation_summary: str
     documents_context: str = ""
+    llm_model: str = "gemini-2.5-flash"
 
 
 class EstimateStatusResponse(BaseModel):

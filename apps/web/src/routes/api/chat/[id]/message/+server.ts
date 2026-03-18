@@ -50,6 +50,7 @@ export const POST: RequestHandler = async ({ locals, params, request }) => {
 	const body = await request.json();
 	const userMessage = body.message as string;
 	const toneInstruction = (body.tone_instruction as string) || null;
+	const llmModel = (body.llm_model as string) || 'gemini-2.5-flash';
 	if (!userMessage?.trim()) {
 		throw error(400, 'Message is required');
 	}
@@ -76,6 +77,7 @@ export const POST: RequestHandler = async ({ locals, params, request }) => {
 		documents_context: documentsContext || null,
 		tone_instruction: toneInstruction,
 		is_resumption: isResumption,
+		llm_model: llmModel,
 	};
 
 	const aiResponse = await proxySSE('/chat/message', chatRequest);
