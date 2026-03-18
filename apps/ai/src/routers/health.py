@@ -41,10 +41,14 @@ async def health_check() -> dict[str, str]:
     else:
         statuses["redis"] = "not_configured"
 
-    # Gemini
-    if settings.gemini_api_key:
-        statuses["gemini"] = "configured"
-    else:
-        statuses["gemini"] = "not_configured"
+    # Vertex AI — autenticação via ADC, sem API key
+    try:
+        from vertexai.generative_models import GenerativeModel
+
+        GenerativeModel("gemini-2.5-flash")
+        statuses["vertex_ai"] = f"ok (project={settings.gcp_project}, location={settings.gcp_location})"
+    except Exception:
+        logger.exception("Vertex AI health check failed")
+        statuses["vertex_ai"] = "error"
 
     return statuses

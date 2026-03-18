@@ -5,9 +5,19 @@ class Settings(BaseSettings):
     environment: str = "development"
     database_url: str = ""
     redis_url: str = ""
-    gemini_api_key: str = ""
     google_cloud_storage_bucket: str = ""
     storage_local_path: str = "./data/uploads"
+
+    # Vertex AI — autenticação via ADC (Application Default Credentials)
+    gcp_project: str = "oute-488706"
+    gcp_location: str = "us-central1"
+
+    # Cloud Tasks — fila para pipeline de estimativa (opcional: fallback para background task)
+    cloud_tasks_queue: str = ""
+    ai_service_url: str = ""  # URL pública do Cloud Run AI (para Cloud Tasks callback)
+
+    # Document AI — processador Layout Parser (opcional: fallback para parsers locais)
+    document_ai_processor_id: str = ""
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 

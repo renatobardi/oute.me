@@ -25,7 +25,7 @@ def build_estimate_crew(
     agents_config = _load_yaml("agents.yaml")
     tasks_config = _load_yaml("tasks.yaml")
 
-    llm = "gemini/gemini-2.5-flash-lite"
+    llm = "vertex_ai/gemini-2.5-flash-lite"
 
     # --- Agents ---
     architecture_interviewer = Agent(

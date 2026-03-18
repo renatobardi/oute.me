@@ -1,11 +1,13 @@
 import asyncio
 import json
 import logging
+import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 from src.crew.estimate_crew import build_estimate_crew
+from src.services.monitoring import emit_metric
 from src.services.state import StateBackend
 from src.services.vector_store import store_vector
 
@@ -32,7 +34,7 @@ def _run_crew_sync(
     return parsed  # type: ignore[no-any-return]
 
 
-async def _run_pipeline(
+async def run_pipeline(
     job_id: str,
     interview_id: str,
     interview_state: dict[str, object],
@@ -40,6 +42,12 @@ async def _run_pipeline(
     documents_context: str,
     backend: StateBackend,
 ) -> None:
+    """Executa o pipeline CrewAI e atualiza o estado do job.
+
+    Pode ser chamado diretamente pelo endpoint Cloud Tasks (/estimate/execute)
+    ou como background asyncio task (fallback em dev sem Cloud Tasks).
+    """
+    start_time = time.monotonic()
     try:
         await backend.update_job(job_id, "running")
 
@@ -75,11 +83,56 @@ async def _run_pipeline(
             logger.exception("Failed to store knowledge vector for job %s", job_id)
 
         await backend.update_job(job_id, "done", result)
-        logger.info("Estimate job %s completed successfully", job_id)
+        duration_s = time.monotonic() - start_time
+        logger.info("Estimate job %s completed in %.1fs", job_id, duration_s)
+        await emit_metric("llm/pipeline_duration", duration_s, {"status": "done"})
 
     except Exception:
-        logger.exception("Estimate job %s failed", job_id)
+        duration_s = time.monotonic() - start_time
+        logger.exception("Estimate job %s failed after %.1fs", job_id, duration_s)
         await backend.update_job(job_id, "failed", {"error": "Pipeline execution failed"})
+        await emit_metric("llm/pipeline_duration", duration_s, {"status": "failed"})
+        await emit_metric("llm/pipeline_error", 1.0, {})
+
+
+async def _dispatch_cloud_tasks(
+    job_id: str,
+    interview_id: str,
+    interview_state: dict[str, object],
+    conversation_summary: str,
+    documents_context: str,
+) -> None:
+    from google.cloud import tasks_v2
+
+    from src.config import settings
+
+    client = tasks_v2.CloudTasksAsyncClient()
+    queue_path = client.queue_path(
+        settings.gcp_project, settings.gcp_location, settings.cloud_tasks_queue
+    )
+
+    payload = {
+        "job_id": job_id,
+        "interview_id": interview_id,
+        "interview_state": interview_state,
+        "conversation_summary": conversation_summary,
+        "documents_context": documents_context,
+    }
+
+    task = tasks_v2.Task(
+        http_request=tasks_v2.HttpRequest(
+            http_method=tasks_v2.HttpMethod.POST,
+            url=f"{settings.ai_service_url}/estimate/execute",
+            headers={"Content-Type": "application/json"},
+            body=json.dumps(payload).encode(),
+            oidc_token=tasks_v2.OidcToken(
+                service_account_email=f"oute-ai@{settings.gcp_project}.iam.gserviceaccount.com",
+            ),
+        )
+    )
+
+    await client.create_task(request={"parent": queue_path, "task": task})
+    logger.info("Cloud Tasks task criada para job %s", job_id)
 
 
 async def start_estimate(
@@ -89,6 +142,8 @@ async def start_estimate(
     documents_context: str,
     backend: StateBackend,
 ) -> str:
+    from src.config import settings
+
     job_id = str(uuid.uuid4())
 
     await backend.create_job(
@@ -99,17 +154,25 @@ async def start_estimate(
         },
     )
 
-    task = asyncio.create_task(
-        _run_pipeline(
-            job_id,
-            interview_id,
-            interview_state,
-            conversation_summary,
-            documents_context,
-            backend,
+    if settings.cloud_tasks_queue and settings.ai_service_url:
+        # Prod: Cloud Tasks entrega a task para /estimate/execute
+        await _dispatch_cloud_tasks(
+            job_id, interview_id, interview_state, conversation_summary, documents_context
         )
-    )
-    _background_tasks.add(task)
-    task.add_done_callback(_background_tasks.discard)
+    else:
+        # Dev fallback: background asyncio task
+        logger.debug("Cloud Tasks não configurado — usando background asyncio task")
+        task = asyncio.create_task(
+            run_pipeline(
+                job_id,
+                interview_id,
+                interview_state,
+                conversation_summary,
+                documents_context,
+                backend,
+            )
+        )
+        _background_tasks.add(task)
+        task.add_done_callback(_background_tasks.discard)
 
     return job_id
