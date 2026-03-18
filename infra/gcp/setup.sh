@@ -118,6 +118,7 @@ phase1() {
     "roles/cloudsql.client"
     "roles/storage.admin"
     "roles/iam.serviceAccountUser"
+    "roles/firebaseauth.admin"
   )
   for role in "${roles[@]}"; do
     gcloud projects add-iam-policy-binding "$PROJECT_ID" \
