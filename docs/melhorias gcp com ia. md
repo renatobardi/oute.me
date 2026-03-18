@@ -1,7 +1,7 @@
 # Melhorias em IA para GCP
 
-> Plano estratégico de adoção de produtos de IA do Google Cloud Platform no oute.me  
-> Criado em: 2026-03-18 | Status: `draft`
+> Plano estratégico de adoção de produtos de IA do Google Cloud Platform no oute.me
+> Criado em: 2026-03-18 | Status: `implementado` (branch: feat/melhorias-ia-gcp)
 
 -----
 
@@ -13,10 +13,10 @@ O oute.me já utiliza GCP AI de forma competente: Gemini 2.5 Flash-Lite para con
 
 ## Oportunidades Identificadas
 
-### 1. Migrar `google-generativeai` → Vertex AI SDK
+### 1. Migrar `google-generativeai` → Vertex AI SDK ✅
 
-**Prioridade:** 🔴 Alta  
-**Risco:** Baixo  
+**Prioridade:** 🔴 Alta
+**Risco:** Baixo
 **Esforço estimado:** 1–2 dias
 
 **Contexto**  
@@ -53,11 +53,11 @@ model = GenerativeModel("gemini-2.5-flash-lite")
 
 -----
 
-### 2. Cloud Tasks para o Pipeline CrewAI
+### 2. Cloud Tasks para o Pipeline CrewAI ✅
 
-**Prioridade:** 🔴 Alta  
-**Risco:** Médio  
-**Esforço estimado:** 3–5 dias  
+**Prioridade:** 🔴 Alta
+**Risco:** Médio
+**Esforço estimado:** 3–5 dias
 **Fase alvo:** Fase 3 (antes de ir para produção)
 
 **Contexto**  
@@ -106,9 +106,9 @@ gcloud tasks queues create estimate-pipeline \
 
 -----
 
-### 3. Document AI Layout Parser
+### 3. Document AI Layout Parser ✅
 
-**Prioridade:** 🟡 Média  
+**Prioridade:** 🟡 Média
 **Risco:** Baixo  
 **Esforço estimado:** 2–3 dias  
 **Fase alvo:** Fase 4+
@@ -153,9 +153,9 @@ Manter os parsers atuais como fallback. Document AI entra como camada primária 
 
 -----
 
-### 4. Embeddings Multilíngues
+### 4. Embeddings Multilíngues ✅
 
-**Prioridade:** 🟡 Média  
+**Prioridade:** 🟡 Média
 **Risco:** Muito Baixo  
 **Esforço estimado:** 4h
 
@@ -177,9 +177,9 @@ model = "models/text-multilingual-embedding-002"
 
 -----
 
-### 5. Cloud Monitoring com Métricas Customizadas de LLM
+### 5. Cloud Monitoring com Métricas Customizadas de LLM ✅
 
-**Prioridade:** 🟢 Baixa (estratégica)  
+**Prioridade:** 🟢 Baixa (estratégica)
 **Risco:** Muito Baixo  
 **Esforço estimado:** 1 dia
 

@@ -1,3 +1,4 @@
+import asyncio
 import io
 import logging
 
@@ -9,12 +10,12 @@ MAX_EXTRACTED_LENGTH = 10000
 async def extract_text(file_bytes: bytes, mime_type: str, filename: str) -> str:
     try:
         if mime_type == "application/pdf":
-            return _extract_pdf(file_bytes)
+            return await _extract_pdf(file_bytes)
         elif mime_type in (
             "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
             "application/msword",
         ):
-            return _extract_docx(file_bytes)
+            return await _extract_docx(file_bytes)
         elif mime_type in (
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             "application/vnd.ms-excel",
@@ -36,7 +37,67 @@ async def extract_text(file_bytes: bytes, mime_type: str, filename: str) -> str:
         return f"[Erro ao processar {filename}]"
 
 
-def _extract_pdf(file_bytes: bytes) -> str:
+async def _extract_pdf(file_bytes: bytes) -> str:
+    """Usa Document AI Layout Parser se configurado, senão PyMuPDF como fallback."""
+    from src.config import settings
+
+    if settings.document_ai_processor_id:
+        try:
+            result = await _extract_with_document_ai(
+                file_bytes, "application/pdf", settings.document_ai_processor_id
+            )
+            if result:
+                return result
+        except Exception:
+            logger.warning("Document AI falhou para PDF, usando PyMuPDF como fallback")
+
+    return _extract_pdf_pymupdf(file_bytes)
+
+
+async def _extract_docx(file_bytes: bytes) -> str:
+    """Usa Document AI Layout Parser se configurado, senão python-docx como fallback."""
+    from src.config import settings
+
+    if settings.document_ai_processor_id:
+        try:
+            result = await _extract_with_document_ai(
+                file_bytes,
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                settings.document_ai_processor_id,
+            )
+            if result:
+                return result
+        except Exception:
+            logger.warning("Document AI falhou para DOCX, usando python-docx como fallback")
+
+    return _extract_docx_local(file_bytes)
+
+
+async def _extract_with_document_ai(
+    file_bytes: bytes, mime_type: str, processor_id: str
+) -> str:
+    from google.cloud import documentai
+
+    from src.config import settings
+
+    processor_name = (
+        f"projects/{settings.gcp_project}/locations/us/processors/{processor_id}"
+    )
+
+    def _call() -> str:
+        client = documentai.DocumentProcessorServiceClient()
+        raw_document = documentai.RawDocument(content=file_bytes, mime_type=mime_type)
+        request = documentai.ProcessRequest(
+            name=processor_name, raw_document=raw_document
+        )
+        result = client.process_document(request=request)
+        return result.document.text[:MAX_EXTRACTED_LENGTH]
+
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, _call)
+
+
+def _extract_pdf_pymupdf(file_bytes: bytes) -> str:
     import pymupdf
 
     doc = pymupdf.open(stream=file_bytes, filetype="pdf")  # type: ignore[no-untyped-call]
@@ -45,7 +106,7 @@ def _extract_pdf(file_bytes: bytes) -> str:
     return text[:MAX_EXTRACTED_LENGTH]
 
 
-def _extract_docx(file_bytes: bytes) -> str:
+def _extract_docx_local(file_bytes: bytes) -> str:
     from docx import Document
 
     doc = Document(io.BytesIO(file_bytes))
@@ -91,37 +152,16 @@ def _extract_pptx(file_bytes: bytes) -> str:
 
 
 async def _extract_image(file_bytes: bytes, mime_type: str) -> str:
-    import base64
-
-    from google import genai
-    from google.genai.types import Content, GenerateContentConfig, Part
-
-    from src.config import settings
-
-    if not settings.gemini_api_key:
-        return "[Gemini API key não configurada para processamento de imagem]"
-
-    client = genai.Client(api_key=settings.gemini_api_key)
+    from vertexai.generative_models import GenerativeModel, Part
 
     prompt = (
         "Extraia e descreva todo o conteúdo relevante desta imagem"
         " para estimativa de um projeto de software."
         " Inclua textos, diagramas, fluxos, e qualquer informação técnica visível."
     )
-    from google.genai.types import Blob
-
-    b64_data = base64.standard_b64encode(file_bytes)
-    contents = Content(
-        parts=[
-            Part(text=prompt),
-            Part(inline_data=Blob(mime_type=mime_type, data=b64_data)),
-        ]
-    )
-    response = await client.aio.models.generate_content(
-        model="gemini-2.5-flash-lite",
-        contents=contents,
-        config=GenerateContentConfig(),
-    )
+    image_part = Part.from_data(mime_type=mime_type, data=file_bytes)
+    model = GenerativeModel("gemini-2.5-flash-lite")
+    response = await model.generate_content_async([prompt, image_part])
     return (response.text or "")[:MAX_EXTRACTED_LENGTH]
 
 
