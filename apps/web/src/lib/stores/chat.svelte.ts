@@ -57,7 +57,7 @@ export function createChatState(
 	let uploadError = $state<string | null>(null);
 	let documents = $state<ChatDocument[]>(initialDocuments);
 
-	let totalTokensUsed = $derived(
+	const totalTokensUsed = $derived(
 		messages.reduce((sum, m) => sum + Math.ceil(m.content.length / 4), 0)
 	);
 

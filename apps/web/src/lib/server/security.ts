@@ -59,12 +59,14 @@ export const securityHeaders: Handle = async ({ event, resolve }) => {
 		'Content-Security-Policy',
 		[
 			"default-src 'self'",
-			// Firebase Auth SDK carrega scripts de gstatic e apis.google.com
-			"script-src 'self' 'unsafe-inline' https://www.gstatic.com https://apis.google.com",
-			"style-src 'self' 'unsafe-inline'",
+			// Firebase Auth SDK (gstatic, apis.google.com) + GIS One Tap (accounts.google.com)
+			"script-src 'self' 'unsafe-inline' https://www.gstatic.com https://apis.google.com https://accounts.google.com",
+			// GIS injeta stylesheet via <link> de accounts.google.com
+			"style-src 'self' 'unsafe-inline' https://accounts.google.com",
 			"img-src 'self' data: https:",
-			"connect-src 'self' https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com",
-			// signInWithPopup abre popup em firebaseapp.com/__/auth/handler e accounts.google.com
+			// GIS faz fetch para accounts.google.com durante troca de credencial
+			"connect-src 'self' https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://accounts.google.com",
+			// One Tap usa iframe de accounts.google.com; popup fallback usa firebaseapp.com
 			"frame-src https://accounts.google.com https://*.firebaseapp.com",
 			"frame-ancestors 'none'",
 		].join('; ')
