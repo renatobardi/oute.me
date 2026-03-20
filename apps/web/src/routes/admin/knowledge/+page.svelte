@@ -120,13 +120,6 @@
 </svelte:head>
 
 <div class="page">
-	<nav class="admin-nav">
-		<a href="/admin/cockpit" class="nav-tab">Cockpit</a>
-		<a href="/admin" class="nav-tab">Usuarios</a>
-		<a href="/admin/knowledge" class="nav-tab active">Base de Conhecimento</a>
-		<a href="/admin/agents" class="nav-tab">Agentes</a>
-	</nav>
-
 	<div class="header">
 		<h1>Base de Conhecimento</h1>
 		<span class="count">{entries.length} registro{entries.length !== 1 ? 's' : ''}</span>
@@ -219,32 +212,6 @@
 		padding: 2rem 1.5rem;
 		max-width: 1100px;
 		margin: 0 auto;
-	}
-
-	.admin-nav {
-		display: flex;
-		gap: 0.25rem;
-		margin-bottom: 1.5rem;
-		border-bottom: 1px solid var(--color-dark-border, rgba(255, 255, 255, 0.08));
-	}
-
-	.nav-tab {
-		padding: 0.6rem 1rem;
-		color: var(--color-neutral-500, #6b7280);
-		text-decoration: none;
-		font-size: 0.875rem;
-		font-weight: 500;
-		border-bottom: 2px solid transparent;
-		transition: color 0.15s, border-color 0.15s;
-	}
-
-	.nav-tab:hover {
-		color: var(--color-neutral-300, #d1d5db);
-	}
-
-	.nav-tab.active {
-		color: var(--color-primary-500, #6366f1);
-		border-bottom-color: var(--color-primary-500, #6366f1);
 	}
 
 	.header {
