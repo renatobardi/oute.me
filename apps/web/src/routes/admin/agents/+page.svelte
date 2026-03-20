@@ -1,9 +1,59 @@
 <script lang="ts">
+	import { auth } from '$lib/firebase';
 	import type { AgentInstruction } from '$lib/server/agent-instructions';
 
 	let { data } = $props();
 
-	let instructions: AgentInstruction[] = data.instructions;
+	// svelte-ignore state_referenced_locally
+	let instructions = $state<AgentInstruction[]>(data.instructions);
+	let selectedKey = $state<string | null>(null);
+	let editContent = $state('');
+	let saving = $state(false);
+	let saved = $state(false);
+	let errorMsg = $state('');
+
+	const selected = $derived(instructions.find((a) => a.agent_key === selectedKey) ?? null);
+	const charCount = $derived(editContent.length);
+
+	function selectAgent(key: string) {
+		if (selectedKey === key) return;
+		selectedKey = key;
+		saved = false;
+		errorMsg = '';
+		const agent = instructions.find((a) => a.agent_key === key);
+		editContent = agent?.content ?? '';
+	}
+
+	async function save() {
+		if (!selectedKey) return;
+		saving = true;
+		saved = false;
+		errorMsg = '';
+		try {
+			const token = await auth.currentUser?.getIdToken(false);
+			const res = await fetch(`/api/admin/agents/${selectedKey}`, {
+				method: 'PUT',
+				headers: {
+					'Content-Type': 'application/json',
+					...(token ? { Authorization: `Bearer ${token}` } : {}),
+				},
+				body: JSON.stringify({ content: editContent }),
+			});
+			if (res.ok) {
+				instructions = instructions.map((a) =>
+					a.agent_key === selectedKey ? { ...a, content: editContent } : a
+				);
+				saved = true;
+				setTimeout(() => (saved = false), 3000);
+			} else {
+				errorMsg = 'Erro ao salvar';
+			}
+		} catch {
+			errorMsg = 'Erro de conexão';
+		} finally {
+			saving = false;
+		}
+	}
 
 	function formatDate(iso: string) {
 		return new Date(iso).toLocaleDateString('pt-BR');
@@ -15,149 +65,258 @@
 </svelte:head>
 
 <div class="page">
-	<nav class="admin-nav">
-		<a href="/admin" class="nav-tab">Usuarios</a>
-		<a href="/admin/knowledge" class="nav-tab">Base de Conhecimento</a>
-		<a href="/admin/agents" class="nav-tab active">Agentes</a>
-	</nav>
+	<div class="split">
+		<!-- Left: agent list -->
+		<div class="list-panel">
+			<div class="list-count">{instructions.length} agente{instructions.length !== 1 ? 's' : ''}</div>
 
-	<div class="header">
-		<h1>Instrucoes dos Agentes</h1>
-		<span class="count">{instructions.length} agente{instructions.length !== 1 ? 's' : ''}</span>
-	</div>
+			<div class="list-items">
+				{#each instructions as agent (agent.id)}
+					<button
+						class="list-item"
+						class:selected={selectedKey === agent.agent_key}
+						onclick={() => selectAgent(agent.agent_key)}
+					>
+						<div class="item-top">
+							<span class="item-name">{agent.title}</span>
+						</div>
+						<div class="item-meta">
+							<span class="agent-key">{agent.agent_key}</span>
+							<span>{agent.content.length} chars</span>
+						</div>
+						<div class="item-date">{formatDate(agent.updated_at)}</div>
+					</button>
+				{/each}
+			</div>
+		</div>
 
-	<div class="cards">
-		{#each instructions as agent (agent.id)}
-			<a href="/admin/agents/{agent.agent_key}" class="card">
-				<div class="card-header">
-					<h3>{agent.title}</h3>
-					<span class="agent-key">{agent.agent_key}</span>
+		<!-- Right: editor -->
+		<div class="detail-panel">
+			{#if !selected}
+				<div class="detail-empty">Selecione um agente para editar as instruções.</div>
+			{:else}
+				<div class="editor-header">
+					<div>
+						<h2 class="editor-title">{selected.title}</h2>
+						<span class="agent-key">{selected.agent_key}</span>
+					</div>
 				</div>
-				<div class="card-meta">
-					<span class="char-count">{agent.content.length} caracteres</span>
-					<span class="updated">Atualizado: {formatDate(agent.updated_at)}</span>
+
+				<div class="editor-wrapper">
+					<textarea
+						class="editor"
+						bind:value={editContent}
+						placeholder="Escreva as instruções em Markdown…"
+					></textarea>
+
+					<div class="editor-footer">
+						<span class="char-count">{charCount} caracteres</span>
+						<div class="actions">
+							{#if saved}
+								<span class="feedback success">Salvo!</span>
+							{/if}
+							{#if errorMsg}
+								<span class="feedback error">{errorMsg}</span>
+							{/if}
+							<button class="btn-save" onclick={save} disabled={saving}>
+								{saving ? 'Salvando…' : 'Salvar'}
+							</button>
+						</div>
+					</div>
 				</div>
-				{#if agent.content}
-					<p class="preview">{agent.content.slice(0, 120)}...</p>
-				{:else}
-					<p class="preview empty-preview">Sem instrucoes configuradas</p>
-				{/if}
-			</a>
-		{/each}
+			{/if}
+		</div>
 	</div>
 </div>
 
 <style>
 	.page {
 		padding: 2rem 1.5rem;
-		max-width: 1100px;
+		max-width: 1400px;
 		margin: 0 auto;
 	}
 
-	.admin-nav {
-		display: flex;
-		gap: 0.25rem;
-		margin-bottom: 1.5rem;
-		border-bottom: 1px solid var(--color-dark-border, rgba(255, 255, 255, 0.08));
-	}
-
-	.nav-tab {
-		padding: 0.6rem 1rem;
-		color: var(--color-neutral-500, #6b7280);
-		text-decoration: none;
-		font-size: 0.875rem;
-		font-weight: 500;
-		border-bottom: 2px solid transparent;
-		transition: color 0.15s, border-color 0.15s;
-	}
-
-	.nav-tab:hover {
-		color: var(--color-neutral-300, #d1d5db);
-	}
-
-	.nav-tab.active {
-		color: var(--color-primary-500, #6366f1);
-		border-bottom-color: var(--color-primary-500, #6366f1);
-	}
-
-	.header {
-		display: flex;
-		align-items: baseline;
-		gap: 1rem;
-		margin-bottom: 1.5rem;
-	}
-
-	.header h1 {
-		font-size: 1.5rem;
-		font-weight: 700;
-		color: #f9fafb;
-		margin: 0;
-	}
-
-	.count {
-		color: var(--color-neutral-500, #6b7280);
-		font-size: 0.875rem;
-	}
-
-	.cards {
+	.split {
 		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-		gap: 1rem;
+		grid-template-columns: 360px 1fr;
+		gap: 1.5rem;
+		align-items: start;
 	}
 
-	.card {
-		display: block;
+	/* ── List panel ── */
+
+	.list-panel {
 		background: var(--color-dark-surface, #1a1d27);
-		border: 1px solid var(--color-dark-border, rgba(255, 255, 255, 0.08));
+		border: 1px solid rgba(255, 255, 255, 0.08);
 		border-radius: 10px;
-		padding: 1.25rem;
-		text-decoration: none;
-		transition: border-color 0.15s;
+		overflow: hidden;
+		display: flex;
+		flex-direction: column;
+		max-height: calc(100vh - 8rem);
 	}
 
-	.card:hover {
-		border-color: var(--color-primary-500, #6366f1);
-	}
-
-	.card-header {
-		margin-bottom: 0.75rem;
-	}
-
-	.card-header h3 {
-		font-size: 1rem;
-		font-weight: 600;
-		color: #f9fafb;
-		margin: 0 0 0.25rem;
-	}
-
-	.agent-key {
+	.list-count {
+		padding: 0.5rem 0.75rem;
 		font-size: 0.75rem;
 		color: var(--color-neutral-500, #6b7280);
-		font-family: monospace;
+		border-bottom: 1px solid rgba(255, 255, 255, 0.04);
 	}
 
-	.card-meta {
+	.list-items {
+		overflow-y: auto;
+		flex: 1;
+	}
+
+	.list-item {
+		width: 100%;
+		text-align: left;
+		background: none;
+		border: none;
+		border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+		padding: 0.75rem;
+		cursor: pointer;
+		transition: background 0.1s;
+		color: inherit;
+	}
+
+	.list-item:hover {
+		background: rgba(255, 255, 255, 0.03);
+	}
+
+	.list-item.selected {
+		background: rgba(99, 102, 241, 0.1);
+		border-left: 3px solid var(--color-primary-500, #6366f1);
+	}
+
+	.item-top {
+		margin-bottom: 0.2rem;
+	}
+
+	.item-name {
+		font-size: 0.8125rem;
+		font-weight: 600;
+		color: #f9fafb;
+	}
+
+	.item-meta {
 		display: flex;
 		justify-content: space-between;
 		font-size: 0.75rem;
 		color: var(--color-neutral-500, #6b7280);
-		margin-bottom: 0.75rem;
+		margin-bottom: 0.15rem;
 	}
 
-	.preview {
-		font-size: 0.8125rem;
-		color: var(--color-neutral-400, #9ca3af);
-		line-height: 1.4;
-		margin: 0;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		display: -webkit-box;
-		-webkit-line-clamp: 3;
-		-webkit-box-orient: vertical;
+	.agent-key {
+		font-family: monospace;
+		font-size: 0.75rem;
+		color: var(--color-neutral-500, #6b7280);
 	}
 
-	.empty-preview {
+	.item-date {
+		font-size: 0.7rem;
 		color: var(--color-neutral-600, #4b5563);
-		font-style: italic;
+	}
+
+	/* ── Detail panel ── */
+
+	.detail-panel {
+		background: var(--color-dark-surface, #1a1d27);
+		border: 1px solid rgba(255, 255, 255, 0.08);
+		border-radius: 10px;
+		padding: 1.5rem;
+		max-height: calc(100vh - 8rem);
+		overflow-y: auto;
+	}
+
+	.detail-empty {
+		color: var(--color-neutral-500, #6b7280);
+		font-size: 0.875rem;
+		text-align: center;
+		padding: 3rem 0;
+	}
+
+	.editor-header {
+		margin-bottom: 1.25rem;
+	}
+
+	.editor-title {
+		font-size: 1.125rem;
+		font-weight: 700;
+		color: #f9fafb;
+		margin: 0 0 0.2rem;
+	}
+
+	.editor-wrapper {
+		background: var(--color-dark-bg, #0f1117);
+		border: 1px solid rgba(255, 255, 255, 0.08);
+		border-radius: 8px;
+		overflow: hidden;
+	}
+
+	.editor {
+		width: 100%;
+		min-height: 420px;
+		padding: 1rem;
+		border: none;
+		background: transparent;
+		color: #f9fafb;
+		font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+		font-size: 0.875rem;
+		line-height: 1.6;
+		resize: vertical;
+		box-sizing: border-box;
+		outline: none;
+	}
+
+	.editor-footer {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		padding: 0.6rem 1rem;
+		border-top: 1px solid rgba(255, 255, 255, 0.06);
+	}
+
+	.char-count {
+		font-size: 0.75rem;
+		color: var(--color-neutral-500, #6b7280);
+	}
+
+	.actions {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+	}
+
+	.feedback {
+		font-size: 0.8125rem;
+		font-weight: 500;
+	}
+
+	.feedback.success {
+		color: var(--color-success, #10b981);
+	}
+
+	.feedback.error {
+		color: var(--color-error, #ef4444);
+	}
+
+	.btn-save {
+		padding: 0.45rem 1.1rem;
+		border-radius: 6px;
+		border: none;
+		background: var(--color-primary-600, #4f46e5);
+		color: #fff;
+		font-size: 0.8125rem;
+		font-weight: 500;
+		cursor: pointer;
+	}
+
+	.btn-save:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+
+	.btn-save:hover:not(:disabled) {
+		background: var(--color-primary-500, #6366f1);
 	}
 </style>
