@@ -25,21 +25,21 @@
 
 <svelte:head>
 	<!-- Open Graph Meta Tags for Social Media Preview -->
-	<meta property="og:title" content="Oute.me - Estimativa de Projetos com IA" />
+	<meta property="og:title" content="Oute.pro - Estimativa de Projetos com IA" />
 	<meta property="og:description" content="Plataforma inteligente para estimar, arquitetar e validar projetos de software. Utilize IA para tomar decisões técnicas e financeiras com confiança." />
-	<meta property="og:url" content="https://oute.me" />
+	<meta property="og:url" content="https://oute.pro" />
 	<meta property="og:type" content="website" />
 	<meta property="og:locale" content="pt_BR" />
 
 	<!-- Twitter Card Meta Tags -->
 	<meta name="twitter:card" content="summary_large_image" />
-	<meta name="twitter:title" content="Oute.me - Estimativa de Projetos com IA" />
+	<meta name="twitter:title" content="Oute.pro - Estimativa de Projetos com IA" />
 	<meta name="twitter:description" content="Plataforma inteligente para estimar, arquitetar e validar projetos de software." />
 </svelte:head>
 
 <div class="app">
 	<nav class="navbar">
-		<a href={data.user ? '/interviews' : '/'} class="logo">oute.me</a>
+		<a href={data.user ? '/interviews' : '/'} class="logo">oute.pro</a>
 		{#if data.user}
 			<SettingsMenu userName={data.user.displayName || data.user.email} isAdmin={data.isAdmin ?? false} />
 		{/if}

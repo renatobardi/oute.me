@@ -17,7 +17,7 @@
 </script>
 
 <svelte:head>
-	<title>oute.me — Estime projetos de software com IA</title>
+	<title>oute.pro — Estime projetos de software com IA</title>
 	<meta name="description" content="Do briefing ao cronograma em minutos. Estimativa inteligente de projetos de software com IA." />
 </svelte:head>
 
@@ -101,7 +101,7 @@
 <!-- Footer -->
 <footer class="footer">
 	<div class="container">
-		<p>oute.me &copy; 2026</p>
+		<p>oute.pro &copy; 2026</p>
 	</div>
 </footer>
 

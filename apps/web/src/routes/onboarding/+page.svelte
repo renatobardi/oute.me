@@ -50,12 +50,12 @@
 </script>
 
 <svelte:head>
-	<title>Complete seu cadastro — oute.me</title>
+	<title>Complete seu cadastro — oute.pro</title>
 </svelte:head>
 
 <div class="page">
 	<div class="card">
-		<h1 class="brand">oute.me</h1>
+		<h1 class="brand">oute.pro</h1>
 		<h2 class="title">Complete seu cadastro</h2>
 		<p class="subtitle">Conte um pouco mais sobre você para começar.</p>
 

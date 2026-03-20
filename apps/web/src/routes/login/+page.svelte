@@ -210,7 +210,7 @@
 </script>
 
 <svelte:head>
-	<title>Login — oute.me</title>
+	<title>Login — oute.pro</title>
 	<script src="https://accounts.google.com/gsi/client" async></script>
 </svelte:head>
 
@@ -247,7 +247,7 @@
 {:else}
 	<div class="login-page">
 		<div class="login-card">
-			<h1 class="brand">oute.me</h1>
+			<h1 class="brand">oute.pro</h1>
 			<p class="tagline">Estimativa de projetos de software com IA</p>
 
 			<div class="tabs">
