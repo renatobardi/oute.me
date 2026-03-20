@@ -265,7 +265,24 @@ phase3() {
   echo ""
   echo "━━━ Phase 3: Domain Mappings ━━━"
 
-  # oute.pro → Cloud Run prod (primary domain)
+  # oute.me → Cloud Run prod (primary domain)
+  log "Creating domain mapping for oute.me..."
+  if gcloud run domain-mappings describe --domain=oute.me --region="$REGION" &>/dev/null 2>&1; then
+    warn "Domain mapping 'oute.me' already exists, skipping."
+  else
+    gcloud run domain-mappings create \
+      --service=oute-web-prod \
+      --domain=oute.me \
+      --region="$REGION"
+  fi
+
+  echo ""
+  warn "DNS records needed for oute.me (configure at GCP Cloud DNS):"
+  gcloud run domain-mappings describe --domain=oute.me --region="$REGION" \
+    --format='value(status.resourceRecords)' 2>/dev/null || \
+    echo "  A/AAAA records as shown by Cloud Run"
+
+  # oute.pro → Cloud Run prod (redirect domain)
   log "Creating domain mapping for oute.pro..."
   if gcloud run domain-mappings describe --domain=oute.pro --region="$REGION" &>/dev/null 2>&1; then
     warn "Domain mapping 'oute.pro' already exists, skipping."

@@ -40,13 +40,12 @@ const cacheControl: Handle = async ({ event, resolve }) => {
 const redirectDomain: Handle = async ({ event, resolve }) => {
 	const host = event.request.headers.get('host') ?? '';
 	if (host.includes('oute.pro')) {
-		const url = new URL(event.request.url);
-		url.hostname = 'oute.me';
+		const url = new URL(event.url.pathname + event.url.search, 'https://oute.me');
 		return Response.redirect(url.toString(), 301);
 	}
 	if (host.startsWith('www.')) {
-		const url = new URL(event.request.url);
-		url.hostname = url.hostname.replace('www.', '');
+		const bare = host.replace(/^www\./, '');
+		const url = new URL(event.url.pathname + event.url.search, `https://${bare}`);
 		return Response.redirect(url.toString(), 301);
 	}
 	return resolve(event);
