@@ -277,8 +277,8 @@
 						<div class="docs-list">
 							{#each detail.documents as doc}
 								<div class="doc-row">
-									<span class="doc-name">{doc.original_name ?? doc.file_path}</span>
-									<span class="muted" style="font-size:0.75rem">{doc.file_type ?? ''}</span>
+									<span class="doc-name">{doc.filename}</span>
+									<span class="muted" style="font-size:0.75rem">{doc.mime_type ?? ''}</span>
 									<span class="muted" style="font-size:0.75rem">{fmtDate(doc.created_at)}</span>
 								</div>
 							{/each}
