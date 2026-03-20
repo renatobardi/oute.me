@@ -4,15 +4,17 @@
 	interface Props {
 		variant?: 'primary' | 'secondary' | 'ghost';
 		size?: 'sm' | 'md' | 'lg';
+		type?: 'button' | 'submit' | 'reset';
+		style?: string;
 		disabled?: boolean;
 		onclick?: (e: MouseEvent) => void;
 		children: Snippet;
 	}
 
-	let { variant = 'primary', size = 'md', disabled = false, onclick, children }: Props = $props();
+	let { variant = 'primary', size = 'md', type = 'button', style, disabled = false, onclick, children }: Props = $props();
 </script>
 
-<button class="btn btn-{variant} btn-{size}" {disabled} {onclick}>
+<button class="btn btn-{variant} btn-{size}" {type} {style} {disabled} {onclick}>
 	{@render children()}
 </button>
 

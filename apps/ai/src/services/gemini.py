@@ -3,11 +3,9 @@ import json
 import logging
 from collections.abc import AsyncGenerator
 
-import vertexai
 from google.api_core.exceptions import ResourceExhausted, ServiceUnavailable
 from vertexai.generative_models import Content, GenerationConfig, GenerativeModel, Part
 
-from src.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -64,7 +62,10 @@ async def stream_chat(
             if i == len(CHAT_MODELS) - 1:
                 raise
             last_exc = exc
-            logger.warning("model %s unavailable (%s), trying %s", model_name, exc, CHAT_MODELS[i + 1])
+            logger.warning(
+                "model %s unavailable (%s), trying %s",
+                model_name, exc, CHAT_MODELS[i + 1],
+            )
 
     if last_exc:
         raise last_exc
@@ -88,7 +89,10 @@ async def analyze_json(prompt: str, max_seconds: float = 30.0) -> dict[str, obje
             if i == len(CHAT_MODELS) - 1:
                 raise
             last_exc = exc
-            logger.warning("model %s unavailable (%s), trying %s", model_name, exc, CHAT_MODELS[i + 1])
+            logger.warning(
+                "model %s unavailable (%s), trying %s",
+                model_name, exc, CHAT_MODELS[i + 1],
+            )
 
     if last_exc:
         raise last_exc

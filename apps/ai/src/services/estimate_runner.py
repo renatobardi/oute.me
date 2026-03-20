@@ -85,8 +85,13 @@ async def run_pipeline(
 
         await backend.update_job(job_id, "done", result)
         duration_s = time.monotonic() - start_time
-        logger.info("Estimate job %s completed in %.1fs (model: %s)", job_id, duration_s, llm_model)
-        await emit_metric("llm/pipeline_duration", duration_s, {"status": "done", "llm_model": llm_model})
+        logger.info(
+            "Estimate job %s completed in %.1fs (model: %s)",
+            job_id, duration_s, llm_model,
+        )
+        await emit_metric(
+            "llm/pipeline_duration", duration_s, {"status": "done", "llm_model": llm_model}
+        )
 
     except Exception:
         duration_s = time.monotonic() - start_time
@@ -161,7 +166,8 @@ async def start_estimate(
     if settings.cloud_tasks_queue and settings.ai_service_url:
         # Prod: Cloud Tasks entrega a task para /estimate/execute
         await _dispatch_cloud_tasks(
-            job_id, interview_id, interview_state, conversation_summary, documents_context, llm_model
+            job_id, interview_id, interview_state,
+            conversation_summary, documents_context, llm_model
         )
     else:
         # Dev fallback: background asyncio task

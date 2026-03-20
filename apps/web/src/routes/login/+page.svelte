@@ -57,6 +57,7 @@
 	}
 
 	// ── One Tap credential callback ──────────────────────────────────────────
+	// eslint-disable-next-line no-undef
 	async function handleOneTapCredential(response: CredentialResponse) {
 		loading = true;
 		authPhase = 'firebase';
@@ -226,7 +227,7 @@
 				<div class="shimmer-block btn-block"></div>
 			</div>
 			<div class="shimmer-grid">
-				{#each [1, 2, 3, 4] as _}
+				{#each [1, 2, 3, 4] as _, i (i)}
 					<div class="shimmer-card">
 						<div class="shimmer-block line-lg"></div>
 						<div class="shimmer-block line-sm" style="width: 55%"></div>

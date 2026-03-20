@@ -161,7 +161,7 @@ async def _extract_image(file_bytes: bytes, mime_type: str) -> str:
     )
     image_part = Part.from_data(mime_type=mime_type, data=file_bytes)
     model = GenerativeModel("gemini-2.5-flash-lite")
-    response = await model.generate_content_async([prompt, image_part])
+    response = await model.generate_content_async([prompt, image_part])  # type: ignore[arg-type]
     return (response.text or "")[:MAX_EXTRACTED_LENGTH]
 
 
