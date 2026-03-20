@@ -33,14 +33,21 @@ consolidate_requirements:
 search_similar_projects:
   description: >
     Com base nos requisitos consolidados, busque projetos similares na base
-    de conhecimento vetorial. Use a ferramenta de busca vetorial para encontrar
-    projetos com escopo, tecnologias e complexidade comparáveis.
+    de conhecimento vetorial E na internet.
+
+    1. Use a ferramenta vector_search para buscar projetos anteriores na base interna.
+    2. Use a ferramenta web_search para buscar na internet por:
+       - Projetos de software similares e seus custos
+       - Arquiteturas de referência para o tipo de projeto
+       - Benchmarks de mercado para desenvolvimento de software
+       - Artigos técnicos relevantes
 
     Requisitos consolidados:
     {consolidated_requirements}
 
-    Gere uma query de busca eficiente e analise os resultados encontrados,
-    extraindo métricas úteis como custo médio, prazo e tamanho de equipe.
+    Gere queries de busca eficientes para cada ferramenta. Combine os resultados
+    internos e externos, dando prioridade a dados internos quando disponíveis,
+    mas enriquecendo com benchmarks de mercado da web.
   expected_output: >
     Um documento JSON com:
     {

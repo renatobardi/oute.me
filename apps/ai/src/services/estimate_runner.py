@@ -9,7 +9,11 @@ from typing import Any
 from src.crew.estimate_crew import build_estimate_crew
 from src.services.monitoring import emit_metric
 from src.services.state import StateBackend
-from src.services.vector_store import store_vector
+from src.services.vector_store import (
+    delete_vectors_by_source,
+    embed_interview_data,
+    store_vector,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -21,8 +25,11 @@ def _run_crew_sync(
     interview_state: dict[str, object],
     conversation_summary: str,
     documents_context: str,
+    agent_instructions: dict[str, str] | None = None,
 ) -> dict[str, Any]:
-    crew = build_estimate_crew(interview_state, conversation_summary, documents_context)
+    crew = build_estimate_crew(
+        interview_state, conversation_summary, documents_context, agent_instructions or {},
+    )
     result = crew.kickoff()
     raw = result.raw if hasattr(result, "raw") else str(result)
 
@@ -42,6 +49,7 @@ async def run_pipeline(
     documents_context: str,
     backend: StateBackend,
     llm_model: str = "gemini-2.5-flash",
+    agent_instructions: dict[str, str] | None = None,
 ) -> None:
     """Executa o pipeline CrewAI e atualiza o estado do job.
 
@@ -52,6 +60,18 @@ async def run_pipeline(
     try:
         await backend.update_job(job_id, "running")
 
+        # Embed interview data for RAG search before pipeline runs
+        try:
+            await delete_vectors_by_source(
+                interview_id,
+                ["interview_summary", "interview_responses", "interview_document"],
+            )
+            await embed_interview_data(
+                interview_id, interview_state, conversation_summary, documents_context,
+            )
+        except Exception:
+            logger.exception("Failed to embed interview data for job %s (continuing)", job_id)
+
         loop = asyncio.get_event_loop()
         result = await loop.run_in_executor(
             _executor,
@@ -59,6 +79,7 @@ async def run_pipeline(
             interview_state,
             conversation_summary,
             documents_context,
+            agent_instructions,
         )
 
         # Store knowledge vector for future RAG searches
@@ -108,6 +129,7 @@ async def _dispatch_cloud_tasks(
     conversation_summary: str,
     documents_context: str,
     llm_model: str = "gemini-2.5-flash",
+    agent_instructions: dict[str, str] | None = None,
 ) -> None:
     from google.cloud import tasks_v2
 
@@ -125,6 +147,7 @@ async def _dispatch_cloud_tasks(
         "conversation_summary": conversation_summary,
         "documents_context": documents_context,
         "llm_model": llm_model,
+        "agent_instructions": agent_instructions or {},
     }
 
     task = tasks_v2.Task(
@@ -150,6 +173,7 @@ async def start_estimate(
     documents_context: str,
     backend: StateBackend,
     llm_model: str = "gemini-2.5-flash",
+    agent_instructions: dict[str, str] | None = None,
 ) -> str:
     from src.config import settings
 
@@ -167,7 +191,7 @@ async def start_estimate(
         # Prod: Cloud Tasks entrega a task para /estimate/execute
         await _dispatch_cloud_tasks(
             job_id, interview_id, interview_state,
-            conversation_summary, documents_context, llm_model
+            conversation_summary, documents_context, llm_model, agent_instructions,
         )
     else:
         # Dev fallback: background asyncio task
@@ -181,6 +205,7 @@ async def start_estimate(
                 documents_context,
                 backend,
                 llm_model,
+                agent_instructions,
             )
         )
         _background_tasks.add(task)
