@@ -83,7 +83,7 @@
 </script>
 
 <svelte:head>
-	<title>{project.name} — oute.me</title>
+	<title>{project.name} — oute.pro</title>
 </svelte:head>
 
 <div class="project-page">

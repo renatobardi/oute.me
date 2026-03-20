@@ -24,7 +24,7 @@
 </script>
 
 <svelte:head>
-	<title>Projetos — oute.me</title>
+	<title>Projetos — oute.pro</title>
 </svelte:head>
 
 <div class="projects-page">

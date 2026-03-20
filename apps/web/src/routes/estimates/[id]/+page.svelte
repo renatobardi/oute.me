@@ -61,7 +61,7 @@
 </script>
 
 <svelte:head>
-	<title>Estimativa — oute.me</title>
+	<title>Estimativa — oute.pro</title>
 </svelte:head>
 
 <div class="estimate-page">

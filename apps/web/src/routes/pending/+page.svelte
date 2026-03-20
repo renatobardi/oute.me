@@ -50,12 +50,12 @@
 </script>
 
 <svelte:head>
-	<title>Aguardando ativação — oute.me</title>
+	<title>Aguardando ativação — oute.pro</title>
 </svelte:head>
 
 <div class="page">
 	<div class="card">
-		<h1 class="brand">oute.me</h1>
+		<h1 class="brand">oute.pro</h1>
 
 		{#if !emailVerified}
 			<div class="icon">📧</div>
@@ -77,7 +77,7 @@
 			<div class="icon">⏳</div>
 			<h2 class="title">Aguardando ativação</h2>
 			<p class="body">
-				Seu e-mail foi confirmado. Sua conta está em análise pela equipe do oute.me.
+				Seu e-mail foi confirmado. Sua conta está em análise pela equipe do oute.pro.
 				Você receberá um e-mail quando for ativado.
 			</p>
 		{/if}

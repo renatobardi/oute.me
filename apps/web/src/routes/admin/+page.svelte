@@ -41,7 +41,7 @@
 </script>
 
 <svelte:head>
-	<title>Admin — oute.me</title>
+	<title>Admin — oute.pro</title>
 </svelte:head>
 
 <div class="page">
