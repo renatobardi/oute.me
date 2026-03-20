@@ -7,7 +7,7 @@ import { postJSON } from '$lib/server/ai-client';
 export const POST: RequestHandler = async ({ request, locals }) => {
 	const user = requireAuth(locals);
 	const body = await request.json();
-	const { interview_id } = body as { interview_id: string };
+	const { interview_id, llm_model } = body as { interview_id: string; llm_model?: string };
 
 	if (!interview_id) {
 		return jsonError(400, 'interview_id is required');
@@ -32,6 +32,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		state: interview.state,
 		conversation_summary: interview.state.conversation_summary || '',
 		documents_context: '',
+		llm_model: llm_model || 'gemini-2.5-flash',
 	});
 
 	const estimate = await createEstimate(interview_id, user.uid, aiResponse.job_id);

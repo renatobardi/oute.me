@@ -31,6 +31,7 @@ class ChatRequest(BaseModel):
     documents_context: str | None = None
     tone_instruction: str | None = None
     is_resumption: bool = False
+    llm_model: str = "gemini-2.5-flash"
 
 
 class StateUpdate(BaseModel):

@@ -20,6 +20,7 @@ async def run_estimate(request: EstimateRequest) -> dict[str, str]:
         conversation_summary=request.conversation_summary,
         documents_context=request.documents_context,
         backend=backend,
+        llm_model=request.llm_model,
     )
 
     return {"job_id": job_id, "status": "pending"}
@@ -44,6 +45,7 @@ async def execute_estimate(
     interview_state: dict[str, object] = payload["interview_state"]
     conversation_summary: str = payload["conversation_summary"]
     documents_context: str = payload["documents_context"]
+    llm_model: str = payload.get("llm_model", "gemini-2.5-flash")
 
     backend = create_state_backend()
 
@@ -54,6 +56,7 @@ async def execute_estimate(
         conversation_summary=conversation_summary,
         documents_context=documents_context,
         backend=backend,
+        llm_model=llm_model,
     )
 
     return {"job_id": job_id, "status": "done"}

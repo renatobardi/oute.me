@@ -8,8 +8,11 @@
 	let { data } = $props();
 
 	// Inicializa o store compartilhado de tom com o valor carregado do servidor
-	activeTone.action = data.toneAction ?? null;
+	$effect(() => {
+		activeTone.action = data.toneAction ?? null;
+	});
 
+	// svelte-ignore state_referenced_locally
 	const chat = createChatState(
 		data.interview.id,
 		data.messages,
