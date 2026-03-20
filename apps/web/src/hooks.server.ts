@@ -37,13 +37,22 @@ const cacheControl: Handle = async ({ event, resolve }) => {
 	return response;
 };
 
-const redirectWww: Handle = async ({ event, resolve }) => {
+const redirectDomain: Handle = async ({ event, resolve }) => {
 	const host = event.request.headers.get('host') ?? '';
+
+	// oute.me (com ou sem www) → oute.pro
+	if (host === 'oute.me' || host === 'www.oute.me') {
+		const url = new URL(event.url.pathname + event.url.search, 'https://oute.pro');
+		return Response.redirect(url.toString(), 301);
+	}
+
+	// www.oute.pro → oute.pro
 	if (host.startsWith('www.')) {
 		const bare = host.replace(/^www\./, '');
 		const url = new URL(event.url.pathname + event.url.search, `https://${bare}`);
 		return Response.redirect(url.toString(), 301);
 	}
+
 	return resolve(event);
 };
 
@@ -115,4 +124,4 @@ const gateUser: Handle = async ({ event, resolve }) => {
 	return resolve(event);
 };
 
-export const handle = sequence(redirectWww, rateLimit, authenticate, gateUser, cacheControl, securityHeaders);
+export const handle = sequence(redirectDomain, rateLimit, authenticate, gateUser, cacheControl, securityHeaders);
