@@ -16,6 +16,7 @@
 
 <div class="page">
 	<nav class="admin-nav">
+		<a href="/admin/cockpit" class="nav-tab">Cockpit</a>
 		<a href="/admin" class="nav-tab">Usuarios</a>
 		<a href="/admin/knowledge" class="nav-tab">Base de Conhecimento</a>
 		<a href="/admin/agents" class="nav-tab active">Agentes</a>
