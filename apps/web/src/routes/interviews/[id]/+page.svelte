@@ -93,7 +93,7 @@
 </script>
 
 <svelte:head>
-	<title>{data.interview.title || 'Entrevista'} — oute.me</title>
+	<title>{data.interview.title || 'Entrevista'} — oute.pro</title>
 </svelte:head>
 
 <div class="interview-page">

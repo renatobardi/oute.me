@@ -33,7 +33,7 @@
 </script>
 
 <svelte:head>
-	<title>Entrevistas — oute.me</title>
+	<title>Entrevistas — oute.pro</title>
 </svelte:head>
 
 <div class="page">
