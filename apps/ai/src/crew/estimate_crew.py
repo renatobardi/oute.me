@@ -5,7 +5,7 @@ from pathlib import Path
 import yaml
 from crewai import Agent, Crew, Process, Task
 
-from src.crew.tools import VectorSearchTool
+from src.crew.tools import VectorSearchTool, WebSearchTool
 
 logger = logging.getLogger(__name__)
 
@@ -17,13 +17,22 @@ def _load_yaml(filename: str) -> dict[str, object]:
         return yaml.safe_load(f)  # type: ignore[no-any-return]
 
 
+def _enrich_backstory(base: str, instructions: str) -> str:
+    """Append admin-editable instructions to an agent's backstory."""
+    if not instructions:
+        return base
+    return f"{base}\n\n## Instruções de Trabalho\n{instructions}"
+
+
 def build_estimate_crew(
     interview_state: dict[str, object],
     conversation_summary: str,
     documents_context: str,
+    agent_instructions: dict[str, str] | None = None,
 ) -> Crew:
     agents_config = _load_yaml("agents.yaml")
     tasks_config = _load_yaml("tasks.yaml")
+    instructions = agent_instructions or {}
 
     llm = "vertex_ai/gemini-2.5-flash-lite"
 
@@ -31,7 +40,10 @@ def build_estimate_crew(
     architecture_interviewer = Agent(
         role=agents_config["architecture_interviewer"]["role"],  # type: ignore[index]
         goal=agents_config["architecture_interviewer"]["goal"],  # type: ignore[index]
-        backstory=agents_config["architecture_interviewer"]["backstory"],  # type: ignore[index]
+        backstory=_enrich_backstory(
+            str(agents_config["architecture_interviewer"]["backstory"]),  # type: ignore[index]
+            instructions.get("architecture_interviewer", ""),
+        ),
         llm=llm,
         verbose=False,
     )
@@ -39,16 +51,22 @@ def build_estimate_crew(
     rag_analyst = Agent(
         role=agents_config["rag_analyst"]["role"],  # type: ignore[index]
         goal=agents_config["rag_analyst"]["goal"],  # type: ignore[index]
-        backstory=agents_config["rag_analyst"]["backstory"],  # type: ignore[index]
+        backstory=_enrich_backstory(
+            str(agents_config["rag_analyst"]["backstory"]),  # type: ignore[index]
+            instructions.get("rag_analyst", ""),
+        ),
         llm=llm,
-        tools=[VectorSearchTool()],
+        tools=[VectorSearchTool(), WebSearchTool()],
         verbose=False,
     )
 
     software_architect = Agent(
         role=agents_config["software_architect"]["role"],  # type: ignore[index]
         goal=agents_config["software_architect"]["goal"],  # type: ignore[index]
-        backstory=agents_config["software_architect"]["backstory"],  # type: ignore[index]
+        backstory=_enrich_backstory(
+            str(agents_config["software_architect"]["backstory"]),  # type: ignore[index]
+            instructions.get("software_architect", ""),
+        ),
         llm=llm,
         verbose=False,
     )
@@ -56,7 +74,10 @@ def build_estimate_crew(
     cost_specialist = Agent(
         role=agents_config["cost_specialist"]["role"],  # type: ignore[index]
         goal=agents_config["cost_specialist"]["goal"],  # type: ignore[index]
-        backstory=agents_config["cost_specialist"]["backstory"],  # type: ignore[index]
+        backstory=_enrich_backstory(
+            str(agents_config["cost_specialist"]["backstory"]),  # type: ignore[index]
+            instructions.get("cost_specialist", ""),
+        ),
         llm=llm,
         verbose=False,
     )
@@ -64,7 +85,10 @@ def build_estimate_crew(
     reviewer = Agent(
         role=agents_config["reviewer"]["role"],  # type: ignore[index]
         goal=agents_config["reviewer"]["goal"],  # type: ignore[index]
-        backstory=agents_config["reviewer"]["backstory"],  # type: ignore[index]
+        backstory=_enrich_backstory(
+            str(agents_config["reviewer"]["backstory"]),  # type: ignore[index]
+            instructions.get("reviewer", ""),
+        ),
         llm=llm,
         verbose=False,
     )
@@ -72,7 +96,10 @@ def build_estimate_crew(
     knowledge_manager = Agent(
         role=agents_config["knowledge_manager"]["role"],  # type: ignore[index]
         goal=agents_config["knowledge_manager"]["goal"],  # type: ignore[index]
-        backstory=agents_config["knowledge_manager"]["backstory"],  # type: ignore[index]
+        backstory=_enrich_backstory(
+            str(agents_config["knowledge_manager"]["backstory"]),  # type: ignore[index]
+            instructions.get("knowledge_manager", ""),
+        ),
         llm=llm,
         verbose=False,
     )

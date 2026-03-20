@@ -19,6 +19,10 @@ class Settings(BaseSettings):
     # Document AI — processador Layout Parser (opcional: fallback para parsers locais)
     document_ai_processor_id: str = ""
 
+    # Google Custom Search — busca web no pipeline de estimativa (opcional)
+    google_search_api_key: str = ""
+    google_search_cx: str = ""
+
     # Grok (xAI) — opcional, usado quando llm_model começa com "grok"
     grok_api_key: str = ""
 
