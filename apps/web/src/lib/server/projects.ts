@@ -1,5 +1,6 @@
 import sql from './db';
 import type { Project, ProjectMilestone, ProjectTask } from '$lib/types/project';
+import type { InterviewDocument } from '$lib/types/interview';
 import type { EstimateResult, Milestone as EstimateMilestone } from '$lib/types/estimate';
 
 export async function createProjectFromEstimate(
@@ -170,6 +171,17 @@ export async function createTask(
 		RETURNING *
 	`;
 	return row;
+}
+
+export async function getProjectDocuments(projectId: string): Promise<InterviewDocument[]> {
+	return sql<InterviewDocument[]>`
+		SELECT d.*
+		FROM public.documents d
+		JOIN public.estimates e ON e.interview_id = d.interview_id
+		JOIN public.projects p ON p.estimate_id = e.id
+		WHERE p.id = ${projectId}
+		ORDER BY d.created_at ASC
+	`;
 }
 
 export async function updateTaskStatus(

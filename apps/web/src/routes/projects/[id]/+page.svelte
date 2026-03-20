@@ -9,6 +9,7 @@
 	let project = $derived(data.project);
 	let milestones = $derived(data.milestones);
 	let tasks = $derived(data.tasks);
+	let documents = $derived(data.documents);
 
 	let completedMilestones = $derived(milestones.filter((m) => m.status === 'done').length);
 	let totalTasks = $derived(tasks.length);
@@ -134,6 +135,38 @@
 			variant={completedTasks === totalTasks && totalTasks > 0 ? 'success' : 'primary'}
 		/>
 	</div>
+
+	<!-- Documents -->
+	{#if documents.length > 0}
+		<section class="documents-section">
+			<h2>Documentos ({documents.length})</h2>
+			<div class="documents-grid">
+				{#each documents as doc (doc.id)}
+					<div class="document-card">
+						<div class="doc-icon">
+							{#if doc.mime_type?.includes('pdf')}
+								<span>PDF</span>
+							{:else if doc.mime_type?.includes('word') || doc.mime_type?.includes('docx')}
+								<span>DOC</span>
+							{:else if doc.mime_type?.includes('sheet') || doc.mime_type?.includes('xlsx') || doc.mime_type?.includes('csv')}
+								<span>XLS</span>
+							{:else if doc.mime_type?.includes('image')}
+								<span>IMG</span>
+							{:else}
+								<span>ARQ</span>
+							{/if}
+						</div>
+						<div class="doc-info">
+							<span class="doc-name">{doc.filename}</span>
+							<span class="doc-meta">
+								{doc.status === 'processed' ? 'Processado' : doc.status === 'processing' ? 'Processando...' : doc.status}
+							</span>
+						</div>
+					</div>
+				{/each}
+			</div>
+		</section>
+	{/if}
 
 	<!-- Milestones -->
 	<section class="milestones-section">
@@ -277,6 +310,67 @@
 		grid-template-columns: 1fr 1fr;
 		gap: 1rem;
 		margin-bottom: 2rem;
+	}
+
+	/* documents */
+	.documents-section {
+		margin-bottom: 2rem;
+	}
+
+	.documents-section h2 {
+		font-size: 1.25rem;
+		color: rgba(255, 255, 255, 0.9);
+		margin-bottom: 1rem;
+	}
+
+	.documents-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+		gap: 0.75rem;
+	}
+
+	.document-card {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+		background: var(--color-dark-surface, #1a1d27);
+		border: 1px solid rgba(255, 255, 255, 0.06);
+		border-radius: 10px;
+		padding: 0.875rem 1rem;
+	}
+
+	.doc-icon {
+		width: 36px;
+		height: 36px;
+		border-radius: 8px;
+		background: rgba(99, 102, 241, 0.15);
+		color: var(--color-primary-500, #6366f1);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		font-size: 0.65rem;
+		font-weight: 700;
+		flex-shrink: 0;
+	}
+
+	.doc-info {
+		display: flex;
+		flex-direction: column;
+		min-width: 0;
+	}
+
+	.doc-name {
+		font-size: 0.8125rem;
+		color: rgba(255, 255, 255, 0.85);
+		font-weight: 500;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.doc-meta {
+		font-size: 0.7rem;
+		color: rgba(255, 255, 255, 0.4);
 	}
 
 	.milestones-section h2 {

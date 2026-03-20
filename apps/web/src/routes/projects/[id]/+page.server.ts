@@ -1,6 +1,6 @@
 import { error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
-import { getProject, getMilestones, getTasks } from '$lib/server/projects';
+import { getProject, getMilestones, getTasks, getProjectDocuments } from '$lib/server/projects';
 
 export const load: PageServerLoad = async ({ params, locals }) => {
 	if (!locals.user) {
@@ -12,8 +12,11 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		throw error(404, 'Project not found');
 	}
 
-	const milestones = await getMilestones(project.id);
-	const tasks = await getTasks(project.id);
+	const [milestones, tasks, documents] = await Promise.all([
+		getMilestones(project.id),
+		getTasks(project.id),
+		getProjectDocuments(project.id),
+	]);
 
-	return { project, milestones, tasks };
+	return { project, milestones, tasks, documents };
 };
