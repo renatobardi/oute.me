@@ -113,7 +113,7 @@ def ensure_domains_initialized(state: InterviewState) -> InterviewState:
     return updated
 
 
-def get_domain_progress_summary(state: InterviewState) -> dict[str, dict]:
+def get_domain_progress_summary(state: InterviewState) -> dict[str, dict[str, object]]:
     """
     Retorna um resumo de progresso por domínio.
     Útil para logging e para o system prompt.
@@ -128,7 +128,12 @@ def get_domain_progress_summary(state: InterviewState) -> dict[str, dict]:
     for domain in DEFAULT_DOMAIN_TOTALS:
         d = state.domains.get(domain)
         if not d:
-            summary[domain] = {"answered": 0, "total": DEFAULT_DOMAIN_TOTALS[domain], "pct": 0.0, "vital": False}
+            summary[domain] = {
+                "answered": 0,
+                "total": DEFAULT_DOMAIN_TOTALS[domain],
+                "pct": 0.0,
+                "vital": False,
+            }
         else:
             pct = (d.answered / d.total * 100) if d.total > 0 else 0.0
             summary[domain] = {

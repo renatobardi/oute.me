@@ -23,11 +23,11 @@ import uuid
 from collections.abc import AsyncGenerator
 
 from src.models.interview import ChatRequest
-from src.services.llm import stream_chat
 from src.services.interview_initializer import (
     ensure_domains_initialized,
     get_uncovered_vital_domains,
 )
+from src.services.llm import stream_chat
 from src.services.prompts import build_system_prompt
 from src.services.state_analyzer import analyze_and_update_state
 
@@ -62,7 +62,9 @@ async def process_message(
     tokens_used = 0
 
     try:
-        async for chunk in await stream_chat(system_prompt, history, request.user_message, llm_model=request.llm_model):
+        async for chunk in await stream_chat(
+            system_prompt, history, request.user_message, llm_model=request.llm_model
+        ):
             full_response += chunk
             tokens_used += len(chunk.split())
             yield _sse_event(
@@ -76,7 +78,7 @@ async def process_message(
         logger.exception("stream_chat failed for interview %s", request.interview_id)
         yield _sse_event(
             "error",
-            {"message": "O serviço de IA está temporariamente indisponível. Tente novamente em instantes."},
+            {"message": "O serviço de IA está temporariamente indisponível. Tente novamente em instantes."},  # noqa: E501
         )
         return
 
