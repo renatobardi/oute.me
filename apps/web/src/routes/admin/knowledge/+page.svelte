@@ -210,8 +210,8 @@
 
 			<!-- Entry detail -->
 			{#if selected}
+				{@const badge = typeBadge(selected.type)}
 				<div class="entry-detail">
-					{@const badge = typeBadge(selected.type)}
 					<div class="entry-header">
 						<h2 class="entry-title">{selected.title}</h2>
 						<span class="badge {badge.cls}">{badge.text}</span>

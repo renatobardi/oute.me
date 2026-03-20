@@ -4,6 +4,7 @@
 
 	let { data } = $props();
 
+	// svelte-ignore state_referenced_locally
 	let instructions = $state<AgentInstruction[]>(data.instructions);
 	let selectedKey = $state<string | null>(null);
 	let editContent = $state('');
