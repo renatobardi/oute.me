@@ -204,18 +204,16 @@ jobs:
           echo "$HEADERS" | grep -qi "x-frame-options: deny" || { echo "Missing X-Frame-Options"; exit 1; }
           echo "Security headers verified"
 
-      - name: Verify oute.me redirect to oute.pro
+      - name: Verify oute.pro responds
         run: |
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "https://oute.me/" 2>/dev/null || echo "000")
-          echo "oute.me status: ${STATUS}"
-          if [[ "$STATUS" == "301" ]]; then
-            LOCATION=$(curl -sI --max-time 10 "https://oute.me/" 2>/dev/null | grep -i "^location:" | tr -d '\r')
-            echo "Redirect location: ${LOCATION}"
-            echo "oute.me → oute.pro redirect verified"
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "https://oute.pro/" 2>/dev/null || echo "000")
+          echo "oute.pro status: ${STATUS}"
+          if [[ "$STATUS" -ge 200 && "$STATUS" -lt 400 ]]; then
+            echo "oute.pro is responding"
           elif [[ "$STATUS" == "000" ]]; then
-            echo "Skipping oute.me domain check (DNS may not be configured yet)"
+            echo "Skipping oute.pro domain check (DNS may not be configured yet)"
           else
-            echo "Expected 301 redirect from oute.me, got ${STATUS}"
+            echo "oute.pro returned unexpected status: ${STATUS}"
             exit 1
           fi
 

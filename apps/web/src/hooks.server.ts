@@ -37,12 +37,8 @@ const cacheControl: Handle = async ({ event, resolve }) => {
 	return response;
 };
 
-const redirectDomain: Handle = async ({ event, resolve }) => {
+const redirectWww: Handle = async ({ event, resolve }) => {
 	const host = event.request.headers.get('host') ?? '';
-	if (host.includes('oute.me')) {
-		const url = new URL(event.url.pathname + event.url.search, 'https://oute.pro');
-		return Response.redirect(url.toString(), 301);
-	}
 	if (host.startsWith('www.')) {
 		const bare = host.replace(/^www\./, '');
 		const url = new URL(event.url.pathname + event.url.search, `https://${bare}`);
@@ -119,4 +115,4 @@ const gateUser: Handle = async ({ event, resolve }) => {
 	return resolve(event);
 };
 
-export const handle = sequence(redirectDomain, rateLimit, authenticate, gateUser, cacheControl, securityHeaders);
+export const handle = sequence(redirectWww, rateLimit, authenticate, gateUser, cacheControl, securityHeaders);

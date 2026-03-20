@@ -282,23 +282,6 @@ phase3() {
     --format='value(status.resourceRecords)' 2>/dev/null || \
     echo "  CNAME oute.pro → ghs.googlehosted.com"
 
-  # oute.me → Cloud Run prod (redirect domain — 301 to oute.pro)
-  log "Creating domain mapping for oute.me..."
-  if gcloud run domain-mappings describe --domain=oute.me --region="$REGION" &>/dev/null 2>&1; then
-    warn "Domain mapping 'oute.me' already exists, skipping."
-  else
-    gcloud run domain-mappings create \
-      --service=oute-web-prod \
-      --domain=oute.me \
-      --region="$REGION"
-  fi
-
-  echo ""
-  warn "DNS records needed for oute.me (configure at GCP Cloud DNS):"
-  gcloud run domain-mappings describe --domain=oute.me --region="$REGION" \
-    --format='value(status.resourceRecords)' 2>/dev/null || \
-    echo "  A/AAAA records as shown by Cloud Run"
-
   log "Phase 3 complete."
 }
 
