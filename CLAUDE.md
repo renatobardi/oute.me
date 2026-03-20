@@ -64,7 +64,7 @@ oute.me/
 
 7. **Auth exclusivamente via Firebase Admin SDK** no servidor. Nunca ler/escrever sessão de auth diretamente no banco.
 
-8. **oute.pro faz redirect 301 para oute.me** via `hooks.server.ts`. Nunca servir conteúdo diferente nos dois domínios.
+8. **oute.pro é o único domínio ativo.** Não há redirect de outros domínios.
 
 ---
 
@@ -216,21 +216,7 @@ Dev (sem `CLOUD_TASKS_QUEUE`): fallback para background asyncio task.
 | Custo estimado | ~$0/mês | ~$10–15/mês |
 
 ### Domínios
-- `oute.me` — DNS gerenciado pelo GCP, domain mapping no Cloud Run prod
-- `oute.pro` — CNAME no provedor externo → `ghs.googlehosted.com`, TLS GCP, redirect 301
-
-### Redirect oute.pro → oute.me (`apps/web/src/hooks.server.ts`)
-```typescript
-export const handle: Handle = async ({ event, resolve }) => {
-  const host = event.request.headers.get('host') ?? '';
-  if (host.includes('oute.pro')) {
-    const url = new URL(event.request.url);
-    url.hostname = 'oute.me';
-    return Response.redirect(url.toString(), 301);
-  }
-  return resolve(event);
-};
-```
+- `oute.pro` — domínio único, CNAME no provedor externo → `ghs.googlehosted.com`, TLS GCP
 
 ---
 
@@ -350,7 +336,7 @@ Tokens CSS em `packages/ui/src/theme/theme.css`:
 | ADR-05 | Firebase Auth — sem Auth.js ou Supabase |
 | ADR-06 | GCP-only, sem VM, sem Docker Compose |
 | ADR-07 | pnpm workspaces + Turborepo |
-| ADR-08 | Dual domain: oute.me (GCP) + oute.pro (externo, 301 redirect) |
+| ADR-08 | Domínio único: oute.pro (GCP Cloud Run) |
 | ADR-09 | Vertex AI SDK como cliente LLM padrão (ADC — sem GEMINI_API_KEY) |
 | ADR-10 | Cloud Tasks como orquestrador de jobs assíncronos de estimativa |
 
