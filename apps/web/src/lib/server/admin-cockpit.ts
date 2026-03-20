@@ -45,7 +45,7 @@ export async function getAllInterviewsForAdmin(): Promise<CockpitInterview[]> {
 			i.maturity,
 			i.created_at,
 			i.updated_at,
-			u.name AS user_name,
+			u.display_name AS user_name,
 			u.email AS user_email,
 			e.id AS estimate_id,
 			e.status AS estimate_status,
