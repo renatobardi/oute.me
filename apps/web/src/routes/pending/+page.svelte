@@ -4,18 +4,16 @@
 	import { auth } from '$lib/firebase';
 	import { sendEmailVerification } from 'firebase/auth';
 
+	// eslint-disable-next-line @typescript-eslint/no-unused-vars
 	let { data } = $props();
 
 	let emailVerified = $state(data.emailVerified);
 	let resending = $state(false);
 	let resent = $state(false);
-	let checkingVerification = $state(false);
-
 	onMount(async () => {
 		if (emailVerified) return;
 
 		// Verifica se o usuário acabou de clicar no link de verificação
-		checkingVerification = true;
 		try {
 			await auth.currentUser?.reload();
 			const verified = auth.currentUser?.emailVerified ?? false;
@@ -34,7 +32,6 @@
 				window.location.reload();
 			}
 		} finally {
-			checkingVerification = false;
 		}
 	});
 

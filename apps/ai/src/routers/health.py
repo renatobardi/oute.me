@@ -46,7 +46,9 @@ async def health_check() -> dict[str, str]:
         from vertexai.generative_models import GenerativeModel
 
         GenerativeModel("gemini-2.5-flash")
-        statuses["vertex_ai"] = f"ok (project={settings.gcp_project}, location={settings.gcp_location})"
+        statuses["vertex_ai"] = (
+            f"ok (project={settings.gcp_project}, location={settings.gcp_location})"
+        )
     except Exception:
         logger.exception("Vertex AI health check failed")
         statuses["vertex_ai"] = "error"

@@ -21,7 +21,7 @@ async def generate_embedding(text: str) -> list[float]:
     model = _get_model()
     inputs = [TextEmbeddingInput(text, "RETRIEVAL_DOCUMENT")]
     loop = asyncio.get_event_loop()
-    embeddings = await loop.run_in_executor(None, model.get_embeddings, inputs)
+    embeddings = await loop.run_in_executor(None, lambda: model.get_embeddings(inputs))
     if not embeddings:
         return []
     return list(embeddings[0].values)
