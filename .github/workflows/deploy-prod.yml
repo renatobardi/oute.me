@@ -73,7 +73,7 @@ jobs:
             --service-account=${{ secrets.GCP_SERVICE_ACCOUNT }}
           env_vars: |
             NODE_ENV=production
-            ORIGIN=https://oute.me
+            ORIGIN=https://oute.pro
             FIREBASE_PROJECT_ID=${{ secrets.GCP_PROJECT_ID }}
             PUBLIC_FIREBASE_API_KEY=${{ secrets.PUBLIC_FIREBASE_API_KEY }}
             PUBLIC_FIREBASE_AUTH_DOMAIN=${{ secrets.GCP_PROJECT_ID }}.firebaseapp.com
@@ -204,18 +204,18 @@ jobs:
           echo "$HEADERS" | grep -qi "x-frame-options: deny" || { echo "Missing X-Frame-Options"; exit 1; }
           echo "Security headers verified"
 
-      - name: Verify oute.pro redirect
+      - name: Verify oute.me redirect to oute.pro
         run: |
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "https://oute.pro/" 2>/dev/null || echo "000")
-          echo "oute.pro status: ${STATUS}"
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "https://oute.me/" 2>/dev/null || echo "000")
+          echo "oute.me status: ${STATUS}"
           if [[ "$STATUS" == "301" ]]; then
-            LOCATION=$(curl -sI --max-time 10 "https://oute.pro/" 2>/dev/null | grep -i "^location:" | tr -d '\r')
+            LOCATION=$(curl -sI --max-time 10 "https://oute.me/" 2>/dev/null | grep -i "^location:" | tr -d '\r')
             echo "Redirect location: ${LOCATION}"
-            echo "oute.pro redirect verified"
+            echo "oute.me → oute.pro redirect verified"
           elif [[ "$STATUS" == "000" ]]; then
-            echo "Skipping oute.pro domain check (DNS may not be configured yet)"
+            echo "Skipping oute.me domain check (DNS may not be configured yet)"
           else
-            echo "Expected 301 redirect from oute.pro, got ${STATUS}"
+            echo "Expected 301 redirect from oute.me, got ${STATUS}"
             exit 1
           fi
 

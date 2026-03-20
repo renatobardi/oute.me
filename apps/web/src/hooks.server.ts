@@ -39,8 +39,8 @@ const cacheControl: Handle = async ({ event, resolve }) => {
 
 const redirectDomain: Handle = async ({ event, resolve }) => {
 	const host = event.request.headers.get('host') ?? '';
-	if (host.includes('oute.pro')) {
-		const url = new URL(event.url.pathname + event.url.search, 'https://oute.me');
+	if (host.includes('oute.me')) {
+		const url = new URL(event.url.pathname + event.url.search, 'https://oute.pro');
 		return Response.redirect(url.toString(), 301);
 	}
 	if (host.startsWith('www.')) {
