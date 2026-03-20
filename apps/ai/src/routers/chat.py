@@ -1,11 +1,12 @@
 from collections.abc import AsyncGenerator
 
 from fastapi import APIRouter, UploadFile
+from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
 from starlette.responses import JSONResponse
 
 from src.models.interview import ChatRequest
-from src.services.document_processor import extract_text
+from src.services.document_processor import extract_from_url, extract_text
 from src.services.interviewer import process_message
 
 router = APIRouter()
@@ -18,6 +19,23 @@ async def chat_message(request: ChatRequest) -> EventSourceResponse:
             yield event
 
     return EventSourceResponse(event_generator())
+
+
+class UrlExtractRequest(BaseModel):
+    url: str
+
+
+@router.post("/extract-url")
+async def extract_url_content(request: UrlExtractRequest) -> JSONResponse:
+    """Extract text content from a URL."""
+    text = await extract_from_url(request.url)
+    return JSONResponse(
+        {
+            "extracted_text": text,
+            "url": request.url,
+            "status": "completed" if not text.startswith("[Erro") else "failed",
+        }
+    )
 
 
 @router.post("/process-document")
