@@ -40,6 +40,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.workflow_run.head_branch || github.ref }}
 
       - id: auth
         uses: google-github-actions/auth@v3
