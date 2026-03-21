@@ -40,7 +40,11 @@ O usuário já enviou documentos com o seguinte conteúdo extraído:
 
 Use essas informações para evitar perguntas redundantes e para validar e enriquecer respostas já dadas."""
 
-    user_section = f"\nVocê está conversando com **{user_name}**. Use o nome dele(a) quando for natural, mas não excessivamente." if user_name else ""
+    user_section = (
+        f"\nVocê está conversando com **{user_name}**. Use o nome dele(a) quando for natural, mas não excessivamente."
+        if user_name
+        else ""
+    )
 
     return f"""Você é um analista sênior de projetos de software conduzindo uma entrevista de descoberta para estimar um projeto. Seu nome é Oute.{user_section}
 

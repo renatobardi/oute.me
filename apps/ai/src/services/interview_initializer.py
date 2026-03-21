@@ -153,6 +153,7 @@ def get_uncovered_vital_domains(state: InterviewState) -> list[str]:
     Usado pelo system prompt para direcionar o agente.
     """
     from src.models.interview import VITAL_REQUIRED
+
     return [
         domain
         for domain, required in VITAL_REQUIRED.items()

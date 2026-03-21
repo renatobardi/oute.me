@@ -64,8 +64,7 @@ SAMPLE_INTERVIEW_STATE: dict[str, object] = {
         },
         "q_tech_001": {
             "value": (
-                "Preferência por React/Next.js no frontend e Node.js no backend."
-                " Banco PostgreSQL."
+                "Preferência por React/Next.js no frontend e Node.js no backend. Banco PostgreSQL."
             ),
             "source": "user",
             "confirmed": True,
@@ -162,33 +161,35 @@ def test_parse_agent_output_valid_json() -> None:
     """Test that parse_agent_output handles valid JSON correctly."""
     from src.models.estimate import ArchitectureDesign, parse_agent_output
 
-    raw = json.dumps({
-        "architecture_overview": "Microservices com API Gateway",
-        "milestones": [
-            {
-                "name": "MVP",
-                "description": "Versão inicial",
-                "duration_weeks": 4,
-                "deliverables": ["API", "Frontend"],
-                "dependencies": [],
-            }
-        ],
-        "tech_recommendations": [
-            {
-                "category": "Backend",
-                "technology": "Node.js",
-                "justification": "Equipe tem experiência",
-            }
-        ],
-        "risks": [
-            {
-                "description": "Integração com ERP",
-                "impact": "high",
-                "mitigation": "Prototipar cedo",
-                "probability": "medium",
-            }
-        ],
-    })
+    raw = json.dumps(
+        {
+            "architecture_overview": "Microservices com API Gateway",
+            "milestones": [
+                {
+                    "name": "MVP",
+                    "description": "Versão inicial",
+                    "duration_weeks": 4,
+                    "deliverables": ["API", "Frontend"],
+                    "dependencies": [],
+                }
+            ],
+            "tech_recommendations": [
+                {
+                    "category": "Backend",
+                    "technology": "Node.js",
+                    "justification": "Equipe tem experiência",
+                }
+            ],
+            "risks": [
+                {
+                    "description": "Integração com ERP",
+                    "impact": "high",
+                    "mitigation": "Prototipar cedo",
+                    "probability": "medium",
+                }
+            ],
+        }
+    )
 
     result = parse_agent_output("software_architect", raw)
     assert isinstance(result, ArchitectureDesign)

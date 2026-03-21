@@ -63,7 +63,9 @@ async def stream_chat(
             last_exc = exc
             logger.warning(
                 "model %s unavailable (%s), trying %s",
-                model_name, exc, CHAT_MODELS[i + 1],
+                model_name,
+                exc,
+                CHAT_MODELS[i + 1],
             )
 
     if last_exc:
@@ -90,7 +92,9 @@ async def analyze_json(prompt: str, max_seconds: float = 30.0) -> dict[str, obje
             last_exc = exc
             logger.warning(
                 "model %s unavailable (%s), trying %s",
-                model_name, exc, CHAT_MODELS[i + 1],
+                model_name,
+                exc,
+                CHAT_MODELS[i + 1],
             )
 
     if last_exc:

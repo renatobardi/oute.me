@@ -102,11 +102,6 @@
 		}).format(value);
 	}
 
-	function fmtDuration(s: number | null): string {
-		if (s === null) return '';
-		if (s < 60) return `${s.toFixed(0)}s`;
-		return `${Math.floor(s / 60)}m ${Math.round(s % 60)}s`;
-	}
 </script>
 
 <svelte:head>
