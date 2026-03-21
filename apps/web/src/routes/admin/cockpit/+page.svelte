@@ -615,9 +615,7 @@
 					{@const steps = (detail.estimate.agent_steps ?? []) as AgentStep[]}
 					{@const displaySteps = steps.length > 0
 						? steps
-						: (['pending', 'running'].includes(detail.estimate.status)
-							? AGENT_KEYS.map((k) => ({ agent_key: k, status: 'pending', started_at: null, finished_at: null, duration_s: null, output_preview: null, error: null }))
-							: [])}
+						: AGENT_KEYS.map((k) => ({ agent_key: k, status: 'pending', started_at: null, finished_at: null, duration_s: null, output_preview: null, error: null }))}
 					<div class="tab-content">
 						<div class="pipeline-header">
 							<div class="section-title">Pipeline de Agentes</div>
@@ -645,10 +643,7 @@
 							</div>
 						</div>
 
-						{#if displaySteps.length === 0}
-							<div class="empty-tab">Nenhum dado de agente disponível. Execute ou re-run o pipeline.</div>
-						{:else}
-							<div class="pipeline-steps">
+						<div class="pipeline-steps">
 								{#each displaySteps as step (step.agent_key)}
 									<div class="pipeline-step {stepStatusClass(step.status)}">
 										<div
@@ -686,8 +681,7 @@
 										{/if}
 									</div>
 								{/each}
-							</div>
-						{/if}
+						</div>
 						<!-- end displaySteps -->
 
 						{#if detail.estimateRuns.length > 0}
