@@ -30,6 +30,7 @@
 	let inputText = $state('');
 	let fileInput = $state<HTMLInputElement | null>(null);
 	let chatContainer = $state<HTMLElement | null>(null);
+	let textareaRef = $state<HTMLTextAreaElement | null>(null);
 	let isRequestingEstimate = $state(false);
 
 	// Editable title state
@@ -102,6 +103,12 @@
 	$effect(() => {
 		if (chatContainer && (chat.messages.length || chat.currentStreamText)) {
 			chatContainer.scrollTop = chatContainer.scrollHeight;
+		}
+	});
+
+	$effect(() => {
+		if (!chat.isStreaming && textareaRef) {
+			textareaRef.focus();
 		}
 	});
 
@@ -302,6 +309,7 @@
 				</svg>
 			</button>
 			<textarea
+				bind:this={textareaRef}
 				bind:value={inputText}
 				onkeydown={handleKeydown}
 				oninput={autoResize}
