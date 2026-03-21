@@ -230,6 +230,7 @@ def test_assemble_estimate_result() -> None:
         RiskItem,
         SimilarProjectsResult,
         TechRecommendation,
+        ValidationIssue,
         ValidationResult,
         assemble_estimate_result,
     )
@@ -281,7 +282,18 @@ def test_assemble_estimate_result() -> None:
             ],
         ),
         "reviewer": ReviewResult(
-            validation=ValidationResult(is_consistent=True),
+            validation=ValidationResult(
+                is_consistent=True,
+                issues_found=[
+                    ValidationIssue(
+                        category="requirement_coverage",
+                        severity="warning",
+                        description="Checkout não coberto em milestones",
+                    ),
+                ],
+                requirements_coverage_pct=50.0,
+                risk_coverage_pct=100.0,
+            ),
             executive_summary="Projeto viável com investimento moderado.",
         ),
         "knowledge_manager": None,
@@ -296,3 +308,135 @@ def test_assemble_estimate_result() -> None:
     assert result.cost_scenarios[0].name == "moderado"
     assert result.executive_summary == "Projeto viável com investimento moderado."
     assert "high" in result.summary.lower() or "Complexidade" in result.summary
+
+    # Validation should flow through to EstimateResult
+    assert result.validation is not None
+    assert result.validation.is_consistent is True
+    assert len(result.validation.issues_found) == 1
+    assert result.validation.requirements_coverage_pct == 50.0
+
+
+# ---------------------------------------------------------------------------
+# Reviewer model tests
+# ---------------------------------------------------------------------------
+
+
+def test_validation_issue_parsing() -> None:
+    """Test ValidationIssue accepts valid Literal values and normalizes input."""
+    from src.models.estimate import ValidationIssue
+
+    issue = ValidationIssue(
+        category="Mathematical",  # should be normalized to lowercase
+        severity="Critical",
+        description="total_cost devia >5%",
+        affected_agent="cost_specialist",
+    )
+    assert issue.category == "mathematical"
+    assert issue.severity == "critical"
+    assert issue.resolved is False
+
+
+def test_validation_result_auto_consistency() -> None:
+    """Test is_consistent is auto-set to False when critical unresolved issues exist."""
+    from src.models.estimate import ValidationIssue, ValidationResult
+
+    result = ValidationResult(
+        is_consistent=True,
+        issues_found=[
+            ValidationIssue(
+                category="mathematical",
+                severity="critical",
+                description="total_cost inconsistente",
+                resolved=False,
+            ),
+        ],
+    )
+    # Validator should have overridden is_consistent
+    assert result.is_consistent is False
+
+    # With resolved critical issue, should stay consistent
+    result2 = ValidationResult(
+        is_consistent=True,
+        issues_found=[
+            ValidationIssue(
+                category="mathematical",
+                severity="critical",
+                description="corrigido",
+                resolved=True,
+            ),
+        ],
+    )
+    assert result2.is_consistent is True
+
+    # Warning-only issues don't affect consistency
+    result3 = ValidationResult(
+        is_consistent=True,
+        issues_found=[
+            ValidationIssue(
+                category="requirement_coverage",
+                severity="warning",
+                description="requisito não coberto",
+            ),
+        ],
+    )
+    assert result3.is_consistent is True
+
+
+def test_review_result_strip_summary() -> None:
+    """Test executive_summary is stripped of whitespace."""
+    from src.models.estimate import ReviewResult
+
+    result = ReviewResult(executive_summary="  Texto com espaços  \n")
+    assert result.executive_summary == "Texto com espaços"
+
+
+# ---------------------------------------------------------------------------
+# Knowledge Manager model tests
+# ---------------------------------------------------------------------------
+
+
+def test_numeric_range_min_max_swap() -> None:
+    """Test NumericRange auto-corrects when min > max."""
+    from src.models.estimate import NumericRange
+
+    r = NumericRange(min=100, max=50)
+    assert r.min == 50
+    assert r.max == 100
+
+
+def test_knowledge_metadata_complexity_normalization() -> None:
+    """Test complexity normalizer handles various casing."""
+    from src.models.estimate import KnowledgeMetadata
+
+    assert KnowledgeMetadata(complexity="High").complexity == "high"
+    assert KnowledgeMetadata(complexity="VERY_HIGH").complexity == "very_high"
+    assert KnowledgeMetadata(complexity="Very High").complexity == "very_high"
+    assert KnowledgeMetadata(complexity="invalid").complexity == "medium"  # fallback
+
+
+def test_knowledge_metadata_legacy_dict_coercion() -> None:
+    """Test that old dict format is accepted for range fields."""
+    from src.models.estimate import KnowledgeMetadata
+
+    data = {
+        "project_type": "e-commerce",
+        "complexity": "high",
+        "cost_range": {"min": 100000, "max": 300000},
+        "duration_range": {"min_weeks": 8, "max_weeks": 24},
+        "team_size_range": {"min": 3, "max": 6},
+    }
+    meta = KnowledgeMetadata.model_validate(data)
+    assert meta.cost_range.min == 100000
+    assert meta.cost_range.max == 300000
+    assert meta.duration_range.min == 8
+    assert meta.duration_range.max == 24
+
+
+def test_knowledge_prep_text_strip() -> None:
+    """Test knowledge_text is stripped of whitespace."""
+    from src.models.estimate import KnowledgePrep
+
+    prep = KnowledgePrep(knowledge_text="  texto com espaços  \n")
+    assert prep.knowledge_text == "texto com espaços"
+
+
