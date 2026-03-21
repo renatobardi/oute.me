@@ -4,7 +4,6 @@
 	import { auth } from '$lib/firebase';
 	import { sendEmailVerification } from 'firebase/auth';
 
-	// eslint-disable-next-line @typescript-eslint/no-unused-vars
 	let { data } = $props();
 
 	let emailVerified = $state(data.emailVerified);
@@ -31,7 +30,8 @@
 				// Recarrega a página — o servidor vai detectar email_verified e atualizar o estado
 				window.location.reload();
 			}
-		} finally {
+		} catch {
+			// silently ignore — next navigation will trigger re-check
 		}
 	});
 

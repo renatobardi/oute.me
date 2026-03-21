@@ -313,7 +313,7 @@
 					<div class="section">
 						<div class="section-title">Domínios</div>
 						<div class="domains">
-							{#each Object.entries(iv.state.domains) as [domain, d]}
+							{#each Object.entries(iv.state.domains) as [domain, d] (domain)}
 								{@const dom = d as { answered: number; total: number; vital_answered: boolean }}
 								<div class="domain-row">
 									<span class="domain-name">{domain}</span>
@@ -383,7 +383,7 @@
 							<div class="empty-tab">Nenhum documento enviado nesta entrevista.</div>
 						{:else}
 							<div class="docs-list">
-								{#each detail.documents as doc}
+								{#each detail.documents as doc (doc.id)}
 									<div class="doc-row">
 										<div class="doc-info">
 											<span class="doc-name">{doc.filename}</span>
@@ -427,7 +427,7 @@
 						{/if}
 
 						<div class="messages">
-							{#each detail.messages as msg}
+							{#each detail.messages as msg (msg.id)}
 								<div
 									class="msg"
 									class:msg-user={msg.role === 'user'}
@@ -454,7 +454,7 @@
 							</div>
 						{:else}
 							<div class="vectors-list">
-								{#each detail.knowledgeVectors as v}
+								{#each detail.knowledgeVectors as v (v.id)}
 									<div class="vector-row">
 										<div class="vector-meta">
 											<span class="mime-badge">{v.source_type}</span>
