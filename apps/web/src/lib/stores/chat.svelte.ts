@@ -51,6 +51,7 @@ export function createChatState(
 		}))
 	);
 	let isStreaming = $state(false);
+	let streamGen = 0; // generation counter to avoid finally() clearing a newer stream
 	let maturity = $state(initialMaturity);
 	let domains = $state(initialDomains);
 	let title = $state<string | null>(initialTitle);
@@ -70,6 +71,7 @@ export function createChatState(
 		error = null;
 		isStreaming = true;
 		currentStreamText = '';
+		const myGen = ++streamGen;
 
 		const userMsg: ChatMessage = {
 			id: crypto.randomUUID(),
@@ -147,6 +149,8 @@ export function createChatState(
 								},
 							];
 							currentStreamText = '';
+							// Libera o input imediatamente — state_update chega em background
+							isStreaming = false;
 						}
 					} catch {
 						// skip malformed events
@@ -156,7 +160,7 @@ export function createChatState(
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Erro ao enviar mensagem';
 		} finally {
-			isStreaming = false;
+			if (streamGen === myGen) isStreaming = false;
 		}
 	}
 
