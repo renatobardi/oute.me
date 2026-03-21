@@ -4,6 +4,8 @@
 	import { createChatState } from '$lib/stores/chat.svelte';
 	import { activeTone } from '$lib/stores/tone.svelte';
 	import { MATURITY_THRESHOLD } from '$lib/types/interview';
+	import { AGENT_LABELS, AGENT_KEYS } from '$lib/types/estimate';
+	import type { AgentStep } from '$lib/types/estimate';
 
 	let { data } = $props();
 
@@ -34,6 +36,44 @@
 	let isRequestingEstimate = $state(false);
 	let existingEstimate = $state(data.existingEstimate ?? null);
 	let existingProject = $state(data.existingProject ?? null);
+
+	// Estimate panel state
+	let showEstimatePanel = $state(false);
+	let panelSteps = $state<AgentStep[]>(data.existingEstimate?.agent_steps ?? []);
+	let panelStatus = $state(data.existingEstimate?.status ?? '');
+	let panelPollTimer = $state<ReturnType<typeof setInterval> | null>(null);
+
+	async function fetchEstimateSteps() {
+		if (!existingEstimate) return;
+		try {
+			const res = await fetch(`/api/estimates/${existingEstimate.id}`);
+			if (!res.ok) return;
+			const est = await res.json();
+			panelSteps = est.agent_steps ?? [];
+			panelStatus = est.status;
+			existingEstimate = { ...existingEstimate, status: est.status, agent_steps: est.agent_steps ?? [] };
+		} catch { /* ignore */ }
+	}
+
+	function openEstimatePanel() {
+		showEstimatePanel = true;
+		fetchEstimateSteps();
+		if (['pending', 'running'].includes(panelStatus)) {
+			panelPollTimer = setInterval(fetchEstimateSteps, 5000);
+		}
+	}
+
+	function closeEstimatePanel() {
+		showEstimatePanel = false;
+		if (panelPollTimer) { clearInterval(panelPollTimer); panelPollTimer = null; }
+	}
+
+	$effect(() => {
+		if (!['pending', 'running'].includes(panelStatus) && panelPollTimer) {
+			clearInterval(panelPollTimer);
+			panelPollTimer = null;
+		}
+	});
 
 	// Editable title state
 	let isTitleEditing = $state(false);
@@ -233,10 +273,10 @@
 
 		{#if existingEstimate}
 			<div class="sidebar-section estimate-action">
-				<a class="estimate-link" href="/estimates/{existingEstimate.id}">
+				<button class="estimate-link" onclick={openEstimatePanel}>
 					<span class="estimate-link-label">Ver Estimativa</span>
 					<span class="estimate-status-badge status-{existingEstimate.status}">{existingEstimate.status}</span>
-				</a>
+				</button>
 			</div>
 		{:else if canEstimate}
 			<div class="sidebar-section estimate-action">
@@ -264,11 +304,48 @@
 	</aside>
 
 	<!-- CHAT -->
-	<main class="chat-area">
+	<main class="chat-area" class:has-panel={showEstimatePanel}>
 		<header class="chat-header">
 			<h2>Entrevista</h2>
 			<StatusBadge status={data.interview.status} size="sm" />
 		</header>
+
+		{#if showEstimatePanel && existingEstimate}
+			{@const displaySteps = panelSteps.length > 0
+				? panelSteps
+				: AGENT_KEYS.map((k) => ({ agent_key: k, status: 'pending', started_at: null, finished_at: null, duration_s: null, output_preview: null, error: null }))}
+			<div class="estimate-panel">
+				<div class="estimate-panel-header">
+					<div class="estimate-panel-title">
+						<span class="estimate-panel-label">Pipeline de Estimativa</span>
+						<span class="estimate-panel-badge status-badge-{panelStatus}">{panelStatus}</span>
+						{#if ['pending', 'running'].includes(panelStatus)}
+							<span class="panel-spinner"></span>
+						{/if}
+					</div>
+					<div class="estimate-panel-actions">
+						<a href="/estimates/{existingEstimate.id}" class="panel-link-btn" target="_blank">Abrir completo ↗</a>
+						<button class="panel-close-btn" onclick={closeEstimatePanel} title="Fechar painel">✕</button>
+					</div>
+				</div>
+				<div class="estimate-panel-steps">
+					{#each displaySteps as step (step.agent_key)}
+						<div class="panel-step panel-step-{step.status}">
+							<span class="panel-step-dot">
+								{#if step.status === 'done'}✓{:else if step.status === 'failed'}✗{:else if step.status === 'running'}◉{:else}○{/if}
+							</span>
+							<span class="panel-step-name">{AGENT_LABELS[step.agent_key] ?? step.agent_key}</span>
+							{#if step.duration_s}
+								<span class="panel-step-dur">{step.duration_s.toFixed(0)}s</span>
+							{/if}
+							{#if step.error}
+								<span class="panel-step-error" title={step.error}>!</span>
+							{/if}
+						</div>
+					{/each}
+				</div>
+			</div>
+		{/if}
 
 		{#if chat.error}
 			<div class="alert alert-error">
@@ -559,6 +636,8 @@
 		border: 1px solid rgba(99, 102, 241, 0.3);
 		border-radius: 8px;
 		text-decoration: none;
+		cursor: pointer;
+		font-family: inherit;
 		transition: background 0.15s;
 	}
 
@@ -814,6 +893,148 @@
 
 	textarea:disabled {
 		opacity: 0.5;
+	}
+
+	/* ── Estimate panel ── */
+	.estimate-panel {
+		border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+		background: var(--color-dark-surface, #1a1d27);
+		padding: 0.875rem 1.25rem;
+		flex-shrink: 0;
+	}
+
+	.estimate-panel-header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		margin-bottom: 0.75rem;
+	}
+
+	.estimate-panel-title {
+		display: flex;
+		align-items: center;
+		gap: 0.625rem;
+	}
+
+	.estimate-panel-label {
+		font-size: 0.8125rem;
+		font-weight: 600;
+		color: rgba(255, 255, 255, 0.7);
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+	}
+
+	.estimate-panel-badge {
+		font-size: 0.6875rem;
+		font-weight: 600;
+		padding: 0.2rem 0.5rem;
+		border-radius: 99px;
+		text-transform: lowercase;
+	}
+
+	.status-badge-done       { background: rgba(16,185,129,.18); color: #10b981; }
+	.status-badge-pending    { background: rgba(99,102,241,.18); color: #818cf8; }
+	.status-badge-running    { background: rgba(99,102,241,.18); color: #818cf8; }
+	.status-badge-failed     { background: rgba(239,68,68,.18);  color: #f87171; }
+	.status-badge-pending_approval { background: rgba(245,158,11,.18); color: #fbbf24; }
+
+	.panel-spinner {
+		width: 12px;
+		height: 12px;
+		border: 2px solid rgba(255,255,255,0.15);
+		border-top-color: var(--color-primary-500, #6366f1);
+		border-radius: 50%;
+		animation: spin 0.8s linear infinite;
+		flex-shrink: 0;
+	}
+
+	@keyframes spin { to { transform: rotate(360deg); } }
+
+	.estimate-panel-actions {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+	}
+
+	.panel-link-btn {
+		font-size: 0.75rem;
+		color: var(--color-primary-500, #6366f1);
+		text-decoration: none;
+		padding: 0.25rem 0.5rem;
+		border-radius: 4px;
+		transition: background 0.15s;
+	}
+
+	.panel-link-btn:hover { background: rgba(99,102,241,0.12); }
+
+	.panel-close-btn {
+		background: none;
+		border: none;
+		color: rgba(255,255,255,0.4);
+		cursor: pointer;
+		font-size: 0.875rem;
+		padding: 0.25rem 0.375rem;
+		border-radius: 4px;
+		line-height: 1;
+		transition: color 0.15s, background 0.15s;
+	}
+
+	.panel-close-btn:hover { color: rgba(255,255,255,0.8); background: rgba(255,255,255,0.06); }
+
+	.estimate-panel-steps {
+		display: flex;
+		gap: 0.375rem;
+		flex-wrap: wrap;
+	}
+
+	.panel-step {
+		display: flex;
+		align-items: center;
+		gap: 0.375rem;
+		padding: 0.3rem 0.625rem;
+		border-radius: 6px;
+		font-size: 0.75rem;
+		border: 1px solid rgba(255,255,255,0.06);
+		background: rgba(255,255,255,0.03);
+		transition: background 0.15s;
+	}
+
+	.panel-step-done    { border-color: rgba(16,185,129,.3);  background: rgba(16,185,129,.07); }
+	.panel-step-failed  { border-color: rgba(239,68,68,.3);   background: rgba(239,68,68,.07);  }
+	.panel-step-running { border-color: rgba(99,102,241,.4);  background: rgba(99,102,241,.1);  }
+
+	.panel-step-dot {
+		font-size: 0.8125rem;
+		line-height: 1;
+		font-weight: 700;
+	}
+
+	.panel-step-done    .panel-step-dot { color: #10b981; }
+	.panel-step-failed  .panel-step-dot { color: #f87171; }
+	.panel-step-running .panel-step-dot { color: #818cf8; }
+	.panel-step-pending .panel-step-dot { color: rgba(255,255,255,0.25); }
+
+	.panel-step-name { color: rgba(255,255,255,0.7); }
+	.panel-step-done .panel-step-name { color: rgba(255,255,255,0.9); }
+
+	.panel-step-dur {
+		color: rgba(255,255,255,0.35);
+		font-size: 0.6875rem;
+	}
+
+	.panel-step-error {
+		width: 14px;
+		height: 14px;
+		border-radius: 50%;
+		background: rgba(239,68,68,.3);
+		color: #f87171;
+		font-size: 0.625rem;
+		font-weight: 700;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		cursor: help;
+		flex-shrink: 0;
 	}
 
 	/* ── Responsive ── */

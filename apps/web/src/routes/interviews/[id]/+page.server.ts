@@ -41,7 +41,11 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 		documents,
 		toneAction: activeTone?.action ?? null,
 		existingEstimate: existingEstimate
-			? { id: existingEstimate.id, status: existingEstimate.status }
+			? {
+					id: existingEstimate.id,
+					status: existingEstimate.status,
+					agent_steps: existingEstimate.agent_steps ?? [],
+				}
 			: null,
 		existingProject: existingProject
 			? { id: existingProject.id, name: existingProject.name }
