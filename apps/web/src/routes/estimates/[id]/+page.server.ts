@@ -1,6 +1,7 @@
 import { error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import { getEstimate, updateEstimateStatus } from '$lib/server/estimates';
+import { getProjectByEstimate } from '$lib/server/projects';
 import { getJSON } from '$lib/server/ai-client';
 import type { AgentStep } from '$lib/types/estimate';
 
@@ -45,5 +46,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		}
 	}
 
-	return { estimate };
+	const project = await getProjectByEstimate(estimate.id, locals.user.uid).catch(() => null);
+
+	return { estimate, project: project ? { id: project.id, name: project.name } : null };
 };

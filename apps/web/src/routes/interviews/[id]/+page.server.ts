@@ -3,6 +3,7 @@ import { error, redirect } from '@sveltejs/kit';
 import { getOrCreateUser } from '$lib/server/users';
 import { getInterview, getMessages, getDocuments } from '$lib/server/interviews';
 import { getEstimateByInterview } from '$lib/server/estimates';
+import { getProjectByEstimate } from '$lib/server/projects';
 import { getUserActiveTone } from '$lib/server/tones';
 import { warmUpAiService } from '$lib/server/ai-client';
 
@@ -30,6 +31,10 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 		getEstimateByInterview(params.id, user.id),
 	]);
 
+	const existingProject = existingEstimate?.approved_at
+		? await getProjectByEstimate(existingEstimate.id, user.id).catch(() => null)
+		: null;
+
 	return {
 		interview,
 		messages,
@@ -37,6 +42,9 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 		toneAction: activeTone?.action ?? null,
 		existingEstimate: existingEstimate
 			? { id: existingEstimate.id, status: existingEstimate.status }
+			: null,
+		existingProject: existingProject
+			? { id: existingProject.id, name: existingProject.name }
 			: null,
 	};
 };

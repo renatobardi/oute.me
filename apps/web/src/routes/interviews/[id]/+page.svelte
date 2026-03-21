@@ -33,6 +33,7 @@
 	let textareaRef = $state<HTMLTextAreaElement | null>(null);
 	let isRequestingEstimate = $state(false);
 	let existingEstimate = $state(data.existingEstimate ?? null);
+	let existingProject = $state(data.existingProject ?? null);
 
 	// Editable title state
 	let isTitleEditing = $state(false);
@@ -217,6 +218,15 @@
 				{/each}
 			</ul>
 		</div>
+
+		{#if existingProject}
+			<div class="sidebar-section estimate-action">
+				<a class="estimate-link project-link" href="/projects/{existingProject.id}">
+					<span class="estimate-link-label">Ver Projeto</span>
+					<span class="project-link-name">{existingProject.name}</span>
+				</a>
+			</div>
+		{/if}
 
 		{#if existingEstimate}
 			<div class="sidebar-section estimate-action">
@@ -583,6 +593,24 @@
 	.status-failed {
 		background: rgba(239, 68, 68, 0.2);
 		color: #fca5a5;
+	}
+
+	.project-link {
+		background: rgba(16, 185, 129, 0.1);
+		border-color: rgba(16, 185, 129, 0.3);
+	}
+
+	.project-link:hover {
+		background: rgba(16, 185, 129, 0.18);
+	}
+
+	.project-link-name {
+		font-size: 0.75rem;
+		color: #6ee7b7;
+		max-width: 120px;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 
 	/* ── Documents ── */
