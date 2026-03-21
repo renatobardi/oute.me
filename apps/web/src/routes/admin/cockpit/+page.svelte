@@ -654,6 +654,10 @@
 								<span class="info-row-label">ID</span>
 								<span class="info-row-value mono">{detail.project.id}</span>
 							</div>
+							<div class="info-row">
+								<span class="info-row-label">Link</span>
+								<a class="project-cockpit-link" href="/projects/{detail.project.id}" target="_blank">Ver Projeto →</a>
+							</div>
 						</div>
 					</div>
 				{/if}
@@ -1013,6 +1017,16 @@
 		font-size: 0.875rem;
 		color: #f9fafb;
 		word-break: break-all;
+	}
+
+	.project-cockpit-link {
+		font-size: 0.875rem;
+		color: #6ee7b7;
+		text-decoration: none;
+	}
+
+	.project-cockpit-link:hover {
+		text-decoration: underline;
 	}
 
 	.summary-row {

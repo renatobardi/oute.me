@@ -9,6 +9,7 @@
 	let { data } = $props();
 
 	let estimate = $derived(data.estimate);
+	let project = $derived(data.project ?? null);
 	let result = $derived(estimate.result as EstimateResult | null);
 	let agentSteps = $derived((estimate.agent_steps ?? []) as AgentStep[]);
 	let isApproving = $state(false);
@@ -119,11 +120,14 @@
 
 <div class="estimate-page">
 	<header class="page-header">
-		<button class="back-btn" onclick={() => goto('/interviews')}>← Voltar</button>
+		<button class="back-btn" onclick={() => goto(`/interviews/${estimate.interview_id}`)}>← Entrevista</button>
 		<div class="header-info">
 			<h1>Estimativa</h1>
 			<StatusBadge status={estimate.status} />
 		</div>
+		{#if project}
+			<a class="project-link-header" href="/projects/{project.id}">Ver Projeto →</a>
+		{/if}
 	</header>
 
 	{#if ['pending', 'running'].includes(estimate.status)}
@@ -337,6 +341,9 @@
 			{:else if estimate.approved_at}
 				<div class="approved-banner">
 					Estimativa aprovada. Projeto criado com sucesso.
+					{#if project}
+						<a class="project-link-banner" href="/projects/{project.id}">Ver Projeto →</a>
+					{/if}
 				</div>
 			{/if}
 		</div>
@@ -353,7 +360,32 @@
 		margin: 0 auto;
 	}
 
-	.page-header { margin-bottom: 2rem; }
+	.page-header {
+		margin-bottom: 2rem;
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.75rem;
+	}
+
+	.page-header .header-info {
+		flex: 1;
+	}
+
+	.project-link-header {
+		font-size: 0.875rem;
+		font-weight: 600;
+		color: var(--color-primary-500, #6366f1);
+		text-decoration: none;
+		padding: 0.35rem 0.75rem;
+		border: 1px solid rgba(99, 102, 241, 0.4);
+		border-radius: 6px;
+		transition: background 0.15s;
+	}
+
+	.project-link-header:hover {
+		background: rgba(99, 102, 241, 0.1);
+	}
 
 	.back-btn {
 		background: none;
@@ -785,11 +817,30 @@
 	}
 
 	.approved-banner {
-		padding: 1rem;
+		padding: 1rem 1.25rem;
 		background: color-mix(in srgb, var(--color-success, #10b981) 15%, transparent);
 		color: var(--color-success, #10b981);
 		border-radius: 8px;
-		text-align: center;
 		font-weight: 500;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 1.25rem;
+		flex-wrap: wrap;
+	}
+
+	.project-link-banner {
+		font-size: 0.875rem;
+		font-weight: 700;
+		color: var(--color-success, #10b981);
+		text-decoration: none;
+		padding: 0.25rem 0.75rem;
+		border: 1px solid rgba(16, 185, 129, 0.5);
+		border-radius: 6px;
+		transition: background 0.15s;
+	}
+
+	.project-link-banner:hover {
+		background: rgba(16, 185, 129, 0.15);
 	}
 </style>
