@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import functools
 import json
 import logging
@@ -76,6 +77,15 @@ def _make_task_done_callback(
 
 
 _PIPELINE_TIMEOUT_S = 300  # 5 minutes hard limit for the full pipeline
+_HEARTBEAT_INTERVAL_S = 60  # update updated_at every 60s so stale detection works
+
+
+async def _heartbeat_loop(job_id: str, backend: StateBackend) -> None:
+    """Periodically touch updated_at so stale-job detection knows the pipeline is alive."""
+    while True:
+        await asyncio.sleep(_HEARTBEAT_INTERVAL_S)
+        with contextlib.suppress(Exception):
+            await backend.update_job(job_id, "running")
 
 
 async def run_pipeline(
@@ -138,6 +148,7 @@ async def run_pipeline(
             previous_outputs,
         )
 
+        heartbeat_task = asyncio.create_task(_heartbeat_loop(job_id, backend))
         try:
             result = await asyncio.wait_for(
                 loop.run_in_executor(_executor, fn),
@@ -149,6 +160,10 @@ async def run_pipeline(
                 extra={"job_id": job_id, "event": "timeout", "timeout_s": _PIPELINE_TIMEOUT_S},
             )
             raise RuntimeError(f"Pipeline timed out after {_PIPELINE_TIMEOUT_S}s") from None
+        finally:
+            heartbeat_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await heartbeat_task
 
         # Extract internal per-agent data before storing
         agent_outputs: dict[str, Any] = result.pop("_agent_outputs", {})
