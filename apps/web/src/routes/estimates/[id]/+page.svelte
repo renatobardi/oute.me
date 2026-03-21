@@ -13,6 +13,8 @@
 	let result = $derived(estimate.result as EstimateResult | null);
 	let isApproving = $state(false);
 	let projectName = $state('');
+	let isRerunning = $state(false);
+	let rerunError = $state('');
 
 	let selectedScenario = $state('moderado');
 	let pollTimer = $state<ReturnType<typeof setInterval> | null>(null);
@@ -24,6 +26,10 @@
 			const found = (estimate.agent_steps ?? []).find((s: AgentStep) => s.agent_key === key);
 			return (found ?? { agent_key: key, status: 'pending', duration_s: null, started_at: null, finished_at: null, output_preview: null, error: null }) as AgentStep;
 		})
+	);
+
+	const firstFailedAgent = $derived(
+		displaySteps.find((s) => s.status === 'failed')?.agent_key ?? null
 	);
 
 	$effect(() => {
@@ -45,6 +51,29 @@
 			if (elapsedTimer) { clearInterval(elapsedTimer); elapsedTimer = null; }
 		}
 	});
+
+	async function handleRerun(fromAgent?: string) {
+		isRerunning = true;
+		rerunError = '';
+		try {
+			const body: Record<string, string> = {};
+			if (fromAgent) body.from_agent = fromAgent;
+			const res = await fetch(`/api/estimates/${estimate.id}/rerun`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify(body),
+			});
+			if (!res.ok) {
+				const err = await res.json().catch(() => ({})) as { error?: string };
+				throw new Error(err?.error || `Erro ${res.status}`);
+			}
+			elapsedSeconds = 0;
+			await invalidateAll();
+		} catch (e) {
+			rerunError = e instanceof Error ? e.message : 'Tente novamente';
+			isRerunning = false;
+		}
+	}
 
 	async function handleApprove() {
 		isApproving = true;
@@ -183,6 +212,19 @@
 					{/each}
 				</div>
 			{/if}
+			<div class="rerun-actions">
+				<Button onclick={() => handleRerun()} disabled={isRerunning}>
+					{isRerunning ? 'Reiniciando…' : '↺ Tentar novamente'}
+				</Button>
+				{#if firstFailedAgent && firstFailedAgent !== AGENT_KEYS[0]}
+					<Button variant="ghost" onclick={() => handleRerun(firstFailedAgent)} disabled={isRerunning}>
+						Continuar a partir de "{AGENT_LABELS[firstFailedAgent]}"
+					</Button>
+				{/if}
+				{#if rerunError}
+					<span class="rerun-error">{rerunError}</span>
+				{/if}
+			</div>
 			<Button variant="ghost" onclick={() => goto(`/interviews/${estimate.interview_id}`)}>
 				Voltar à Entrevista
 			</Button>
@@ -420,6 +462,23 @@
 	.approval-icon {
 		font-size: 3rem;
 		margin-bottom: 1rem;
+	}
+
+	/* ── Re-run actions ── */
+	.rerun-actions {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.75rem;
+		align-items: center;
+		justify-content: center;
+		margin-bottom: 1rem;
+	}
+
+	.rerun-error {
+		width: 100%;
+		text-align: center;
+		font-size: 0.8125rem;
+		color: var(--color-error, #ef4444);
 	}
 
 	/* ── Pipeline stepper ── */
