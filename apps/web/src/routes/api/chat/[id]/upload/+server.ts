@@ -5,6 +5,9 @@ import { getOrCreateUser } from '$lib/server/users';
 import { getInterview, addDocument, updateDocumentStatus } from '$lib/server/interviews';
 import { postFile } from '$lib/server/ai-client';
 import { jsonOk, jsonError } from '$lib/server/api-utils';
+import { writeFile, mkdir } from 'fs/promises';
+import { join, dirname } from 'path';
+import { env } from '$env/dynamic/private';
 
 const ALLOWED_TYPES = new Set([
 	'application/pdf',
@@ -51,8 +54,16 @@ export const POST: RequestHandler = async ({ locals, params, request }) => {
 
 	let doc: { id: string } | undefined;
 	try {
+		const fileBytes = await file.arrayBuffer();
+
+		// Persist file to local storage (dev) — TODO: use GCS in prod
+		const storageBase = env.STORAGE_LOCAL_PATH ?? './data/uploads';
+		const fullPath = join(storageBase, storagePath);
+		await mkdir(dirname(fullPath), { recursive: true });
+		await writeFile(fullPath, Buffer.from(fileBytes));
+
 		doc = await addDocument(params.id, file.name, file.type, storagePath);
-		const result = await postFile('/chat/process-document', file, file.name);
+		const result = await postFile('/chat/process-document', new File([fileBytes], file.name, { type: file.type }), file.name);
 
 		await updateDocumentStatus(
 			doc.id,

@@ -116,30 +116,30 @@
 					<span class="badge {status.cls}">{status.text}</span>
 				</div>
 
-				<div class="info-grid">
-					<div class="info-card">
-						<div class="info-label">E-mail</div>
-						<div class="info-value">{selected.email}</div>
+				<div class="info-list">
+					<div class="info-row">
+						<span class="info-label">E-mail</span>
+						<span class="info-value">{selected.email}</span>
 					</div>
-					<div class="info-card">
-						<div class="info-label">Empresa</div>
-						<div class="info-value">{selected.company ?? '—'}</div>
+					<div class="info-row">
+						<span class="info-label">Empresa</span>
+						<span class="info-value">{selected.company ?? '—'}</span>
 					</div>
-					<div class="info-card">
-						<div class="info-label">Cargo</div>
-						<div class="info-value">{selected.role ?? '—'}</div>
+					<div class="info-row">
+						<span class="info-label">Cargo</span>
+						<span class="info-value">{selected.role ?? '—'}</span>
 					</div>
-					<div class="info-card">
-						<div class="info-label">Cadastro</div>
-						<div class="info-value">{formatDate(selected.created_at)}</div>
+					<div class="info-row">
+						<span class="info-label">Cadastro</span>
+						<span class="info-value">{formatDate(selected.created_at)}</span>
 					</div>
-					<div class="info-card">
-						<div class="info-label">E-mail verificado</div>
-						<div class="info-value">{selected.email_verified ? 'Sim' : 'Não'}</div>
+					<div class="info-row">
+						<span class="info-label">E-mail verificado</span>
+						<span class="info-value">{selected.email_verified ? 'Sim' : 'Não'}</span>
 					</div>
-					<div class="info-card">
-						<div class="info-label">Onboarding</div>
-						<div class="info-value">{selected.onboarding_complete ? 'Completo' : 'Pendente'}</div>
+					<div class="info-row">
+						<span class="info-label">Onboarding</span>
+						<span class="info-value">{selected.onboarding_complete ? 'Completo' : 'Pendente'}</span>
 					</div>
 				</div>
 
@@ -322,35 +322,41 @@
 		margin: 0;
 	}
 
-	.info-grid {
-		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-		gap: 0.75rem;
+	.info-list {
+		display: flex;
+		flex-direction: column;
 		margin-bottom: 1.5rem;
-	}
-
-	.info-card {
-		background: rgba(255, 255, 255, 0.03);
 		border: 1px solid rgba(255, 255, 255, 0.06);
 		border-radius: 8px;
-		padding: 0.75rem;
+		overflow: hidden;
+	}
+
+	.info-row {
+		display: flex;
+		align-items: baseline;
+		gap: 1rem;
+		padding: 0.65rem 0.875rem;
+		border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+	}
+
+	.info-row:last-child {
+		border-bottom: none;
 	}
 
 	.info-label {
-		font-size: 0.7rem;
+		font-size: 0.72rem;
 		color: var(--color-neutral-500, #6b7280);
 		text-transform: uppercase;
-		letter-spacing: 0.05em;
-		margin-bottom: 0.3rem;
+		letter-spacing: 0.04em;
+		min-width: 130px;
+		flex-shrink: 0;
 	}
 
 	.info-value {
 		font-size: 0.875rem;
 		color: #f9fafb;
 		font-weight: 500;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
+		word-break: break-all;
 	}
 
 	.actions {

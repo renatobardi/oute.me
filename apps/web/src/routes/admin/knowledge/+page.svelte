@@ -6,17 +6,27 @@
 
 	// svelte-ignore state_referenced_locally
 	let entries = $state<AdminKnowledge[]>(data.entries);
-	let loading = $state(false);
-	let activeTab = $state<'note' | 'url' | 'document'>('note');
 	let search = $state('');
 	let typeFilter = $state('');
-	let selectedId = $state<string | null>(null);
+
+	// Form state: null = nenhum selecionado, 'new' = criar, AdminKnowledge = editar
+	type FormMode = null | 'new' | AdminKnowledge;
+	let mode = $state<FormMode>(null);
 
 	// Form fields
-	let title = $state('');
-	let noteContent = $state('');
-	let urlValue = $state('');
+	let fTitle = $state('');
+	let fType = $state<'note' | 'url' | 'document'>('note');
+	let fContent = $state('');
+	let fUrl = $state('');
 	let fileInput = $state<HTMLInputElement | null>(null);
+
+	// URL verification
+	let urlStatus = $state<'idle' | 'checking' | 'ok' | 'fail'>('idle');
+	let urlStatusMsg = $state('');
+	let urlDebounce: ReturnType<typeof setTimeout> | null = null;
+
+	let saving = $state(false);
+	let deleting = $state(false);
 
 	const filtered = $derived(
 		entries.filter((e) => {
@@ -27,86 +37,151 @@
 		})
 	);
 
-	const selected = $derived(entries.find((e) => e.id === selectedId) ?? null);
+	const selectedId = $derived(mode && mode !== 'new' ? (mode as AdminKnowledge).id : null);
 
 	async function getHeaders() {
 		const token = await auth.currentUser?.getIdToken(false);
 		return { ...(token ? { Authorization: `Bearer ${token}` } : {}) };
 	}
 
-	async function addNote() {
-		if (!title || !noteContent) return;
-		loading = true;
+	function openNew() {
+		mode = 'new';
+		fTitle = '';
+		fType = 'note';
+		fContent = '';
+		fUrl = '';
+		urlStatus = 'idle';
+		if (fileInput) fileInput.value = '';
+	}
+
+	function openEdit(entry: AdminKnowledge) {
+		mode = entry;
+		fTitle = entry.title;
+		fType = entry.type as 'note' | 'url' | 'document';
+		fContent = entry.content ?? '';
+		fUrl = entry.original_url ?? '';
+		urlStatus = 'idle';
+	}
+
+	function onTypeChange() {
+		fContent = '';
+		fUrl = '';
+		urlStatus = 'idle';
+		if (fileInput) fileInput.value = '';
+	}
+
+	function onUrlInput() {
+		urlStatus = 'idle';
+		urlStatusMsg = '';
+		if (urlDebounce) clearTimeout(urlDebounce);
+		if (!fUrl) return;
+		urlDebounce = setTimeout(() => verifyUrl(), 800);
+	}
+
+	async function verifyUrl() {
+		if (!fUrl) return;
+		urlStatus = 'checking';
 		try {
 			const headers = await getHeaders();
-			const res = await fetch('/api/admin/knowledge', {
+			const res = await fetch('/api/admin/knowledge/verify-url', {
 				method: 'POST',
 				headers: { ...headers, 'Content-Type': 'application/json' },
-				body: JSON.stringify({ type: 'note', title, content: noteContent }),
+				body: JSON.stringify({ url: fUrl }),
 			});
-			if (res.ok) {
-				const entry = await res.json();
-				entries = [entry, ...entries];
-				title = '';
-				noteContent = '';
+			const data = await res.json();
+			if (data.ok) {
+				urlStatus = 'ok';
+				urlStatusMsg = `Respondeu com ${data.status}`;
+			} else {
+				urlStatus = 'fail';
+				urlStatusMsg = data.error ?? `Status ${data.status}`;
 			}
-		} finally {
-			loading = false;
+		} catch {
+			urlStatus = 'fail';
+			urlStatusMsg = 'Erro ao verificar';
 		}
 	}
 
-	async function addUrl() {
-		if (!title || !urlValue) return;
-		loading = true;
+	async function save() {
+		if (!fTitle.trim()) return;
+		saving = true;
 		try {
 			const headers = await getHeaders();
-			const res = await fetch('/api/admin/knowledge', {
-				method: 'POST',
-				headers: { ...headers, 'Content-Type': 'application/json' },
-				body: JSON.stringify({ type: 'url', title, content: urlValue, original_url: urlValue }),
-			});
-			if (res.ok) {
-				const entry = await res.json();
-				entries = [entry, ...entries];
-				title = '';
-				urlValue = '';
+
+			if (mode === 'new') {
+				// CREATE
+				if (fType === 'document') {
+					const file = fileInput?.files?.[0];
+					if (!file) return;
+					const formData = new FormData();
+					formData.append('file', file);
+					formData.append('title', fTitle);
+					const res = await fetch('/api/admin/knowledge/upload', {
+						method: 'POST',
+						headers,
+						body: formData,
+					});
+					if (res.ok) {
+						const entry: AdminKnowledge = await res.json();
+						entries = [entry, ...entries];
+						mode = entry;
+					}
+				} else {
+					const content = fType === 'url' ? fUrl : fContent;
+					const res = await fetch('/api/admin/knowledge', {
+						method: 'POST',
+						headers: { ...headers, 'Content-Type': 'application/json' },
+						body: JSON.stringify({
+							type: fType,
+							title: fTitle,
+							content,
+							original_url: fType === 'url' ? fUrl : undefined,
+						}),
+					});
+					if (res.ok) {
+						const entry: AdminKnowledge = await res.json();
+						entries = [entry, ...entries];
+						mode = entry;
+					}
+				}
+			} else {
+				// UPDATE (documents: only title is editable)
+				const existing = mode as AdminKnowledge;
+				const content = fType === 'url' ? fUrl : fType === 'document' ? existing.content : fContent;
+				const res = await fetch(`/api/admin/knowledge/${existing.id}`, {
+					method: 'PATCH',
+					headers: { ...headers, 'Content-Type': 'application/json' },
+					body: JSON.stringify({
+						title: fTitle,
+						content,
+						original_url: fType === 'url' ? fUrl : null,
+					}),
+				});
+				if (res.ok) {
+					const updated: AdminKnowledge = await res.json();
+					entries = entries.map((e) => (e.id === updated.id ? updated : e));
+					mode = updated;
+				}
 			}
 		} finally {
-			loading = false;
+			saving = false;
 		}
 	}
 
-	async function uploadDocument() {
-		const file = fileInput?.files?.[0];
-		if (!file || !title) return;
-		loading = true;
+	async function deleteEntry() {
+		if (mode === 'new' || mode === null) return;
+		const entry = mode as AdminKnowledge;
+		if (!confirm(`Excluir "${entry.title}"?`)) return;
+		deleting = true;
 		try {
 			const headers = await getHeaders();
-			const formData = new FormData();
-			formData.append('file', file);
-			formData.append('title', title);
-			const res = await fetch('/api/admin/knowledge/upload', {
-				method: 'POST',
-				headers,
-				body: formData,
-			});
+			const res = await fetch(`/api/admin/knowledge/${entry.id}`, { method: 'DELETE', headers });
 			if (res.ok) {
-				const entry = await res.json();
-				entries = [entry, ...entries];
-				title = '';
-				if (fileInput) fileInput.value = '';
+				entries = entries.filter((e) => e.id !== entry.id);
+				mode = null;
 			}
 		} finally {
-			loading = false;
-		}
-	}
-
-	async function deleteEntry(id: string) {
-		const headers = await getHeaders();
-		const res = await fetch(`/api/admin/knowledge/${id}`, { method: 'DELETE', headers });
-		if (res.ok) {
-			entries = entries.filter((e) => e.id !== id);
-			if (selectedId === id) selectedId = null;
+			deleting = false;
 		}
 	}
 
@@ -122,6 +197,12 @@
 		};
 		return map[type] ?? { text: type, cls: '' };
 	}
+
+	const isEditing = $derived(mode !== null && mode !== 'new');
+	const canSave = $derived(
+		!!fTitle.trim() &&
+			(fType === 'note' ? !!fContent.trim() : fType === 'url' ? !!fUrl.trim() : true)
+	);
 </script>
 
 <svelte:head>
@@ -147,6 +228,8 @@
 				</select>
 			</div>
 
+			<button class="new-btn" onclick={openNew}>+ Nova entrada</button>
+
 			<div class="list-count">{filtered.length} registro{filtered.length !== 1 ? 's' : ''}</div>
 
 			<div class="list-items">
@@ -155,7 +238,7 @@
 					<button
 						class="list-item"
 						class:selected={selectedId === entry.id}
-						onclick={() => (selectedId = entry.id)}
+						onclick={() => openEdit(entry)}
 					>
 						<div class="item-top">
 							<span class="item-title">{entry.title}</span>
@@ -176,77 +259,156 @@
 			</div>
 		</div>
 
-		<!-- Right: add form + detail -->
+		<!-- Right: form -->
 		<div class="detail-panel">
-			<!-- Add form always visible at top -->
-			<div class="add-section">
-				<div class="add-tabs">
-					<button class="add-tab" class:active={activeTab === 'note'} onclick={() => (activeTab = 'note')}>Nota</button>
-					<button class="add-tab" class:active={activeTab === 'url'} onclick={() => (activeTab = 'url')}>URL</button>
-					<button class="add-tab" class:active={activeTab === 'document'} onclick={() => (activeTab = 'document')}>Documento</button>
-				</div>
-
-				<div class="add-form">
-					<input type="text" bind:value={title} placeholder="Título" class="input" />
-
-					{#if activeTab === 'note'}
-						<textarea bind:value={noteContent} placeholder="Conteúdo da nota…" class="textarea"></textarea>
-						<button class="btn-primary" onclick={addNote} disabled={loading || !title || !noteContent}>
-							{loading ? 'Salvando…' : 'Adicionar Nota'}
-						</button>
-					{:else if activeTab === 'url'}
-						<input type="url" bind:value={urlValue} placeholder="https://…" class="input" />
-						<button class="btn-primary" onclick={addUrl} disabled={loading || !title || !urlValue}>
-							{loading ? 'Processando…' : 'Adicionar URL'}
-						</button>
-					{:else}
-						<input type="file" bind:this={fileInput} class="input" />
-						<button class="btn-primary" onclick={uploadDocument} disabled={loading || !title}>
-							{loading ? 'Enviando…' : 'Upload Documento'}
-						</button>
-					{/if}
-				</div>
-			</div>
-
-			<!-- Entry detail -->
-			{#if selected}
-				{@const badge = typeBadge(selected.type)}
-				<div class="entry-detail">
-					<div class="entry-header">
-						<h2 class="entry-title">{selected.title}</h2>
-						<span class="badge {badge.cls}">{badge.text}</span>
-					</div>
-
-					<div class="info-grid">
-						<div class="info-card">
-							<div class="info-label">Data</div>
-							<div class="info-value">{formatDate(selected.created_at)}</div>
-						</div>
-						<div class="info-card">
-							<div class="info-label">Embedded</div>
-							<div class="info-value">{selected.is_embedded ? 'Sim' : 'Não'}</div>
-						</div>
-						{#if selected.original_url}
-							<div class="info-card" style="grid-column: span 2">
-								<div class="info-label">URL</div>
-								<div class="info-value url-val">{selected.original_url}</div>
-							</div>
-						{/if}
-					</div>
-
-					{#if selected.content}
-						<div class="content-preview">
-							<div class="section-label">Conteúdo</div>
-							<pre class="content-text">{selected.content.slice(0, 800)}{selected.content.length > 800 ? '…' : ''}</pre>
-						</div>
-					{/if}
-
-					<div class="entry-actions">
-						<button class="btn-delete" onclick={() => deleteEntry(selected.id)}>Excluir entrada</button>
-					</div>
+			{#if mode === null}
+				<div class="detail-empty">
+					<div class="empty-icon">📚</div>
+					<div>Selecione uma entrada ou clique em <strong>+ Nova entrada</strong>.</div>
 				</div>
 			{:else}
-				<div class="detail-hint">Selecione um registro para ver os detalhes.</div>
+				<div class="form-header">
+					<h2 class="form-title">{mode === 'new' ? 'Nova entrada' : 'Editar entrada'}</h2>
+					{#if isEditing}
+						{@const badge = typeBadge((mode as AdminKnowledge).type)}
+						<span class="badge {badge.cls}">{badge.text}</span>
+						{#if (mode as AdminKnowledge).is_embedded}
+							<span class="badge embedded-badge">embedded</span>
+						{/if}
+					{/if}
+				</div>
+
+				<div class="form-body">
+					<!-- Title -->
+					<div class="field">
+						<label class="field-label" for="f-title">Nome da base</label>
+						<input id="f-title" class="input" type="text" placeholder="Ex: Política de preços" bind:value={fTitle} />
+					</div>
+
+					<!-- Type selector (only on new) -->
+					{#if mode === 'new'}
+						<div class="field">
+							<label class="field-label">Tipo</label>
+							<div class="type-tabs">
+								<button
+									class="type-tab"
+									class:active={fType === 'note'}
+									onclick={() => { fType = 'note'; onTypeChange(); }}
+								>Nota</button>
+								<button
+									class="type-tab"
+									class:active={fType === 'url'}
+									onclick={() => { fType = 'url'; onTypeChange(); }}
+								>URL</button>
+								<button
+									class="type-tab"
+									class:active={fType === 'document'}
+									onclick={() => { fType = 'document'; onTypeChange(); }}
+								>Documento</button>
+							</div>
+						</div>
+					{/if}
+
+					<!-- Type-specific fields -->
+					{#if fType === 'note'}
+						<div class="field">
+							<label class="field-label" for="f-content">Conteúdo da nota</label>
+							<textarea
+								id="f-content"
+								class="textarea"
+								placeholder="Escreva o conteúdo da nota…"
+								bind:value={fContent}
+							></textarea>
+						</div>
+
+					{:else if fType === 'url'}
+						<div class="field">
+							<label class="field-label" for="f-url">URL</label>
+							<div class="url-row">
+								<input
+									id="f-url"
+									class="input"
+									class:url-ok={urlStatus === 'ok'}
+									class:url-fail={urlStatus === 'fail'}
+									type="url"
+									placeholder="https://…"
+									bind:value={fUrl}
+									oninput={onUrlInput}
+								/>
+								<button class="verify-btn" onclick={verifyUrl} disabled={!fUrl || urlStatus === 'checking'}>
+									{urlStatus === 'checking' ? '…' : 'Verificar'}
+								</button>
+							</div>
+							{#if urlStatus !== 'idle'}
+								<div class="url-feedback" class:feedback-ok={urlStatus === 'ok'} class:feedback-fail={urlStatus === 'fail'} class:feedback-checking={urlStatus === 'checking'}>
+									{#if urlStatus === 'checking'}
+										Verificando…
+									{:else if urlStatus === 'ok'}
+										✓ {urlStatusMsg}
+									{:else if urlStatus === 'fail'}
+										✗ {urlStatusMsg}
+									{/if}
+								</div>
+							{/if}
+						</div>
+
+					{:else if fType === 'document'}
+						{#if mode === 'new'}
+							<div class="field">
+								<label class="field-label">Arquivo</label>
+								<input
+									type="file"
+									bind:this={fileInput}
+									class="file-input"
+									accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.ppt,.pptx,.png,.jpg,.jpeg,.webp,.gif"
+								/>
+							</div>
+						{:else}
+							{@const existing = mode as AdminKnowledge}
+							<div class="field">
+								<label class="field-label">Arquivo atual</label>
+								<div class="doc-info-row">
+									<span class="doc-filename">{existing.filename ?? '—'}</span>
+									{#if existing.mime_type}
+										<span class="mime-badge">{existing.mime_type.split('/').pop()}</span>
+									{/if}
+								</div>
+								<div class="field-hint">Para substituir o arquivo, exclua e crie uma nova entrada.</div>
+							</div>
+						{/if}
+					{/if}
+
+					<!-- Actions -->
+					<div class="form-actions">
+						<button
+							class="btn-save"
+							onclick={save}
+							disabled={saving || !canSave}
+						>
+							{saving ? 'Salvando…' : mode === 'new' ? 'Salvar' : 'Atualizar'}
+						</button>
+
+						{#if isEditing}
+							<button
+								class="btn-delete"
+								onclick={deleteEntry}
+								disabled={deleting}
+							>
+								{deleting ? 'Excluindo…' : 'Excluir'}
+							</button>
+						{/if}
+
+						<button class="btn-cancel" onclick={() => (mode = null)}>Cancelar</button>
+					</div>
+
+					<!-- Content preview (edit mode only) -->
+					{#if isEditing && (mode as AdminKnowledge).content}
+						<div class="content-preview">
+							<div class="section-label">Conteúdo extraído</div>
+							<pre class="content-text">{(mode as AdminKnowledge).content.slice(0, 800)}{(mode as AdminKnowledge).content.length > 800 ? '…' : ''}</pre>
+						</div>
+					{/if}
+				</div>
 			{/if}
 		</div>
 	</div>
@@ -309,6 +471,24 @@
 		padding: 0.4rem 0.5rem;
 		outline: none;
 		cursor: pointer;
+	}
+
+	.new-btn {
+		width: 100%;
+		background: rgba(99, 102, 241, 0.1);
+		border: none;
+		border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+		color: var(--color-primary-500, #6366f1);
+		font-size: 0.8125rem;
+		font-weight: 500;
+		padding: 0.6rem 0.75rem;
+		text-align: left;
+		cursor: pointer;
+		transition: background 0.15s;
+	}
+
+	.new-btn:hover {
+		background: rgba(99, 102, 241, 0.18);
 	}
 
 	.list-count {
@@ -392,156 +572,283 @@
 		padding: 1.5rem;
 		max-height: calc(100vh - 8rem);
 		overflow-y: auto;
+	}
+
+	.detail-empty {
 		display: flex;
 		flex-direction: column;
-		gap: 1.5rem;
+		align-items: center;
+		gap: 0.75rem;
+		padding: 4rem 1rem;
+		color: var(--color-neutral-500, #6b7280);
+		font-size: 0.9rem;
+		text-align: center;
 	}
 
-	/* Add section */
-
-	.add-section {
-		background: rgba(255, 255, 255, 0.02);
-		border: 1px solid rgba(255, 255, 255, 0.06);
-		border-radius: 8px;
-		padding: 1rem;
+	.empty-icon {
+		font-size: 2.5rem;
+		opacity: 0.4;
 	}
 
-	.add-tabs {
-		display: flex;
-		gap: 0.5rem;
-		margin-bottom: 0.75rem;
-	}
+	/* ── Form ── */
 
-	.add-tab {
-		padding: 0.35rem 0.7rem;
-		border-radius: 6px;
-		border: 1px solid rgba(255, 255, 255, 0.08);
-		background: transparent;
-		color: var(--color-neutral-400, #9ca3af);
-		font-size: 0.8125rem;
-		cursor: pointer;
-	}
-
-	.add-tab.active {
-		background: var(--color-primary-500, #6366f1);
-		color: #fff;
-		border-color: var(--color-primary-500, #6366f1);
-	}
-
-	.add-form {
-		display: flex;
-		flex-direction: column;
-		gap: 0.6rem;
-	}
-
-	.input {
-		padding: 0.45rem 0.7rem;
-		border-radius: 6px;
-		border: 1px solid rgba(255, 255, 255, 0.08);
-		background: var(--color-dark-bg, #0f1117);
-		color: #f9fafb;
-		font-size: 0.875rem;
-		width: 100%;
-		box-sizing: border-box;
-	}
-
-	.textarea {
-		padding: 0.45rem 0.7rem;
-		border-radius: 6px;
-		border: 1px solid rgba(255, 255, 255, 0.08);
-		background: var(--color-dark-bg, #0f1117);
-		color: #f9fafb;
-		font-size: 0.875rem;
-		min-height: 80px;
-		resize: vertical;
-		font-family: inherit;
-		width: 100%;
-		box-sizing: border-box;
-	}
-
-	.btn-primary {
-		align-self: flex-start;
-		padding: 0.45rem 1rem;
-		border-radius: 6px;
-		border: none;
-		background: var(--color-primary-600, #4f46e5);
-		color: #fff;
-		font-size: 0.8125rem;
-		font-weight: 500;
-		cursor: pointer;
-	}
-
-	.btn-primary:disabled {
-		opacity: 0.5;
-		cursor: not-allowed;
-	}
-
-	/* Entry detail */
-
-	.entry-detail {
-		display: flex;
-		flex-direction: column;
-		gap: 1rem;
-	}
-
-	.entry-header {
+	.form-header {
 		display: flex;
 		align-items: center;
 		gap: 0.75rem;
 		flex-wrap: wrap;
+		margin-bottom: 1.5rem;
 	}
 
-	.entry-title {
+	.form-title {
 		font-size: 1.125rem;
 		font-weight: 700;
 		color: #f9fafb;
 		margin: 0;
 	}
 
-	.info-grid {
-		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-		gap: 0.6rem;
+	.form-body {
+		display: flex;
+		flex-direction: column;
+		gap: 1.1rem;
 	}
 
-	.info-card {
-		background: rgba(255, 255, 255, 0.03);
-		border: 1px solid rgba(255, 255, 255, 0.06);
-		border-radius: 8px;
-		padding: 0.6rem 0.75rem;
+	.field {
+		display: flex;
+		flex-direction: column;
+		gap: 0.35rem;
 	}
 
-	.info-label {
-		font-size: 0.7rem;
-		color: var(--color-neutral-500, #6b7280);
+	.field-label {
+		font-size: 0.75rem;
+		font-weight: 600;
+		color: var(--color-neutral-400, #9ca3af);
 		text-transform: uppercase;
-		letter-spacing: 0.05em;
-		margin-bottom: 0.25rem;
+		letter-spacing: 0.04em;
 	}
 
-	.info-value {
+	.field-hint {
+		font-size: 0.75rem;
+		color: var(--color-neutral-600, #4b5563);
+		margin-top: 0.2rem;
+	}
+
+	.input {
+		padding: 0.5rem 0.7rem;
+		border-radius: 6px;
+		border: 1px solid rgba(255, 255, 255, 0.1);
+		background: var(--color-dark-bg, #0f1117);
+		color: #f9fafb;
+		font-size: 0.875rem;
+		width: 100%;
+		box-sizing: border-box;
+		outline: none;
+		transition: border-color 0.15s;
+	}
+
+	.input:focus {
+		border-color: var(--color-primary-500, #6366f1);
+	}
+
+	.input.url-ok {
+		border-color: var(--color-success, #10b981);
+	}
+
+	.input.url-fail {
+		border-color: var(--color-error, #ef4444);
+	}
+
+	.textarea {
+		padding: 0.5rem 0.7rem;
+		border-radius: 6px;
+		border: 1px solid rgba(255, 255, 255, 0.1);
+		background: var(--color-dark-bg, #0f1117);
+		color: #f9fafb;
+		font-size: 0.875rem;
+		min-height: 120px;
+		resize: vertical;
+		font-family: inherit;
+		width: 100%;
+		box-sizing: border-box;
+		outline: none;
+		line-height: 1.5;
+	}
+
+	.textarea:focus {
+		border-color: var(--color-primary-500, #6366f1);
+	}
+
+	.type-tabs {
+		display: flex;
+		gap: 0.5rem;
+	}
+
+	.type-tab {
+		padding: 0.35rem 0.875rem;
+		border-radius: 6px;
+		border: 1px solid rgba(255, 255, 255, 0.1);
+		background: transparent;
+		color: var(--color-neutral-400, #9ca3af);
+		font-size: 0.8125rem;
+		cursor: pointer;
+		transition: background 0.15s, border-color 0.15s, color 0.15s;
+	}
+
+	.type-tab:hover {
+		border-color: rgba(255, 255, 255, 0.2);
+		color: #f9fafb;
+	}
+
+	.type-tab.active {
+		background: var(--color-primary-600, #4f46e5);
+		border-color: var(--color-primary-600, #4f46e5);
+		color: #fff;
+	}
+
+	/* URL row */
+	.url-row {
+		display: flex;
+		gap: 0.5rem;
+	}
+
+	.url-row .input {
+		flex: 1;
+	}
+
+	.verify-btn {
+		padding: 0.5rem 0.875rem;
+		border-radius: 6px;
+		border: 1px solid rgba(255, 255, 255, 0.1);
+		background: rgba(255, 255, 255, 0.04);
+		color: #d1d5db;
+		font-size: 0.8125rem;
+		cursor: pointer;
+		white-space: nowrap;
+		transition: background 0.15s;
+	}
+
+	.verify-btn:hover:not(:disabled) {
+		background: rgba(255, 255, 255, 0.08);
+	}
+
+	.verify-btn:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+
+	.url-feedback {
+		font-size: 0.8rem;
+		padding: 0.3rem 0;
+	}
+
+	.feedback-ok { color: var(--color-success, #10b981); }
+	.feedback-fail { color: var(--color-error, #ef4444); }
+	.feedback-checking { color: var(--color-neutral-500, #6b7280); }
+
+	/* File input */
+	.file-input {
+		font-size: 0.875rem;
+		color: #d1d5db;
+		cursor: pointer;
+	}
+
+	.doc-info-row {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+	}
+
+	.doc-filename {
 		font-size: 0.875rem;
 		color: #f9fafb;
+	}
+
+	.mime-badge {
+		background: rgba(99, 102, 241, 0.15);
+		color: var(--color-primary-500, #6366f1);
+		padding: 0.1rem 0.4rem;
+		border-radius: 4px;
+		font-size: 0.7rem;
 		font-weight: 500;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
+		text-transform: uppercase;
 	}
 
-	.url-val {
-		font-size: 0.75rem;
-		font-weight: 400;
+	/* Actions */
+	.form-actions {
+		display: flex;
+		gap: 0.6rem;
+		flex-wrap: wrap;
+	}
+
+	.btn-save {
+		padding: 0.5rem 1.25rem;
+		border-radius: 6px;
+		border: none;
+		background: var(--color-primary-600, #4f46e5);
+		color: #fff;
+		font-size: 0.875rem;
+		font-weight: 500;
+		cursor: pointer;
+		transition: background 0.15s;
+	}
+
+	.btn-save:hover:not(:disabled) {
+		background: var(--color-primary-500, #6366f1);
+	}
+
+	.btn-save:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+
+	.btn-delete {
+		padding: 0.5rem 1rem;
+		border-radius: 6px;
+		border: 1px solid var(--color-error, #ef4444);
+		color: var(--color-error, #ef4444);
+		background: color-mix(in srgb, var(--color-error, #ef4444) 10%, transparent);
+		font-size: 0.875rem;
+		cursor: pointer;
+		transition: background 0.15s;
+	}
+
+	.btn-delete:hover:not(:disabled) {
+		background: color-mix(in srgb, var(--color-error, #ef4444) 20%, transparent);
+	}
+
+	.btn-delete:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+
+	.btn-cancel {
+		padding: 0.5rem 1rem;
+		border-radius: 6px;
+		border: 1px solid rgba(255, 255, 255, 0.1);
+		background: transparent;
 		color: var(--color-neutral-400, #9ca3af);
+		font-size: 0.875rem;
+		cursor: pointer;
+		transition: background 0.15s;
 	}
 
+	.btn-cancel:hover {
+		background: rgba(255, 255, 255, 0.05);
+		color: #f9fafb;
+	}
+
+	/* Content preview */
 	.content-preview {
 		display: flex;
 		flex-direction: column;
 		gap: 0.4rem;
+		margin-top: 0.5rem;
+		border-top: 1px solid rgba(255, 255, 255, 0.06);
+		padding-top: 1rem;
 	}
 
 	.section-label {
-		font-size: 0.75rem;
+		font-size: 0.72rem;
 		font-weight: 600;
 		color: var(--color-neutral-400, #9ca3af);
 		text-transform: uppercase;
@@ -562,32 +869,6 @@
 		overflow-y: auto;
 		margin: 0;
 		font-family: inherit;
-	}
-
-	.entry-actions {
-		display: flex;
-		gap: 0.75rem;
-	}
-
-	.btn-delete {
-		padding: 0.45rem 1rem;
-		border-radius: 6px;
-		border: 1px solid var(--color-error, #ef4444);
-		color: var(--color-error, #ef4444);
-		background: color-mix(in srgb, var(--color-error, #ef4444) 10%, transparent);
-		font-size: 0.8125rem;
-		cursor: pointer;
-	}
-
-	.btn-delete:hover {
-		background: color-mix(in srgb, var(--color-error, #ef4444) 20%, transparent);
-	}
-
-	.detail-hint {
-		color: var(--color-neutral-500, #6b7280);
-		font-size: 0.875rem;
-		text-align: center;
-		padding: 1rem 0;
 	}
 
 	/* ── Badges ── */
