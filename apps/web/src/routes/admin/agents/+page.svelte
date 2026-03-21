@@ -14,20 +14,42 @@
 	let saving = $state(false);
 	let saved = $state(false);
 	let errorMsg = $state('');
+	let agentOutput = $state<Record<string, unknown> | null>(null);
+	let loadingOutput = $state(false);
 
 	const selected = $derived(instructions.find((a) => a.agent_key === selectedKey) ?? null);
 	const charCount = $derived(editContent.length);
 
-	function selectAgent(key: string) {
+	async function selectAgent(key: string) {
 		if (selectedKey === key) return;
 		selectedKey = key;
 		saved = false;
 		errorMsg = '';
+		agentOutput = null;
 		const agent = instructions.find((a) => a.agent_key === key);
 		editContent = agent?.content ?? '';
 		editTemperature = agent?.temperature ?? 0.7;
 		editMaxTokens = agent?.max_tokens ?? 4096;
 		editEnabled = agent?.enabled ?? true;
+
+		if (data.latestJobId) {
+			loadingOutput = true;
+			try {
+				const token = await auth.currentUser?.getIdToken(false);
+				const res = await fetch(
+					`/api/admin/agents/${key}/output?job_id=${data.latestJobId}`,
+					{ headers: token ? { Authorization: `Bearer ${token}` } : {} }
+				);
+				if (res.ok) {
+					const json = await res.json();
+					agentOutput = json?.output ?? null;
+				}
+			} catch {
+				// ignore — output not available
+			} finally {
+				loadingOutput = false;
+			}
+		}
 	}
 
 	async function save() {
@@ -167,6 +189,21 @@
 						</div>
 					</div>
 				</div>
+			{#if data.latestJobId}
+				<div class="output-section">
+					<div class="output-header">
+						<span class="output-title">Último output</span>
+						{#if loadingOutput}
+							<span class="output-loading">carregando…</span>
+						{/if}
+					</div>
+					{#if agentOutput}
+						<pre class="output-pre">{JSON.stringify(agentOutput, null, 2)}</pre>
+					{:else if !loadingOutput}
+						<div class="output-empty">Nenhum output disponível para este agente.</div>
+					{/if}
+				</div>
+			{/if}
 			{/if}
 		</div>
 	</div>
@@ -429,5 +466,56 @@
 
 	.btn-save:hover:not(:disabled) {
 		background: var(--color-primary-500, #6366f1);
+	}
+
+	/* ── Output preview ── */
+
+	.output-section {
+		margin-top: 1.25rem;
+		border-top: 1px solid rgba(255, 255, 255, 0.06);
+		padding-top: 1.25rem;
+	}
+
+	.output-header {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+		margin-bottom: 0.75rem;
+	}
+
+	.output-title {
+		font-size: 0.75rem;
+		font-weight: 600;
+		color: var(--color-neutral-400, #9ca3af);
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+	}
+
+	.output-loading {
+		font-size: 0.75rem;
+		color: var(--color-neutral-500, #6b7280);
+	}
+
+	.output-pre {
+		background: var(--color-dark-bg, #0f1117);
+		border: 1px solid rgba(255, 255, 255, 0.08);
+		border-radius: 8px;
+		padding: 1rem;
+		font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+		font-size: 0.75rem;
+		line-height: 1.5;
+		color: #d1d5db;
+		overflow: auto;
+		max-height: 360px;
+		white-space: pre-wrap;
+		word-break: break-all;
+		margin: 0;
+	}
+
+	.output-empty {
+		font-size: 0.8125rem;
+		color: var(--color-neutral-500, #6b7280);
+		text-align: center;
+		padding: 1.5rem 0;
 	}
 </style>

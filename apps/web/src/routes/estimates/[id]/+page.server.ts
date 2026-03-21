@@ -36,8 +36,13 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 					aiStatus.agent_steps ?? []
 				);
 				if (['done', 'failed'].includes(aiStatus.status) && estimate.job_id) {
+					const totalDurationS = (aiStatus.agent_steps ?? []).reduce(
+						(sum, s) => sum + (s.duration_s ?? 0),
+						0
+					);
 					await updateEstimateRun(estimate.job_id, aiStatus.status, {
 						agentSteps: aiStatus.agent_steps ?? [],
+						totalDurationS: totalDurationS > 0 ? totalDurationS : undefined,
 						errorMessage: aiStatus.status === 'failed' ? 'Pipeline failed' : undefined,
 					}).catch(() => null);
 				}
