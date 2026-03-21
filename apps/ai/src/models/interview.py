@@ -33,6 +33,7 @@ class ChatRequest(BaseModel):
     is_resumption: bool = False
     llm_model: str = "gemini-2.5-flash"
     current_title: str | None = None
+    user_name: str | None = None
 
 
 class StateUpdate(BaseModel):

@@ -21,6 +21,7 @@ def build_system_prompt(
     state: InterviewState,
     documents_context: str | None = None,
     tone_instruction: str | None = None,
+    user_name: str | None = None,
 ) -> str:
     domains_status = _format_domains(state)
     maturity = _calculate_maturity_inline(state)
@@ -39,7 +40,9 @@ O usuário já enviou documentos com o seguinte conteúdo extraído:
 
 Use essas informações para evitar perguntas redundantes e para validar e enriquecer respostas já dadas."""
 
-    return f"""Você é um analista sênior de projetos de software conduzindo uma entrevista de descoberta para estimar um projeto. Seu nome é Oute.
+    user_section = f"\nVocê está conversando com **{user_name}**. Use o nome dele(a) quando for natural, mas não excessivamente." if user_name else ""
+
+    return f"""Você é um analista sênior de projetos de software conduzindo uma entrevista de descoberta para estimar um projeto. Seu nome é Oute.{user_section}
 
 ## Objetivo
 
