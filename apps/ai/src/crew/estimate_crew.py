@@ -8,11 +8,13 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+import litellm
 import yaml
 from crewai import Agent, Crew, Process, Task
 
 from src.crew.tools import VectorSearchTool, WebSearchTool
 from src.models.estimate import (
+    AGENT_OUTPUT_MODELS,
     AgentStep,
     assemble_estimate_result,
     parse_agent_output,
@@ -291,6 +293,44 @@ def run_and_collect(
                         parsed = model_cls.model_validate(retry_data)
                 except Exception:
                     logger.debug("Agent %s retry parse also failed", key)
+
+        # Third tier: ask the LLM to reformat the output as valid JSON
+        if parsed is None and raw:
+            logger.warning(
+                "agent_llm_reformat",
+                extra={"agent": key, "event": "llm_retry", "raw_length": len(raw)},
+            )
+            try:
+                model_cls = AGENT_OUTPUT_MODELS.get(key)
+                if model_cls:
+                    schema_str = json.dumps(model_cls.model_json_schema(), indent=2)
+                    resp = litellm.completion(
+                        model="vertex_ai/gemini-2.5-flash-lite",
+                        messages=[
+                            {
+                                "role": "user",
+                                "content": (
+                                    "The following text is the output of an AI agent. "
+                                    "Your job is to extract it as a valid JSON object "
+                                    "matching the JSON Schema below.\n"
+                                    "Output ONLY the JSON object — no explanation, no markdown.\n\n"
+                                    f"JSON Schema:\n{schema_str}\n\n"
+                                    f"Agent output to parse:\n{raw[:3000]}"
+                                ),
+                            }
+                        ],
+                        temperature=0.0,
+                        max_tokens=2048,
+                    )
+                    fixed_raw = resp.choices[0].message.content or ""
+                    parsed = parse_agent_output(key, fixed_raw)
+                    if parsed is not None:
+                        logger.info(
+                            "agent_llm_reformat_success",
+                            extra={"agent": key, "event": "llm_retry_ok"},
+                        )
+            except Exception:
+                logger.debug("Agent %s LLM reformat retry also failed", key, exc_info=True)
 
         agent_outputs[key] = parsed
 

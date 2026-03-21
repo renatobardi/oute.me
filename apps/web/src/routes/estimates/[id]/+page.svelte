@@ -3,6 +3,8 @@
 	import { Button, StatusBadge, MetricDisplay, ProgressBar } from '@oute/ui';
 	import '@oute/ui/theme.css';
 	import type { EstimateResult } from '$lib/types/estimate';
+	import { AGENT_LABELS, AGENT_KEYS } from '$lib/types/estimate';
+	import type { AgentStep } from '$lib/types/estimate';
 
 	let { data } = $props();
 
@@ -16,6 +18,13 @@
 	let pollTimer = $state<ReturnType<typeof setInterval> | null>(null);
 	let elapsedSeconds = $state(0);
 	let elapsedTimer = $state<ReturnType<typeof setInterval> | null>(null);
+
+	const displaySteps = $derived(
+		AGENT_KEYS.map((key) => {
+			const found = (estimate.agent_steps ?? []).find((s: AgentStep) => s.agent_key === key);
+			return (found ?? { agent_key: key, status: 'pending', duration_s: null, started_at: null, finished_at: null, output_preview: null, error: null }) as AgentStep;
+		})
+	);
 
 	$effect(() => {
 		if (['pending', 'running'].includes(estimate.status)) {
@@ -98,17 +107,82 @@
 		</div>
 
 	{:else if ['pending', 'running'].includes(estimate.status)}
-		<div class="loading-state">
-			<div class="spinner"></div>
-			<h2>Gerando estimativa…</h2>
-			<p>Nossos especialistas de IA estão analisando seu projeto.<br>Esse processo pode levar alguns minutos.</p>
-			<span class="elapsed-label">{elapsedSeconds}s</span>
+		<div class="pipeline-state">
+			<div class="pipeline-header">
+				<h2>Gerando estimativa…</h2>
+				<span class="elapsed-chip">⏱ {elapsedSeconds}s</span>
+			</div>
+			<p class="pipeline-hint">Nossos especialistas de IA estão analisando seu projeto.<br>Esse processo pode levar alguns minutos.</p>
+			<div class="agent-stepper">
+				{#each displaySteps as step, i (step.agent_key)}
+					<div class="as-row as-{step.status}">
+						<div class="as-track">
+							<div class="as-line" class:as-line-hidden={i === 0}></div>
+							<div class="as-circle">
+								{#if step.status === 'done'}
+									<span>✓</span>
+								{:else if step.status === 'failed'}
+									<span>✕</span>
+								{:else if step.status === 'running'}
+									<div class="as-pulse"></div>
+								{:else}
+									<div class="as-dot"></div>
+								{/if}
+							</div>
+							<div class="as-line" class:as-line-hidden={i === displaySteps.length - 1}></div>
+						</div>
+						<div class="as-content">
+							<span class="as-label">{AGENT_LABELS[step.agent_key] ?? step.agent_key}</span>
+							{#if step.status === 'running'}
+								<span class="as-time">em andamento…</span>
+							{:else if step.status === 'done' && step.duration_s != null}
+								<span class="as-time">{step.duration_s.toFixed(1)}s</span>
+							{:else if step.status === 'failed'}
+								<span class="as-time as-err">falhou</span>
+							{/if}
+						</div>
+					</div>
+				{/each}
+			</div>
 		</div>
 
 	{:else if estimate.status === 'failed'}
 		<div class="error-state">
 			<h2>Erro na estimativa</h2>
 			<p>Ocorreu um problema ao gerar sua estimativa. Nossa equipe foi notificada e irá verificar.</p>
+			{#if estimate.agent_steps && estimate.agent_steps.length > 0}
+				<div class="agent-stepper agent-stepper-compact">
+					{#each displaySteps as step, i (step.agent_key)}
+						<div class="as-row as-{step.status}">
+							<div class="as-track">
+								<div class="as-line" class:as-line-hidden={i === 0}></div>
+								<div class="as-circle">
+									{#if step.status === 'done'}
+										<span>✓</span>
+									{:else if step.status === 'failed'}
+										<span>✕</span>
+									{:else if step.status === 'running'}
+										<div class="as-pulse"></div>
+									{:else}
+										<div class="as-dot"></div>
+									{/if}
+								</div>
+								<div class="as-line" class:as-line-hidden={i === displaySteps.length - 1}></div>
+							</div>
+							<div class="as-content">
+								<span class="as-label">{AGENT_LABELS[step.agent_key] ?? step.agent_key}</span>
+								{#if step.status === 'done' && step.duration_s != null}
+									<span class="as-time">{step.duration_s.toFixed(1)}s</span>
+								{:else if step.status === 'failed' && step.error}
+									<span class="as-time as-err">{step.error}</span>
+								{:else if step.status === 'failed'}
+									<span class="as-time as-err">falhou</span>
+								{/if}
+							</div>
+						</div>
+					{/each}
+				</div>
+			{/if}
 			<Button variant="ghost" onclick={() => goto(`/interviews/${estimate.interview_id}`)}>
 				Voltar à Entrevista
 			</Button>
@@ -348,24 +422,170 @@
 		margin-bottom: 1rem;
 	}
 
-	.spinner {
-		width: 48px;
-		height: 48px;
-		border: 3px solid rgba(255, 255, 255, 0.1);
-		border-top-color: var(--color-primary-500, #6366f1);
-		border-radius: 50%;
-		animation: spin 0.9s linear infinite;
-		margin: 0 auto 1.5rem;
+	/* ── Pipeline stepper ── */
+	.pipeline-state {
+		padding: 2rem 0;
+		max-width: 480px;
+		margin: 0 auto;
 	}
 
-	@keyframes spin { to { transform: rotate(360deg); } }
+	.pipeline-header {
+		display: flex;
+		align-items: baseline;
+		gap: 1rem;
+		margin-bottom: 0.5rem;
+	}
 
-	.elapsed-label {
-		font-size: 0.875rem;
+	.pipeline-header h2 {
+		color: rgba(255, 255, 255, 0.9);
+		margin: 0;
+		font-size: 1.25rem;
+	}
+
+	.elapsed-chip {
+		font-size: 0.8125rem;
 		color: rgba(255, 255, 255, 0.35);
-		margin-top: -1rem;
+		background: rgba(255, 255, 255, 0.05);
+		padding: 0.2rem 0.6rem;
+		border-radius: 20px;
 	}
 
+	.pipeline-hint {
+		font-size: 0.875rem;
+		color: rgba(255, 255, 255, 0.45);
+		margin-bottom: 2rem;
+		line-height: 1.6;
+	}
+
+	.agent-stepper {
+		display: flex;
+		flex-direction: column;
+	}
+
+	.agent-stepper-compact {
+		margin: 1.5rem auto;
+		max-width: 400px;
+	}
+
+	.as-row {
+		display: flex;
+		align-items: stretch;
+		gap: 0.875rem;
+		min-height: 52px;
+	}
+
+	.as-track {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		flex-shrink: 0;
+		width: 28px;
+	}
+
+	.as-line {
+		flex: 1;
+		width: 2px;
+		background: rgba(255, 255, 255, 0.1);
+		min-height: 8px;
+	}
+
+	.as-line-hidden {
+		background: transparent;
+	}
+
+	.as-circle {
+		width: 28px;
+		height: 28px;
+		border-radius: 50%;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		flex-shrink: 0;
+		font-size: 0.8125rem;
+		font-weight: 700;
+		border: 2px solid rgba(255, 255, 255, 0.12);
+		background: rgba(255, 255, 255, 0.04);
+		color: rgba(255, 255, 255, 0.5);
+	}
+
+	.as-done .as-circle {
+		background: var(--color-success, #10b981);
+		border-color: var(--color-success, #10b981);
+		color: white;
+	}
+
+	.as-running .as-circle {
+		background: var(--color-primary-500, #6366f1);
+		border-color: var(--color-primary-500, #6366f1);
+		color: white;
+	}
+
+	.as-failed .as-circle {
+		background: var(--color-error, #ef4444);
+		border-color: var(--color-error, #ef4444);
+		color: white;
+	}
+
+	.as-dot {
+		width: 8px;
+		height: 8px;
+		border-radius: 50%;
+		background: rgba(255, 255, 255, 0.2);
+	}
+
+	.as-pulse {
+		width: 10px;
+		height: 10px;
+		border-radius: 50%;
+		background: white;
+		animation: pulse-dot 1.2s ease-in-out infinite;
+	}
+
+	@keyframes pulse-dot {
+		0%, 100% { opacity: 1; transform: scale(1); }
+		50% { opacity: 0.5; transform: scale(0.7); }
+	}
+
+	.as-content {
+		display: flex;
+		flex-direction: column;
+		justify-content: center;
+		padding: 0.25rem 0;
+		gap: 0.125rem;
+	}
+
+	.as-label {
+		font-size: 0.9375rem;
+		font-weight: 500;
+		color: rgba(255, 255, 255, 0.75);
+		line-height: 1.3;
+	}
+
+	.as-running .as-label {
+		color: rgba(255, 255, 255, 0.95);
+	}
+
+	.as-done .as-label {
+		color: rgba(255, 255, 255, 0.6);
+	}
+
+	.as-failed .as-label {
+		color: var(--color-error, #ef4444);
+	}
+
+	.as-time {
+		font-size: 0.75rem;
+		color: rgba(255, 255, 255, 0.35);
+	}
+
+	.as-err {
+		color: var(--color-error, #ef4444);
+		opacity: 0.8;
+	}
+
+	.as-done .as-line {
+		background: color-mix(in srgb, var(--color-success, #10b981) 40%, rgba(255,255,255,0.1));
+	}
 
 	/* ── Result sections ── */
 	.section { margin-bottom: 2.5rem; }
