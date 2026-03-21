@@ -44,6 +44,9 @@
 			<div class="nav-links">
 				<a href="/interviews" class="nav-link">Entrevistas</a>
 				<a href="/projects" class="nav-link">Projetos</a>
+				{#if data.isAdmin}
+					<a href="/admin" class="nav-link nav-link-admin">Administração</a>
+				{/if}
 			</div>
 			<SettingsMenu userName={data.user.displayName || data.user.email} isAdmin={data.isAdmin ?? false} />
 		{/if}
@@ -111,6 +114,15 @@
 	.nav-link:hover {
 		color: rgba(255, 255, 255, 0.95);
 		background: rgba(255, 255, 255, 0.06);
+	}
+
+	.nav-link-admin {
+		color: var(--color-warning, #f59e0b);
+	}
+
+	.nav-link-admin:hover {
+		color: var(--color-warning, #f59e0b);
+		background: color-mix(in srgb, var(--color-warning, #f59e0b) 10%, transparent);
 	}
 
 	.content {
