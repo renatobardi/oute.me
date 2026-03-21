@@ -1,6 +1,6 @@
 import type { RequestHandler } from './$types';
 import { requireAuth, jsonOk, jsonError } from '$lib/server/api-utils';
-import { getEstimate, updateEstimateJobId } from '$lib/server/estimates';
+import { getEstimate, updateEstimateJobId, createEstimateRun } from '$lib/server/estimates';
 import { getInterview, getDocuments } from '$lib/server/interviews';
 import { postJSON } from '$lib/server/ai-client';
 import { getAllInstructions } from '$lib/server/agent-instructions';
@@ -44,6 +44,7 @@ export const POST: RequestHandler = async ({ params, locals }) => {
 	});
 
 	await updateEstimateJobId(estimate.id, aiResponse.job_id);
+	await createEstimateRun(estimate.id, aiResponse.job_id, 'gemini-2.5-flash');
 
 	return jsonOk({ id: estimate.id, job_id: aiResponse.job_id, status: 'pending' });
 };

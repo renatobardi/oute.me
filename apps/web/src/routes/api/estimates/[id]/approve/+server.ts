@@ -7,6 +7,9 @@ import type { EstimateResult } from '$lib/types/estimate';
 
 export const POST: RequestHandler = async ({ params, request, locals }) => {
 	const user = requireAuth(locals);
+	if (!locals.dbUser) {
+		throw error(401, 'Authentication required');
+	}
 	const estimate = await getEstimate(params.id, user.uid);
 
 	if (!estimate) {
@@ -39,7 +42,7 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
 
 	const project = await createProjectFromEstimate(
 		estimate.id,
-		user.uid,
+		locals.dbUser.id,
 		projectName,
 		estimate.result as unknown as EstimateResult,
 		scenario

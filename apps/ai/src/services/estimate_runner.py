@@ -1,14 +1,16 @@
 from __future__ import annotations
 
 import asyncio
+import functools
 import json
 import logging
 import time
 import uuid
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
-from src.crew.estimate_crew import build_estimate_crew, run_and_collect
+from src.crew.estimate_crew import AGENT_KEYS, build_estimate_crew, run_and_collect
 from src.services.monitoring import emit_metric
 from src.services.state import StateBackend
 from src.services.vector_store import (
@@ -29,6 +31,7 @@ def _run_crew_sync(
     documents_context: str,
     agent_instructions: dict[str, str] | None = None,
     agent_config: dict[str, dict[str, Any]] | None = None,
+    task_done_callback: Callable[[str], None] | None = None,
 ) -> dict[str, Any]:
     """Build and run the CrewAI pipeline, returning an aggregated result dict."""
     estimate_crew = build_estimate_crew(
@@ -37,8 +40,37 @@ def _run_crew_sync(
         documents_context,
         agent_instructions or {},
         agent_config or {},
+        task_done_callback=task_done_callback,
     )
     return run_and_collect(estimate_crew)
+
+
+def _make_task_done_callback(
+    job_id: str,
+    loop: asyncio.AbstractEventLoop,
+    backend: StateBackend,
+) -> tuple[list[dict[str, Any]], Callable[[str], None]]:
+    """Returns (steps_list, callback).
+
+    The callback is safe to call from a ThreadPoolExecutor thread.
+    It marks the given agent_key as 'done' and schedules an async
+    update to the state backend via run_coroutine_threadsafe.
+    """
+    steps: list[dict[str, Any]] = [
+        {"agent_key": k, "status": "pending"} for k in AGENT_KEYS
+    ]
+
+    def on_task_done(agent_key: str) -> None:
+        for step in steps:
+            if step["agent_key"] == agent_key:
+                step["status"] = "done"
+                break
+        asyncio.run_coroutine_threadsafe(
+            backend.update_agent_steps(job_id, steps),  # type: ignore[arg-type]
+            loop,
+        )
+
+    return steps, on_task_done
 
 
 _PIPELINE_TIMEOUT_S = 300  # 5 minutes hard limit for the full pipeline
@@ -77,17 +109,29 @@ async def run_pipeline(
             logger.exception("Failed to embed interview data for job %s (continuing)", job_id)
 
         loop = asyncio.get_event_loop()
+
+        # Publish all-pending steps immediately so the frontend can show the stepper
+        pending_steps: list[dict[str, Any]] = [
+            {"agent_key": k, "status": "pending"} for k in AGENT_KEYS
+        ]
+        await backend.update_agent_steps(job_id, pending_steps)  # type: ignore[arg-type]
+
+        # Build real-time callback — updates each step as it completes during execution
+        _steps_ref, task_done_cb = _make_task_done_callback(job_id, loop, backend)
+
+        fn = functools.partial(
+            _run_crew_sync,
+            interview_state,
+            conversation_summary,
+            documents_context,
+            agent_instructions,
+            agent_config,
+            task_done_cb,
+        )
+
         try:
             result = await asyncio.wait_for(
-                loop.run_in_executor(
-                    _executor,
-                    _run_crew_sync,
-                    interview_state,
-                    conversation_summary,
-                    documents_context,
-                    agent_instructions,
-                    agent_config,
-                ),
+                loop.run_in_executor(_executor, fn),
                 timeout=_PIPELINE_TIMEOUT_S,
             )
         except TimeoutError:
@@ -161,7 +205,7 @@ async def run_pipeline(
         except Exception:
             logger.exception("Failed to store knowledge vector for job %s", job_id)
 
-        # Store result with agent tracking data
+        # Store final result with complete agent tracking data
         result["_agent_steps"] = agent_steps
         result["_agent_outputs"] = agent_outputs
 
