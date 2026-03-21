@@ -1,7 +1,9 @@
 import type { RequestHandler } from './$types';
 import { requireAuth, jsonOk, jsonError } from '$lib/server/api-utils';
 import { getOrCreateUser } from '$lib/server/users';
-import { getInterview, getMessages, getDocuments, updateInterviewTitle } from '$lib/server/interviews';
+import { getInterview, getMessages, getDocuments, updateInterviewTitle, updateInterviewStatus } from '$lib/server/interviews';
+
+const VALID_STATUSES = ['active', 'archived'];
 
 export const GET: RequestHandler = async ({ locals, params }) => {
 	const auth = requireAuth(locals);
@@ -30,6 +32,16 @@ export const PATCH: RequestHandler = async ({ locals, params, request }) => {
 	}
 
 	const body = await request.json();
+
+	if ('status' in body) {
+		const status = body.status as string;
+		if (!VALID_STATUSES.includes(status)) {
+			return jsonError(400, 'Invalid status');
+		}
+		await updateInterviewStatus(params.id, status);
+		return jsonOk({ status });
+	}
+
 	const title = body.title as string;
 	if (!title?.trim()) {
 		return jsonError(400, 'Title is required');
