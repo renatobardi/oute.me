@@ -17,13 +17,18 @@ export const PUT: RequestHandler = async ({ params, request, locals }) => {
 	if (!locals.dbUser?.is_admin) return jsonError(403, 'Admin access required');
 
 	const body = await request.json();
-	const { content } = body as { content: string };
+	const { content, temperature, max_tokens, enabled } = body as {
+		content?: string;
+		temperature?: number;
+		max_tokens?: number;
+		enabled?: boolean;
+	};
 
-	if (typeof content !== 'string') {
-		return jsonError(400, 'content is required');
+	if (content !== undefined && typeof content !== 'string') {
+		return jsonError(400, 'content must be a string');
 	}
 
-	const updated = await updateInstruction(params.key, content, user.uid);
+	const updated = await updateInstruction(params.key, { content, temperature, max_tokens, enabled }, user.uid);
 	if (!updated) return jsonError(404, 'Agent instruction not found');
 
 	return jsonOk(updated);

@@ -251,6 +251,7 @@ class EstimateRequest(BaseModel):
     documents_context: str = ""
     llm_model: str = "gemini-2.5-flash"
     agent_instructions: dict[str, str] = {}
+    agent_config: dict[str, dict[str, Any]] = {}
 
 
 class EstimateStatusResponse(BaseModel):

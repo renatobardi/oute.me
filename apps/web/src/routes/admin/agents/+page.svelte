@@ -8,6 +8,9 @@
 	let instructions = $state<AgentInstruction[]>(data.instructions);
 	let selectedKey = $state<string | null>(null);
 	let editContent = $state('');
+	let editTemperature = $state(0.7);
+	let editMaxTokens = $state(4096);
+	let editEnabled = $state(true);
 	let saving = $state(false);
 	let saved = $state(false);
 	let errorMsg = $state('');
@@ -22,6 +25,9 @@
 		errorMsg = '';
 		const agent = instructions.find((a) => a.agent_key === key);
 		editContent = agent?.content ?? '';
+		editTemperature = agent?.temperature ?? 0.7;
+		editMaxTokens = agent?.max_tokens ?? 4096;
+		editEnabled = agent?.enabled ?? true;
 	}
 
 	async function save() {
@@ -37,11 +43,17 @@
 					'Content-Type': 'application/json',
 					...(token ? { Authorization: `Bearer ${token}` } : {}),
 				},
-				body: JSON.stringify({ content: editContent }),
+				body: JSON.stringify({
+					content: editContent,
+					temperature: editTemperature,
+					max_tokens: editMaxTokens,
+					enabled: editEnabled,
+				}),
 			});
 			if (res.ok) {
+				const updated = await res.json();
 				instructions = instructions.map((a) =>
-					a.agent_key === selectedKey ? { ...a, content: editContent } : a
+					a.agent_key === selectedKey ? updated : a
 				);
 				saved = true;
 				setTimeout(() => (saved = false), 3000);
@@ -100,6 +112,37 @@
 						<h2 class="editor-title">{selected.title}</h2>
 						<span class="agent-key">{selected.agent_key}</span>
 					</div>
+					<label class="toggle-wrap">
+						<input type="checkbox" bind:checked={editEnabled} />
+						<span class="toggle-label">{editEnabled ? 'Ativo' : 'Desativado'}</span>
+					</label>
+				</div>
+
+				<div class="config-row">
+					<label class="config-field">
+						<span class="config-label">Temperature</span>
+						<div class="slider-wrap">
+							<input
+								type="range"
+								min="0"
+								max="1"
+								step="0.05"
+								bind:value={editTemperature}
+							/>
+							<span class="slider-value">{editTemperature.toFixed(2)}</span>
+						</div>
+					</label>
+					<label class="config-field">
+						<span class="config-label">Max tokens</span>
+						<input
+							class="tokens-input"
+							type="number"
+							min="256"
+							max="16384"
+							step="256"
+							bind:value={editMaxTokens}
+						/>
+					</label>
 				</div>
 
 				<div class="editor-wrapper">
@@ -236,6 +279,9 @@
 	}
 
 	.editor-header {
+		display: flex;
+		justify-content: space-between;
+		align-items: flex-start;
 		margin-bottom: 1.25rem;
 	}
 
@@ -244,6 +290,71 @@
 		font-weight: 700;
 		color: #f9fafb;
 		margin: 0 0 0.2rem;
+	}
+
+	.toggle-wrap {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		cursor: pointer;
+		user-select: none;
+	}
+
+	.toggle-label {
+		font-size: 0.8125rem;
+		color: var(--color-neutral-400, #9ca3af);
+	}
+
+	.config-row {
+		display: flex;
+		gap: 1.5rem;
+		margin-bottom: 1.25rem;
+		flex-wrap: wrap;
+	}
+
+	.config-field {
+		display: flex;
+		flex-direction: column;
+		gap: 0.35rem;
+		flex: 1;
+		min-width: 160px;
+	}
+
+	.config-label {
+		font-size: 0.75rem;
+		font-weight: 600;
+		color: var(--color-neutral-400, #9ca3af);
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+	}
+
+	.slider-wrap {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+	}
+
+	.slider-wrap input[type='range'] {
+		flex: 1;
+		accent-color: var(--color-primary-500, #6366f1);
+	}
+
+	.slider-value {
+		font-family: monospace;
+		font-size: 0.8125rem;
+		color: #f9fafb;
+		min-width: 2.5rem;
+		text-align: right;
+	}
+
+	.tokens-input {
+		width: 100%;
+		padding: 0.35rem 0.6rem;
+		background: rgba(255, 255, 255, 0.05);
+		border: 1px solid rgba(255, 255, 255, 0.1);
+		border-radius: 6px;
+		color: #f9fafb;
+		font-size: 0.875rem;
 	}
 
 	.editor-wrapper {

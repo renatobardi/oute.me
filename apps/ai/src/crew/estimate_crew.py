@@ -60,21 +60,27 @@ def build_estimate_crew(
     conversation_summary: str,
     documents_context: str,
     agent_instructions: dict[str, str] | None = None,
+    agent_config: dict[str, dict[str, Any]] | None = None,
 ) -> EstimateCrew:
     agents_config = _load_yaml("agents.yaml")
     tasks_config = _load_yaml("tasks.yaml")
     instructions = agent_instructions or {}
+    config = agent_config or {}
 
-    llm = "vertex_ai/gemini-2.5-flash-lite"
+    default_llm = "vertex_ai/gemini-2.5-flash-lite"
 
     # --- Agents ---
     def _agent(key: str, **extra: Any) -> Agent:
         cfg = agents_config[key]  # type: ignore[index]
+        agent_cfg = config.get(key, {})
+        temperature = agent_cfg.get("temperature", 0.7)
+        max_tokens = agent_cfg.get("max_tokens", 4096)
         return Agent(
             role=cfg["role"],  # type: ignore[index]
             goal=cfg["goal"],  # type: ignore[index]
             backstory=_enrich_backstory(str(cfg["backstory"]), instructions.get(key, "")),  # type: ignore[index]
-            llm=llm,
+            llm=default_llm,
+            llm_config={"temperature": temperature, "max_tokens": max_tokens},
             verbose=False,
             **extra,
         )
@@ -197,15 +203,12 @@ def run_and_collect(
     crew = estimate_crew.crew
     tasks_by_key = estimate_crew.tasks_by_key
 
-    # Notify all agents as pending
-    steps: list[AgentStep] = []
-    for key in AGENT_KEYS:
-        step = AgentStep(agent_key=key, status="pending")
-        steps.append(step)
+    # Initialize steps list (one per agent, indexed by AGENT_KEYS order)
+    steps: list[AgentStep] = [AgentStep(agent_key=key, status="pending") for key in AGENT_KEYS]
 
     # Run the full crew
     t0 = time.monotonic()
-    logger.info("Starting CrewAI pipeline with %d agents", len(AGENT_KEYS))
+    logger.info("crew_pipeline_start", extra={"event": "start", "agent_count": len(AGENT_KEYS)})
 
     try:
         crew.kickoff()
@@ -214,13 +217,16 @@ def run_and_collect(
         raise
 
     total_duration = time.monotonic() - t0
-    logger.info("CrewAI pipeline completed in %.1fs", total_duration)
+    logger.info(
+        "crew_pipeline_done",
+        extra={"event": "done", "duration_s": round(total_duration, 2)},
+    )
 
-    # Collect per-agent outputs
+    # Collect per-agent outputs with retry on parse failure
     agent_outputs: dict[str, BaseModel | None] = {}
     agent_raw_outputs: dict[str, str] = {}
 
-    for key in AGENT_KEYS:
+    for i, key in enumerate(AGENT_KEYS):
         task = tasks_by_key[key]
         raw = ""
         if hasattr(task, "output") and task.output is not None:
@@ -228,35 +234,60 @@ def run_and_collect(
 
         agent_raw_outputs[key] = raw
         parsed = parse_agent_output(key, raw)
+
+        # Retry once with a stricter JSON extraction if first attempt failed
+        if parsed is None and raw:
+            logger.warning(
+                "agent_parse_retry",
+                extra={"agent": key, "event": "retry", "raw_length": len(raw)},
+            )
+            # Try extracting the first JSON object/array found anywhere in the raw text
+            import re
+            json_match = re.search(r"\{[\s\S]+\}", raw)
+            if json_match:
+                try:
+                    retry_data = json.loads(json_match.group(0))
+                    model_cls = __import__(
+                        "src.models.estimate", fromlist=["AGENT_OUTPUT_MODELS"]
+                    ).AGENT_OUTPUT_MODELS.get(key)
+                    if model_cls:
+                        parsed = model_cls.model_validate(retry_data)
+                except Exception:
+                    logger.debug("Agent %s retry parse also failed", key)
+
         agent_outputs[key] = parsed
 
-        # Build step record
+        # Build step record — replace the pending placeholder in-place
         step = AgentStep(
             agent_key=key,
             status="done" if parsed is not None else "failed",
             output_preview=raw[:500] if raw else None,
-            error=None if parsed is not None else f"Failed to parse output (length={len(raw)})",
+            error=None if parsed is not None else f"Parse failed (raw_length={len(raw)})",
         )
+        steps[i] = step  # replace pending placeholder
+
         if on_step:
             on_step(step)
 
         logger.info(
-            "Agent %s: status=%s output_length=%d",
-            key, step.status, len(raw),
+            "agent_step_done",
+            extra={
+                "agent": key,
+                "event": "step_done",
+                "status": step.status,
+                "output_length": len(raw),
+            },
         )
 
     # Assemble final result
     result = assemble_estimate_result(agent_outputs)
     result_dict = result.model_dump()
 
-    # Attach internal data for the runner
+    # Attach internal data for the runner (all steps, including pending if crew failed early)
     result_dict["_agent_outputs"] = {
         k: v.model_dump() if v is not None else {"_raw": agent_raw_outputs.get(k, "")}
         for k, v in agent_outputs.items()
     }
-    result_dict["_agent_steps"] = [
-        s.model_dump() for s in steps
-        if s.status != "pending"  # only emit completed steps
-    ]
+    result_dict["_agent_steps"] = [s.model_dump() for s in steps]
 
     return result_dict

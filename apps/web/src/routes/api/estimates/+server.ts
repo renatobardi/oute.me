@@ -40,6 +40,12 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	const agent_instructions = Object.fromEntries(
 		instructions.filter((i) => i.content).map((i) => [i.agent_key, i.content])
 	);
+	const agent_config = Object.fromEntries(
+		instructions.map((i) => [
+			i.agent_key,
+			{ temperature: i.temperature ?? 0.7, max_tokens: i.max_tokens ?? 4096 },
+		])
+	);
 
 	const aiResponse = await postJSON<{ job_id: string; status: string }>('/estimate/run', {
 		interview_id,
@@ -48,6 +54,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		documents_context,
 		llm_model: llm_model || 'gemini-2.5-flash',
 		agent_instructions,
+		agent_config,
 	});
 
 	const estimate = await createEstimate(interview_id, user.uid, aiResponse.job_id);
