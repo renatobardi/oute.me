@@ -328,18 +328,21 @@
 						<button class="panel-close-btn" onclick={closeEstimatePanel} title="Fechar painel">✕</button>
 					</div>
 				</div>
-				<div class="estimate-panel-steps">
-					{#each displaySteps as step (step.agent_key)}
-						<div class="panel-step panel-step-{step.status}">
-							<span class="panel-step-dot">
-								{#if step.status === 'done'}✓{:else if step.status === 'failed'}✗{:else if step.status === 'running'}◉{:else}○{/if}
-							</span>
-							<span class="panel-step-name">{AGENT_LABELS[step.agent_key] ?? step.agent_key}</span>
+				<div class="pipeline-stepper">
+					{#each displaySteps as step, i (step.agent_key)}
+						<div class="stepper-step stepper-{step.status}">
+							<div class="stepper-track">
+								<div class="stepper-line" class:stepper-line-hidden={i === 0}></div>
+								<div class="stepper-circle">
+									{#if step.status === 'done'}✓{:else if step.status === 'failed'}✗{:else if step.status === 'running'}<span class="stepper-spin">◉</span>{:else}○{/if}
+								</div>
+								<div class="stepper-line" class:stepper-line-hidden={i === displaySteps.length - 1}></div>
+							</div>
+							<div class="stepper-label">{AGENT_LABELS[step.agent_key] ?? step.agent_key}</div>
 							{#if step.duration_s}
-								<span class="panel-step-dur">{step.duration_s.toFixed(0)}s</span>
-							{/if}
-							{#if step.error}
-								<span class="panel-step-error" title={step.error}>!</span>
+								<div class="stepper-time">{step.duration_s.toFixed(0)}s</div>
+							{:else if step.error}
+								<div class="stepper-time stepper-err" title={step.error}>erro</div>
 							{/if}
 						</div>
 					{/each}
@@ -435,7 +438,12 @@
 
 	/* ── Sidebar ── */
 	.sidebar {
-		background: var(--color-dark-surface, #1a1d27);
+		background:
+			linear-gradient(#1a1d27 30%, transparent) center top / 100% 2.5rem no-repeat local,
+			linear-gradient(transparent, #1a1d27 70%) center bottom / 100% 2.5rem no-repeat local,
+			radial-gradient(farthest-side at 50% 0, rgba(0,0,0,.25), transparent) center top / 100% 10px no-repeat scroll,
+			radial-gradient(farthest-side at 50% 100%, rgba(0,0,0,.25), transparent) center bottom / 100% 10px no-repeat scroll;
+		background-color: #1a1d27;
 		border-right: 1px solid var(--color-dark-border, rgba(255, 255, 255, 0.08));
 		padding: 1.25rem;
 		overflow-y: auto;
@@ -764,6 +772,12 @@
 		flex-direction: column;
 		gap: 0.25rem;
 		min-height: 0;
+		background:
+			linear-gradient(#0f1117 30%, transparent) center top / 100% 2.5rem no-repeat local,
+			linear-gradient(transparent, #0f1117 70%) center bottom / 100% 2.5rem no-repeat local,
+			radial-gradient(farthest-side at 50% 0, rgba(0,0,0,.3), transparent) center top / 100% 10px no-repeat scroll,
+			radial-gradient(farthest-side at 50% 100%, rgba(0,0,0,.3), transparent) center bottom / 100% 10px no-repeat scroll;
+		background-color: #0f1117;
 	}
 
 	.empty-chat {
@@ -981,60 +995,100 @@
 
 	.panel-close-btn:hover { color: rgba(255,255,255,0.8); background: rgba(255,255,255,0.06); }
 
-	.estimate-panel-steps {
+	/* ── Pipeline stepper ── */
+	.pipeline-stepper {
 		display: flex;
-		gap: 0.375rem;
-		flex-wrap: wrap;
+		align-items: flex-start;
+		width: 100%;
+		overflow-x: auto;
+		padding-bottom: 0.25rem;
 	}
 
-	.panel-step {
+	.stepper-step {
+		flex: 1;
+		min-width: 80px;
 		display: flex;
+		flex-direction: column;
 		align-items: center;
 		gap: 0.375rem;
-		padding: 0.3rem 0.625rem;
-		border-radius: 6px;
-		font-size: 0.75rem;
-		border: 1px solid rgba(255,255,255,0.06);
-		background: rgba(255,255,255,0.03);
-		transition: background 0.15s;
 	}
 
-	.panel-step-done    { border-color: rgba(16,185,129,.3);  background: rgba(16,185,129,.07); }
-	.panel-step-failed  { border-color: rgba(239,68,68,.3);   background: rgba(239,68,68,.07);  }
-	.panel-step-running { border-color: rgba(99,102,241,.4);  background: rgba(99,102,241,.1);  }
-
-	.panel-step-dot {
-		font-size: 0.8125rem;
-		line-height: 1;
-		font-weight: 700;
+	.stepper-track {
+		display: flex;
+		align-items: center;
+		width: 100%;
 	}
 
-	.panel-step-done    .panel-step-dot { color: #10b981; }
-	.panel-step-failed  .panel-step-dot { color: #f87171; }
-	.panel-step-running .panel-step-dot { color: #818cf8; }
-	.panel-step-pending .panel-step-dot { color: rgba(255,255,255,0.25); }
-
-	.panel-step-name { color: rgba(255,255,255,0.7); }
-	.panel-step-done .panel-step-name { color: rgba(255,255,255,0.9); }
-
-	.panel-step-dur {
-		color: rgba(255,255,255,0.35);
-		font-size: 0.6875rem;
+	.stepper-line {
+		flex: 1;
+		height: 2px;
+		background: rgba(255,255,255,0.12);
+		transition: background 0.3s;
 	}
 
-	.panel-step-error {
-		width: 14px;
-		height: 14px;
+	.stepper-line-hidden { background: transparent; }
+
+	.stepper-done .stepper-line    { background: #10b981; }
+	.stepper-failed .stepper-line  { background: rgba(239,68,68,.4); }
+
+	.stepper-circle {
+		width: 32px;
+		height: 32px;
 		border-radius: 50%;
-		background: rgba(239,68,68,.3);
-		color: #f87171;
-		font-size: 0.625rem;
-		font-weight: 700;
+		border: 2px solid rgba(255,255,255,0.18);
+		background: rgba(255,255,255,0.04);
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		cursor: help;
+		font-size: 0.9375rem;
+		font-weight: 700;
+		color: rgba(255,255,255,0.3);
 		flex-shrink: 0;
+		transition: all 0.3s;
+	}
+
+	.stepper-done .stepper-circle {
+		border-color: #10b981;
+		background: rgba(16,185,129,.15);
+		color: #10b981;
+	}
+
+	.stepper-failed .stepper-circle {
+		border-color: #f87171;
+		background: rgba(239,68,68,.15);
+		color: #f87171;
+	}
+
+	.stepper-running .stepper-circle {
+		border-color: #818cf8;
+		background: rgba(99,102,241,.15);
+		color: #818cf8;
+	}
+
+	.stepper-spin { animation: spin 1s linear infinite; display: inline-block; }
+
+	.stepper-label {
+		font-size: 0.6875rem;
+		text-align: center;
+		color: rgba(255,255,255,0.45);
+		line-height: 1.3;
+		max-width: 90px;
+		padding: 0 0.25rem;
+	}
+
+	.stepper-done .stepper-label   { color: rgba(255,255,255,0.85); }
+	.stepper-failed .stepper-label { color: #f87171; }
+	.stepper-running .stepper-label { color: #818cf8; }
+
+	.stepper-time {
+		font-size: 0.625rem;
+		color: rgba(255,255,255,0.3);
+		text-align: center;
+	}
+
+	.stepper-err {
+		color: rgba(239,68,68,.7);
+		cursor: help;
 	}
 
 	/* ── Responsive ── */

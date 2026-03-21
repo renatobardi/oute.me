@@ -500,6 +500,12 @@
 
 	.list-items {
 		overflow-y: auto;
+		background:
+			linear-gradient(#1a1d27 30%, transparent) center top / 100% 2.5rem no-repeat local,
+			linear-gradient(transparent, #1a1d27 70%) center bottom / 100% 2.5rem no-repeat local,
+			radial-gradient(farthest-side at 50% 0, rgba(0,0,0,.25), transparent) center top / 100% 10px no-repeat scroll,
+			radial-gradient(farthest-side at 50% 100%, rgba(0,0,0,.25), transparent) center bottom / 100% 10px no-repeat scroll;
+		background-color: #1a1d27;
 		flex: 1;
 	}
 
@@ -572,6 +578,12 @@
 		padding: 1.5rem;
 		max-height: calc(100vh - 8rem);
 		overflow-y: auto;
+		background:
+			linear-gradient(#1a1d27 30%, transparent) center top / 100% 2.5rem no-repeat local,
+			linear-gradient(transparent, #1a1d27 70%) center bottom / 100% 2.5rem no-repeat local,
+			radial-gradient(farthest-side at 50% 0, rgba(0,0,0,.25), transparent) center top / 100% 10px no-repeat scroll,
+			radial-gradient(farthest-side at 50% 100%, rgba(0,0,0,.25), transparent) center bottom / 100% 10px no-repeat scroll;
+		background-color: #1a1d27;
 	}
 
 	.detail-empty {
