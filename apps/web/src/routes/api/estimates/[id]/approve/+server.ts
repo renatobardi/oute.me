@@ -7,7 +7,7 @@ import { createProjectFromEstimate } from '$lib/server/projects';
 import type { EstimateResult } from '$lib/types/estimate';
 
 export const POST: RequestHandler = async ({ params, request, locals }) => {
-	requireAuth(locals);
+	const user = requireAuth(locals);
 	if (!locals.dbUser) {
 		throw error(401, 'Authentication required');
 	}

@@ -132,10 +132,15 @@
 		switch (status) {
 			case 'completed':
 			case 'approved':
+			case 'done':
 				return 'badge-success';
 			case 'estimating':
 			case 'in_progress':
+			case 'pending':
+			case 'running':
 				return 'badge-info';
+			case 'pending_approval':
+				return 'badge-warning';
 			case 'failed':
 				return 'badge-error';
 			default:
@@ -591,13 +596,23 @@
 								{#if rerunMsg}
 									<span class="pipeline-msg">{rerunMsg}</span>
 								{/if}
-								<button
-									class="btn-rerun"
-									onclick={() => openRerunModal(iv.id)}
-									disabled={rerunning || ['pending','running'].includes(detail.estimate.status)}
-								>
-									{rerunning ? 'Iniciando…' : 'Re-run Pipeline'}
-								</button>
+								{#if detail.estimate.status === 'pending_approval'}
+									<button
+										class="btn-rerun btn-start"
+										onclick={() => triggerRerun(iv.id)}
+										disabled={rerunning}
+									>
+										{rerunning ? 'Iniciando…' : 'Iniciar Pipeline'}
+									</button>
+								{:else}
+									<button
+										class="btn-rerun"
+										onclick={() => openRerunModal(iv.id)}
+										disabled={rerunning || ['pending','running'].includes(detail.estimate.status)}
+									>
+										{rerunning ? 'Iniciando…' : 'Re-run Pipeline'}
+									</button>
+								{/if}
 							</div>
 						</div>
 
@@ -1315,6 +1330,11 @@
 		color: var(--color-neutral-500, #6b7280);
 	}
 
+	.badge-warning {
+		background: color-mix(in srgb, var(--color-warning, #f59e0b) 15%, transparent);
+		color: var(--color-warning, #f59e0b);
+	}
+
 	.muted {
 		color: var(--color-neutral-500, #6b7280);
 	}
@@ -1353,6 +1373,10 @@
 	.btn-rerun:disabled {
 		opacity: 0.5;
 		cursor: not-allowed;
+	}
+
+	.btn-start {
+		background: var(--color-success, #10b981);
 	}
 
 	.pipeline-steps {
