@@ -200,6 +200,21 @@ export function createChatState(
 		}
 	}
 
+	async function deleteDocument(docId: string): Promise<boolean> {
+		const authHeaders = await getAuthHeaders();
+		try {
+			const response = await fetch(`/api/chat/${interviewId}/documents/${docId}`, {
+				method: 'DELETE',
+				headers: authHeaders,
+			});
+			if (!response.ok) return false;
+			documents = documents.filter((d) => d.id !== docId);
+			return true;
+		} catch {
+			return false;
+		}
+	}
+
 	function setTitle(newTitle: string) {
 		title = newTitle;
 		titleUserSet = true;
@@ -244,6 +259,7 @@ export function createChatState(
 		},
 		sendMessage,
 		uploadDocument,
+		deleteDocument,
 		setTitle,
 	};
 }
