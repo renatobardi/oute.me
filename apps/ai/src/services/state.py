@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
 
 from src.config import settings
 
@@ -10,6 +10,10 @@ if TYPE_CHECKING:
     import asyncpg
 
 JOB_TTL_HOURS = 24
+
+# Jobs stuck in "running" longer than this are considered orphaned (worker was killed).
+# Value: pipeline hard timeout (300s) + 2 heartbeat intervals (120s) + buffer (60s).
+_STALE_JOB_TIMEOUT_S = 480
 
 
 class StateBackend(Protocol):
@@ -21,6 +25,18 @@ class StateBackend(Protocol):
     async def update_agent_steps(self, job_id: str, steps: list[dict[str, object]]) -> None: ...
 
 
+def _is_stale(updated_at: Any) -> bool:
+    """Return True if a 'running' job has not been touched within _STALE_JOB_TIMEOUT_S."""
+    if updated_at is None:
+        return False
+    if isinstance(updated_at, str):
+        updated_at = datetime.fromisoformat(updated_at)
+    if updated_at.tzinfo is None:
+        updated_at = updated_at.replace(tzinfo=UTC)
+    age_s = (datetime.now(UTC) - updated_at).total_seconds()
+    return age_s > _STALE_JOB_TIMEOUT_S
+
+
 class RedisStateBackend:
     def __init__(self, redis_url: str) -> None:
         import redis.asyncio as aioredis
@@ -28,35 +44,45 @@ class RedisStateBackend:
         self._redis = aioredis.from_url(redis_url, decode_responses=True)
 
     async def create_job(self, job_id: str, payload: dict[str, object]) -> None:
-        data = json.dumps({"status": "pending", "payload": payload, "result": None})
+        data = json.dumps({
+            "status": "pending",
+            "payload": payload,
+            "result": None,
+            "updated_at": datetime.now(UTC).isoformat(),
+        })
         await self._redis.setex(f"job:{job_id}", JOB_TTL_HOURS * 3600, data)
 
     async def get_job(self, job_id: str) -> dict[str, object] | None:
         data = await self._redis.get(f"job:{job_id}")
         if data is None:
             return None
-        return json.loads(data)  # type: ignore[no-any-return]
+        job: dict[str, Any] = json.loads(data)
+        if job.get("status") == "running" and _is_stale(job.get("updated_at")):
+            job["status"] = "failed"
+        return job  # type: ignore[return-value]
 
     async def update_job(
         self, job_id: str, status: str, result: dict[str, object] | None = None
     ) -> None:
-        job = await self.get_job(job_id)
-        if job is None:
+        raw = await self._redis.get(f"job:{job_id}")
+        if raw is None:
             return
+        job: dict[str, Any] = json.loads(raw)
         job["status"] = status
+        job["updated_at"] = datetime.now(UTC).isoformat()
         if result is not None:
             job["result"] = result
-        data = json.dumps(job)
-        await self._redis.setex(f"job:{job_id}", JOB_TTL_HOURS * 3600, data)
+        await self._redis.setex(f"job:{job_id}", JOB_TTL_HOURS * 3600, json.dumps(job))
 
     async def update_agent_steps(self, job_id: str, steps: list[dict[str, object]]) -> None:
         data_raw = await self._redis.get(f"job:{job_id}")
         if data_raw is None:
             return
-        job = json.loads(data_raw)
+        job: dict[str, Any] = json.loads(data_raw)
         result = job.get("result") or {}
         result["_agent_steps"] = steps
         job["result"] = result
+        job["updated_at"] = datetime.now(UTC).isoformat()
         await self._redis.setex(f"job:{job_id}", JOB_TTL_HOURS * 3600, json.dumps(job))
 
 
@@ -83,12 +109,16 @@ class PostgresStateBackend:
     async def get_job(self, job_id: str) -> dict[str, object] | None:
         pool = await self._get_pool()
         row = await pool.fetchrow(
-            "SELECT status, payload, result FROM ai.job_state WHERE job_id = $1", job_id
+            "SELECT status, payload, result, updated_at FROM ai.job_state WHERE job_id = $1",
+            job_id,
         )
         if row is None:
             return None
+        status = row["status"]
+        if status == "running" and _is_stale(row["updated_at"]):
+            status = "failed"
         return {
-            "status": row["status"],
+            "status": status,
             "payload": json.loads(row["payload"]) if row["payload"] else {},
             "result": json.loads(row["result"]) if row["result"] else None,
         }
