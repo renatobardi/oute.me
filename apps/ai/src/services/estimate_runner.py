@@ -32,6 +32,8 @@ def _run_crew_sync(
     agent_instructions: dict[str, str] | None = None,
     agent_config: dict[str, dict[str, Any]] | None = None,
     task_done_callback: Callable[[str], None] | None = None,
+    from_agent: str | None = None,
+    previous_outputs: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     """Build and run the CrewAI pipeline, returning an aggregated result dict."""
     estimate_crew = build_estimate_crew(
@@ -41,6 +43,8 @@ def _run_crew_sync(
         agent_instructions or {},
         agent_config or {},
         task_done_callback=task_done_callback,
+        from_agent=from_agent,
+        previous_outputs=previous_outputs,
     )
     return run_and_collect(estimate_crew)
 
@@ -86,6 +90,8 @@ async def run_pipeline(
     llm_model: str = "gemini-2.5-flash",
     agent_instructions: dict[str, str] | None = None,
     agent_config: dict[str, dict[str, Any]] | None = None,
+    from_agent: str | None = None,
+    previous_outputs: dict[str, str] | None = None,
 ) -> None:
     """Executa o pipeline CrewAI e atualiza o estado do job.
 
@@ -127,6 +133,8 @@ async def run_pipeline(
             agent_instructions,
             agent_config,
             task_done_cb,
+            from_agent,
+            previous_outputs,
         )
 
         try:
@@ -236,6 +244,8 @@ async def _dispatch_cloud_tasks(
     llm_model: str = "gemini-2.5-flash",
     agent_instructions: dict[str, str] | None = None,
     agent_config: dict[str, dict[str, Any]] | None = None,
+    from_agent: str | None = None,
+    previous_outputs: dict[str, str] | None = None,
 ) -> None:
     from google.cloud import tasks_v2
 
@@ -246,7 +256,7 @@ async def _dispatch_cloud_tasks(
         settings.gcp_project, settings.gcp_location, settings.cloud_tasks_queue
     )
 
-    payload = {
+    payload: dict[str, Any] = {
         "job_id": job_id,
         "interview_id": interview_id,
         "interview_state": interview_state,
@@ -256,6 +266,10 @@ async def _dispatch_cloud_tasks(
         "agent_instructions": agent_instructions or {},
         "agent_config": agent_config or {},
     }
+    if from_agent:
+        payload["from_agent"] = from_agent
+    if previous_outputs:
+        payload["previous_outputs"] = previous_outputs
 
     task = tasks_v2.Task(
         http_request=tasks_v2.HttpRequest(
@@ -282,6 +296,8 @@ async def start_estimate(
     llm_model: str = "gemini-2.5-flash",
     agent_instructions: dict[str, str] | None = None,
     agent_config: dict[str, dict[str, Any]] | None = None,
+    from_agent: str | None = None,
+    previous_outputs: dict[str, str] | None = None,
 ) -> str:
     from src.config import settings
 
@@ -300,6 +316,7 @@ async def start_estimate(
         await _dispatch_cloud_tasks(
             job_id, interview_id, interview_state,
             conversation_summary, documents_context, llm_model, agent_instructions, agent_config,
+            from_agent, previous_outputs,
         )
     else:
         # Dev fallback: background asyncio task
@@ -315,6 +332,8 @@ async def start_estimate(
                 llm_model,
                 agent_instructions,
                 agent_config,
+                from_agent,
+                previous_outputs,
             )
         )
         _background_tasks.add(task)

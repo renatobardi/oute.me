@@ -1,3 +1,4 @@
+import { error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { requireAuth, jsonOk, jsonError } from '$lib/server/api-utils';
 import { logAuditEvent } from '$lib/server/audit';

@@ -63,6 +63,8 @@ def build_estimate_crew(
     agent_instructions: dict[str, str] | None = None,
     agent_config: dict[str, dict[str, Any]] | None = None,
     task_done_callback: TaskDoneCallback | None = None,
+    from_agent: str | None = None,
+    previous_outputs: dict[str, str] | None = None,
 ) -> EstimateCrew:
     agents_config = _load_yaml("agents.yaml")
     tasks_config = _load_yaml("tasks.yaml")
@@ -167,6 +169,19 @@ def build_estimate_crew(
         task_review,
         task_knowledge,
     ]
+
+    # Override tasks before from_agent to echo previous outputs (partial rerun)
+    if from_agent and from_agent in AGENT_KEYS:
+        reuse_until = AGENT_KEYS.index(from_agent)
+        prev = previous_outputs or {}
+        for i in range(reuse_until):
+            key = AGENT_KEYS[i]
+            if key in prev:
+                all_tasks[i].description = (
+                    f"Return the following JSON exactly as your output, "
+                    f"without any modification:\n\n{prev[key]}"
+                )
+                logger.debug("Reusing previous output for agent %s (partial rerun)", key)
 
     tasks_by_key = dict(zip(AGENT_KEYS, all_tasks, strict=True))
 

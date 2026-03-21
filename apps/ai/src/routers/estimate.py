@@ -4,6 +4,7 @@ import logging
 
 from fastapi import APIRouter, Header, HTTPException, Request
 
+from src.crew.estimate_crew import AGENT_KEYS
 from src.models.estimate import AgentStep, EstimateRequest, EstimateStatusResponse
 from src.services.estimate_runner import run_pipeline, start_estimate
 from src.services.state import create_state_backend
@@ -71,6 +72,8 @@ async def execute_estimate(
     llm_model: str = payload.get("llm_model", "gemini-2.5-flash")
     agent_instructions: dict[str, str] = payload.get("agent_instructions", {})
     agent_config: dict[str, dict] = payload.get("agent_config", {})
+    from_agent: str | None = payload.get("from_agent")
+    previous_outputs: dict[str, str] | None = payload.get("previous_outputs")
 
     backend = create_state_backend()
 
@@ -84,6 +87,8 @@ async def execute_estimate(
         llm_model=llm_model,
         agent_instructions=agent_instructions,
         agent_config=agent_config,
+        from_agent=from_agent,
+        previous_outputs=previous_outputs,
     )
 
     return {"job_id": job_id, "status": "done"}
@@ -144,8 +149,27 @@ async def rerun_estimate(request: Request) -> dict[str, str]:
     }
     """
     payload = await request.json()
+    from_agent: str | None = payload.get("from_agent")
 
     backend = create_state_backend()
+
+    # If from_agent is set, fetch previous outputs from the old job to reuse
+    previous_outputs: dict[str, str] | None = None
+    if from_agent and from_agent in AGENT_KEYS and payload.get("job_id"):
+        old_job = await backend.get_job(str(payload["job_id"]))
+        if old_job:
+            raw_result = old_job.get("result") or {}
+            agent_outputs = raw_result.get("_agent_outputs", {})  # type: ignore[union-attr]
+            if isinstance(agent_outputs, dict):
+                reuse_until = AGENT_KEYS.index(from_agent)
+                previous_outputs = {}
+                for key in AGENT_KEYS[:reuse_until]:
+                    out = agent_outputs.get(key)
+                    if out is not None:
+                        import json as _json
+                        previous_outputs[key] = (
+                            _json.dumps(out) if not isinstance(out, str) else out
+                        )
 
     new_job_id = await start_estimate(
         interview_id=payload["interview_id"],
@@ -155,6 +179,9 @@ async def rerun_estimate(request: Request) -> dict[str, str]:
         backend=backend,
         llm_model=payload.get("llm_model", "gemini-2.5-flash"),
         agent_instructions=payload.get("agent_instructions", {}),
+        agent_config=payload.get("agent_config", {}),
+        from_agent=from_agent,
+        previous_outputs=previous_outputs,
     )
 
     return {"job_id": new_job_id, "status": "pending"}

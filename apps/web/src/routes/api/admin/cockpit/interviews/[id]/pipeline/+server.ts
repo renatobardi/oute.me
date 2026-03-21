@@ -1,6 +1,6 @@
 import type { RequestHandler } from './$types';
 import { requireAuth, jsonOk, jsonError } from '$lib/server/api-utils';
-import { getEstimateByInterview } from '$lib/server/estimates';
+import { getEstimateByInterview, createEstimateRun } from '$lib/server/estimates';
 import { getDocuments } from '$lib/server/interviews';
 import { getJSON, postJSON } from '$lib/server/ai-client';
 import { getAllInstructions } from '$lib/server/agent-instructions';
@@ -48,7 +48,7 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
 	requireAuth(locals);
 	if (!locals.dbUser?.is_admin) return jsonError(403, 'Admin access required');
 
-	const body = await request.json().catch(() => ({})) as { llm_model?: string };
+	const body = await request.json().catch(() => ({})) as { llm_model?: string; from_agent?: string };
 
 	const [interviewRow] = await sql<Interview[]>`
 		SELECT * FROM public.interviews WHERE id = ${params.id}
@@ -84,6 +84,7 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
 		documents_context,
 		llm_model: body.llm_model || 'gemini-2.5-flash',
 		agent_instructions,
+		...(body.from_agent ? { from_agent: body.from_agent } : {}),
 	});
 
 	await sql`
@@ -91,6 +92,7 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
 		SET job_id = ${aiResponse.job_id}, status = 'pending', updated_at = now()
 		WHERE id = ${estimateRow.id}
 	`;
+	await createEstimateRun(estimateRow.id, aiResponse.job_id, body.llm_model || 'gemini-2.5-flash');
 
 	return jsonOk({ estimate_id: estimateRow.id, job_id: aiResponse.job_id, status: 'pending' });
 };

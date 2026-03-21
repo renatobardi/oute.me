@@ -5,7 +5,7 @@ import { getInterview, getDocuments } from '$lib/server/interviews';
 import { postJSON } from '$lib/server/ai-client';
 import { getAllInstructions } from '$lib/server/agent-instructions';
 
-export const POST: RequestHandler = async ({ params, locals }) => {
+export const POST: RequestHandler = async ({ params, request, locals }) => {
 	const user = requireAuth(locals);
 	const estimate = await getEstimate(params.id, user.uid);
 
@@ -16,6 +16,8 @@ export const POST: RequestHandler = async ({ params, locals }) => {
 	if (['pending', 'running'].includes(estimate.status)) {
 		return jsonError(400, 'Estimate is already running');
 	}
+
+	const body = await request.json().catch(() => ({})) as { from_agent?: string; llm_model?: string };
 
 	const interview = await getInterview(estimate.interview_id, user.uid);
 	if (!interview) {
@@ -39,12 +41,13 @@ export const POST: RequestHandler = async ({ params, locals }) => {
 		interview_state: interview.state,
 		conversation_summary: interview.state.conversation_summary || '',
 		documents_context,
-		llm_model: 'gemini-2.5-flash',
+		llm_model: body.llm_model || 'gemini-2.5-flash',
 		agent_instructions,
+		...(body.from_agent ? { from_agent: body.from_agent } : {}),
 	});
 
 	await updateEstimateJobId(estimate.id, aiResponse.job_id);
-	await createEstimateRun(estimate.id, aiResponse.job_id, 'gemini-2.5-flash');
+	await createEstimateRun(estimate.id, aiResponse.job_id, body.llm_model || 'gemini-2.5-flash');
 
 	return jsonOk({ id: estimate.id, job_id: aiResponse.job_id, status: 'pending' });
 };
