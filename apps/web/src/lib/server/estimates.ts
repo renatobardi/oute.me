@@ -4,11 +4,12 @@ import type { Estimate, EstimateRun } from '$lib/types/estimate';
 export async function createEstimate(
 	interviewId: string,
 	userId: string,
-	jobId: string
+	jobId?: string | null
 ): Promise<Estimate> {
+	const status = jobId ? 'pending' : 'pending_approval';
 	const [row] = await sql<Estimate[]>`
 		INSERT INTO public.estimates (interview_id, user_id, job_id, status)
-		VALUES (${interviewId}, ${userId}, ${jobId}, 'pending')
+		VALUES (${interviewId}, ${userId}, ${jobId ?? null}, ${status})
 		RETURNING *
 	`;
 	return row;

@@ -2,36 +2,16 @@
 	import { goto, invalidateAll } from '$app/navigation';
 	import { Button, StatusBadge, MetricDisplay, ProgressBar } from '@oute/ui';
 	import '@oute/ui/theme.css';
-	import { auth } from '$lib/firebase';
-	import type { EstimateResult, AgentStep } from '$lib/types/estimate';
-	import { AGENT_KEYS, AGENT_LABELS } from '$lib/types/estimate';
+	import type { EstimateResult } from '$lib/types/estimate';
 
 	let { data } = $props();
 
 	let estimate = $derived(data.estimate);
 	let project = $derived(data.project ?? null);
 	let result = $derived(estimate.result as EstimateResult | null);
-	let agentSteps = $derived((estimate.agent_steps ?? []) as AgentStep[]);
 	let isApproving = $state(false);
-	let isRerunning = $state(false);
-	let rerunModal = $state(false);
-	let rerunFromAgent = $state('');
-	let rerunModel = $state('gemini-2.5-flash');
 	let projectName = $state('');
 
-	const LLM_MODELS = [
-		{ value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash' },
-		{ value: 'gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash Lite' },
-		{ value: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro' },
-	];
-
-	function openRerunModal() {
-		// Pre-select first failed agent
-		const failed = agentSteps.find((s) => s.status === 'failed');
-		rerunFromAgent = failed?.agent_key ?? '';
-		rerunModel = 'gemini-2.5-flash';
-		rerunModal = true;
-	}
 	let selectedScenario = $state('moderado');
 	let pollTimer = $state<ReturnType<typeof setInterval> | null>(null);
 	let elapsedSeconds = $state(0);
@@ -57,27 +37,6 @@
 		}
 	});
 
-	// Build stepper state from agentSteps (or defaults when pipeline is still running)
-	const stepperSteps = $derived(
-		AGENT_KEYS.map((key, i) => {
-			const found = agentSteps.find((s) => s.agent_key === key);
-			if (found) return found;
-			// Pipeline running but no step data yet — all pending
-			return {
-				agent_key: key,
-				status: 'pending',
-				started_at: null,
-				finished_at: null,
-				duration_s: null,
-				output_preview: null,
-				error: null,
-			} satisfies AgentStep;
-		})
-	);
-
-	const doneCount = $derived(stepperSteps.filter((s) => s.status === 'done').length);
-	const progressPct = $derived(Math.round((doneCount / AGENT_KEYS.length) * 100));
-
 	async function handleApprove() {
 		isApproving = true;
 		try {
@@ -94,29 +53,6 @@
 			goto(`/projects/${data.project_id}`);
 		} catch {
 			isApproving = false;
-		}
-	}
-
-	async function handleRerun() {
-		rerunModal = false;
-		isRerunning = true;
-		elapsedSeconds = 0;
-		try {
-			const token = await auth.currentUser?.getIdToken(false);
-			const body: Record<string, string> = { llm_model: rerunModel };
-			if (rerunFromAgent) body.from_agent = rerunFromAgent;
-			const res = await fetch(`/api/estimates/${estimate.id}/rerun`, {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json',
-					...(token ? { Authorization: `Bearer ${token}` } : {}),
-				},
-				body: JSON.stringify(body),
-			});
-			if (!res.ok) throw new Error('Rerun failed');
-			await invalidateAll();
-		} catch {
-			isRerunning = false;
 		}
 	}
 
@@ -151,71 +87,31 @@
 		{/if}
 	</header>
 
-	{#if ['pending', 'running'].includes(estimate.status)}
+	{#if estimate.status === 'pending_approval'}
 		<div class="loading-state">
+			<div class="approval-icon">⏳</div>
+			<h2>Estimativa solicitada</h2>
+			<p>Sua solicitação foi recebida e está aguardando análise da nossa equipe.<br>Você será notificado quando o processo iniciar.</p>
+			<Button variant="ghost" onclick={() => goto(`/interviews/${estimate.interview_id}`)}>
+				Voltar à Entrevista
+			</Button>
+		</div>
+
+	{:else if ['pending', 'running'].includes(estimate.status)}
+		<div class="loading-state">
+			<div class="spinner"></div>
 			<h2>Gerando estimativa…</h2>
-			<p>Nossos agentes de IA estão analisando seu projeto.</p>
-
-			<!-- Agent stepper -->
-			<div class="stepper">
-				{#each stepperSteps as step, i (step.agent_key)}
-					<div class="step" class:step-done={step.status === 'done'} class:step-failed={step.status === 'failed'} class:step-running={step.status === 'running'}>
-						<div class="step-icon">
-							{#if step.status === 'done'}✓
-							{:else if step.status === 'failed'}✗
-							{:else if step.status === 'running' || (step.status === 'pending' && i === doneCount)}
-								<span class="pulse-dot"></span>
-							{:else}
-								<span class="step-num">{i + 1}</span>
-							{/if}
-						</div>
-						<div class="step-info">
-							<span class="step-name">{AGENT_LABELS[step.agent_key] ?? step.agent_key}</span>
-							{#if step.status === 'done' && step.duration_s !== null}
-								<span class="step-duration">{fmtDuration(step.duration_s)}</span>
-							{:else if step.status === 'failed' && step.error}
-								<span class="step-error">{step.error.slice(0, 60)}</span>
-							{:else if (step.status === 'running' || (step.status === 'pending' && i === doneCount))}
-								<span class="step-running-label">{elapsedSeconds}s…</span>
-							{/if}
-						</div>
-					</div>
-					{#if i < AGENT_KEYS.length - 1}
-						<div class="step-connector" class:connector-done={i < doneCount}></div>
-					{/if}
-				{/each}
-			</div>
-
-			<div class="progress-wrap">
-				<ProgressBar value={progressPct} label={`${doneCount} de ${AGENT_KEYS.length} agentes`} variant="primary" />
-			</div>
+			<p>Nossos especialistas de IA estão analisando seu projeto.<br>Esse processo pode levar alguns minutos.</p>
+			<span class="elapsed-label">{elapsedSeconds}s</span>
 		</div>
 
 	{:else if estimate.status === 'failed'}
 		<div class="error-state">
 			<h2>Erro na estimativa</h2>
-			<p>Ocorreu um erro ao gerar a estimativa.</p>
-
-			{#if agentSteps.length > 0}
-				<div class="fail-steps">
-					{#each agentSteps as step (step.agent_key)}
-						<div class="fail-step" class:fail-ok={step.status === 'done'} class:fail-err={step.status === 'failed'}>
-							<span>{step.status === 'done' ? '✓' : '✗'}</span>
-							<span>{AGENT_LABELS[step.agent_key] ?? step.agent_key}</span>
-							{#if step.error}<span class="fail-msg">{step.error.slice(0, 80)}</span>{/if}
-						</div>
-					{/each}
-				</div>
-			{/if}
-
-			<div class="error-actions">
-				<Button onclick={openRerunModal} disabled={isRerunning}>
-					{isRerunning ? 'Iniciando…' : 'Tentar novamente'}
-				</Button>
-				<Button variant="ghost" onclick={() => goto(`/interviews/${estimate.interview_id}`)}>
-					Voltar à Entrevista
-				</Button>
-			</div>
+			<p>Ocorreu um problema ao gerar sua estimativa. Nossa equipe foi notificada e irá verificar.</p>
+			<Button variant="ghost" onclick={() => goto(`/interviews/${estimate.interview_id}`)}>
+				Voltar à Entrevista
+			</Button>
 		</div>
 
 	{:else if result}
@@ -371,44 +267,6 @@
 	{/if}
 </div>
 
-{#if rerunModal}
-	<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-	<div class="modal-backdrop" onclick={() => (rerunModal = false)}>
-		<div class="modal" onclick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
-			<h3 class="modal-title">Re-run Pipeline</h3>
-
-			<label class="modal-field">
-				<span class="modal-label">Modelo LLM</span>
-				<select class="modal-select" bind:value={rerunModel}>
-					{#each LLM_MODELS as m (m.value)}
-						<option value={m.value}>{m.label}</option>
-					{/each}
-				</select>
-			</label>
-
-			<label class="modal-field">
-				<span class="modal-label">Recomeçar a partir de</span>
-				<select class="modal-select" bind:value={rerunFromAgent}>
-					<option value="">Início (rodar tudo)</option>
-					{#each AGENT_KEYS as key (key)}
-						<option value={key}>{AGENT_LABELS[key] ?? key}</option>
-					{/each}
-				</select>
-			</label>
-
-			{#if rerunFromAgent}
-				<p class="modal-hint">
-					Outputs anteriores a <strong>{AGENT_LABELS[rerunFromAgent] ?? rerunFromAgent}</strong> serão reutilizados.
-				</p>
-			{/if}
-
-			<div class="modal-actions">
-				<button class="btn-cancel" onclick={() => (rerunModal = false)}>Cancelar</button>
-				<Button onclick={handleRerun}>Iniciar Re-run</Button>
-			</div>
-		</div>
-	</div>
-{/if}
 
 <style>
 	.estimate-page {
@@ -485,169 +343,29 @@
 		margin-bottom: 2rem;
 	}
 
-	/* ── Pipeline stepper ── */
-	.stepper {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		flex-wrap: wrap;
-		gap: 0;
-		margin: 0 auto 2rem;
-		max-width: 820px;
+	.approval-icon {
+		font-size: 3rem;
+		margin-bottom: 1rem;
 	}
 
-	.step {
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		gap: 0.4rem;
-		min-width: 100px;
-		max-width: 120px;
-	}
-
-	.step-icon {
-		width: 36px;
-		height: 36px;
+	.spinner {
+		width: 48px;
+		height: 48px;
+		border: 3px solid rgba(255, 255, 255, 0.1);
+		border-top-color: var(--color-primary-500, #6366f1);
 		border-radius: 50%;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		font-size: 0.9rem;
-		font-weight: 700;
-		border: 2px solid rgba(255, 255, 255, 0.15);
-		background: rgba(255, 255, 255, 0.05);
-		color: rgba(255, 255, 255, 0.4);
-		transition: all 0.3s;
-	}
-
-	.step-done .step-icon {
-		background: color-mix(in srgb, var(--color-success, #10b981) 20%, transparent);
-		border-color: var(--color-success, #10b981);
-		color: var(--color-success, #10b981);
-	}
-
-	.step-failed .step-icon {
-		background: color-mix(in srgb, var(--color-error, #ef4444) 20%, transparent);
-		border-color: var(--color-error, #ef4444);
-		color: var(--color-error, #ef4444);
-	}
-
-	.step-running .step-icon {
-		border-color: var(--color-primary-500, #6366f1);
-		animation: pulse-ring 1.5s ease-in-out infinite;
-	}
-
-	@keyframes pulse-ring {
-		0%, 100% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.4); }
-		50% { box-shadow: 0 0 0 6px rgba(99, 102, 241, 0); }
-	}
-
-	.pulse-dot {
-		width: 10px;
-		height: 10px;
-		border-radius: 50%;
-		background: var(--color-primary-500, #6366f1);
-		animation: pulse-dot 1s ease-in-out infinite;
-	}
-
-	@keyframes pulse-dot {
-		0%, 100% { opacity: 1; transform: scale(1); }
-		50% { opacity: 0.5; transform: scale(0.7); }
-	}
-
-	.step-num {
-		font-size: 0.8rem;
-		font-weight: 600;
-	}
-
-	.step-info {
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		gap: 0.15rem;
-	}
-
-	.step-name {
-		font-size: 0.72rem;
-		color: rgba(255, 255, 255, 0.7);
-		text-align: center;
-		line-height: 1.3;
-	}
-
-	.step-done .step-name { color: rgba(255, 255, 255, 0.9); }
-
-	.step-duration {
-		font-size: 0.65rem;
-		color: var(--color-success, #10b981);
-	}
-
-	.step-running-label {
-		font-size: 0.65rem;
-		color: var(--color-primary-500, #6366f1);
-	}
-
-	.step-error {
-		font-size: 0.65rem;
-		color: var(--color-error, #ef4444);
-		max-width: 100px;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-	}
-
-	.step-connector {
-		flex: 1;
-		height: 2px;
-		min-width: 12px;
-		background: rgba(255, 255, 255, 0.1);
-		margin-bottom: 1.5rem;
-		transition: background 0.3s;
-	}
-
-	.connector-done {
-		background: var(--color-success, #10b981);
-	}
-
-	.progress-wrap {
-		max-width: 400px;
-		margin: 0 auto;
-	}
-
-	/* ── Error state ── */
-	.fail-steps {
-		display: flex;
-		flex-direction: column;
-		gap: 0.4rem;
-		max-width: 400px;
+		animation: spin 0.9s linear infinite;
 		margin: 0 auto 1.5rem;
-		text-align: left;
 	}
 
-	.fail-step {
-		display: flex;
-		align-items: baseline;
-		gap: 0.5rem;
-		font-size: 0.8125rem;
-		padding: 0.35rem 0.75rem;
-		border-radius: 6px;
-		background: rgba(255, 255, 255, 0.03);
+	@keyframes spin { to { transform: rotate(360deg); } }
+
+	.elapsed-label {
+		font-size: 0.875rem;
+		color: rgba(255, 255, 255, 0.35);
+		margin-top: -1rem;
 	}
 
-	.fail-ok { color: var(--color-success, #10b981); }
-	.fail-err { color: var(--color-error, #ef4444); }
-
-	.fail-msg {
-		color: rgba(255, 255, 255, 0.4);
-		font-size: 0.75rem;
-		margin-left: auto;
-	}
-
-	.error-actions {
-		display: flex;
-		gap: 1rem;
-		justify-content: center;
-		margin-top: 1.5rem;
-	}
 
 	/* ── Result sections ── */
 	.section { margin-bottom: 2.5rem; }

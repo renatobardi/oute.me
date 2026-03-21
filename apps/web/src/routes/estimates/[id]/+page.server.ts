@@ -22,7 +22,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		throw error(404, 'Estimate not found');
 	}
 
-	// Poll AI service for status updates
+	// Poll AI service for status updates (skip if awaiting admin approval or no job yet)
 	if (['pending', 'running'].includes(estimate.status) && estimate.job_id) {
 		try {
 			const aiStatus = await getJSON<AiStatusResponse>(

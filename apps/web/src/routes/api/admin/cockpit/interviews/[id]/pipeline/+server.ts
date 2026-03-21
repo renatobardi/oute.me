@@ -75,17 +75,39 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
 	const agent_instructions = Object.fromEntries(
 		instructions.filter((i) => i.content).map((i) => [i.agent_key, i.content])
 	);
+	const agent_config = Object.fromEntries(
+		instructions.map((i) => [
+			i.agent_key,
+			{ temperature: i.temperature ?? 0.7, max_tokens: i.max_tokens ?? 4096 },
+		])
+	);
 
-	const aiResponse = await postJSON<{ job_id: string; status: string }>('/estimate/rerun', {
-		job_id: estimateRow.job_id,
-		interview_id: params.id,
-		interview_state: interviewRow.state,
-		conversation_summary: interviewRow.state?.conversation_summary || '',
-		documents_context,
-		llm_model: body.llm_model || 'gemini-2.5-flash',
-		agent_instructions,
-		...(body.from_agent ? { from_agent: body.from_agent } : {}),
-	});
+	// First run (pending_approval): call /estimate/run; subsequent runs: call /estimate/rerun
+	const isFirstRun = !estimateRow.job_id;
+	const aiEndpoint = isFirstRun ? '/estimate/run' : '/estimate/rerun';
+	const aiPayload = isFirstRun
+		? {
+				interview_id: params.id,
+				state: interviewRow.state,
+				conversation_summary: interviewRow.state?.conversation_summary || '',
+				documents_context,
+				llm_model: body.llm_model || 'gemini-2.5-flash',
+				agent_instructions,
+				agent_config,
+			}
+		: {
+				job_id: estimateRow.job_id,
+				interview_id: params.id,
+				interview_state: interviewRow.state,
+				conversation_summary: interviewRow.state?.conversation_summary || '',
+				documents_context,
+				llm_model: body.llm_model || 'gemini-2.5-flash',
+				agent_instructions,
+				agent_config,
+				...(body.from_agent ? { from_agent: body.from_agent } : {}),
+			};
+
+	const aiResponse = await postJSON<{ job_id: string; status: string }>(aiEndpoint, aiPayload);
 
 	await sql`
 		UPDATE public.estimates
