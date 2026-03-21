@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { scrollShadow } from '$lib/actions/scroll-shadow';
 	import { auth } from '$lib/firebase';
 	import type { AgentInstruction } from '$lib/server/agent-instructions';
 
@@ -104,7 +105,7 @@
 		<div class="list-panel">
 			<div class="list-count">{instructions.length} agente{instructions.length !== 1 ? 's' : ''}</div>
 
-			<div class="list-items">
+			<div class="list-items" use:scrollShadow>
 				{#each instructions as agent (agent.id)}
 					<button
 						class="list-item"
@@ -125,7 +126,7 @@
 		</div>
 
 		<!-- Right: editor -->
-		<div class="detail-panel">
+		<div class="detail-panel" use:scrollShadow>
 			{#if !selected}
 				<div class="detail-empty">Selecione um agente para editar as instruções.</div>
 			{:else}

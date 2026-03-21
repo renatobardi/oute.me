@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { scrollShadow } from '$lib/actions/scroll-shadow';
 	import { auth } from '$lib/firebase';
 	import type { DbUser } from '$lib/server/users';
 
@@ -80,7 +81,7 @@
 
 			<div class="list-count">{filtered.length} usuário{filtered.length !== 1 ? 's' : ''}</div>
 
-			<div class="list-items">
+			<div class="list-items" use:scrollShadow>
 				{#each filtered as user (user.id)}
 					{@const status = statusLabel(user)}
 					<button
@@ -106,7 +107,7 @@
 		</div>
 
 		<!-- Right: detail -->
-		<div class="detail-panel">
+		<div class="detail-panel" use:scrollShadow>
 			{#if !selected}
 				<div class="detail-empty">Selecione um usuário para ver os detalhes.</div>
 			{:else}

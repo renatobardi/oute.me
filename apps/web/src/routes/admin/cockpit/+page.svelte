@@ -3,6 +3,7 @@
 	import type { CockpitInterview, CockpitDetail } from '$lib/server/admin-cockpit';
 	import type { AgentStep } from '$lib/types/estimate';
 	import { AGENT_LABELS, AGENT_KEYS } from '$lib/types/estimate';
+	import { scrollShadow } from '$lib/actions/scroll-shadow';
 
 	let { data } = $props();
 
@@ -262,7 +263,7 @@
 
 			<div class="list-count">{filtered.length} entrevista{filtered.length !== 1 ? 's' : ''}</div>
 
-			<div class="list-items">
+			<div class="list-items" use:scrollShadow>
 				{#each filtered as iv (iv.id)}
 					<button
 						class="list-item"
@@ -299,7 +300,7 @@
 		</div>
 
 		<!-- Right panel: detail -->
-		<div class="detail-panel">
+		<div class="detail-panel" use:scrollShadow>
 			{#if !selectedId}
 				<div class="detail-empty">Selecione uma entrevista para ver os detalhes.</div>
 			{:else if loadingDetail}
@@ -567,6 +568,10 @@
 					</div>
 
 				{:else if activeTab === 'estimativa' && detail.estimate}
+					{@const estSteps = (detail.estimate.agent_steps ?? []) as AgentStep[]}
+					{@const estDisplaySteps = estSteps.length > 0
+						? estSteps
+						: AGENT_KEYS.map((k) => ({ agent_key: k, status: 'pending', started_at: null, finished_at: null, duration_s: null, output_preview: null, error: null }))}
 					<div class="tab-content">
 						<div class="section-title">Estimativa</div>
 						<div class="info-list">
@@ -585,10 +590,33 @@
 								<span class="info-row-value">{fmtDate(detail.estimate.created_at)}</span>
 							</div>
 						</div>
+
+						<div class="est-timeline">
+							<div class="est-timeline-title">Agentes</div>
+							<div class="est-timeline-steps">
+								{#each estDisplaySteps as step (step.agent_key)}
+									<div class="est-step est-step-{step.status}">
+										<span class="est-step-dot">
+											{#if step.status === 'done'}✓{:else if step.status === 'failed'}✗{:else if step.status === 'running'}◉{:else}○{/if}
+										</span>
+										<span class="est-step-name">{AGENT_LABELS[step.agent_key] ?? step.agent_key}</span>
+										{#if step.duration_s}
+											<span class="est-step-dur">{step.duration_s.toFixed(0)}s</span>
+										{/if}
+										{#if step.error}
+											<span class="est-step-err" title={step.error}>!</span>
+										{/if}
+									</div>
+								{/each}
+							</div>
+						</div>
 					</div>
 
 				{:else if activeTab === 'pipeline' && detail.estimate}
 					{@const steps = (detail.estimate.agent_steps ?? []) as AgentStep[]}
+					{@const displaySteps = steps.length > 0
+						? steps
+						: AGENT_KEYS.map((k) => ({ agent_key: k, status: 'pending', started_at: null, finished_at: null, duration_s: null, output_preview: null, error: null }))}
 					<div class="tab-content">
 						<div class="pipeline-header">
 							<div class="section-title">Pipeline de Agentes</div>
@@ -616,52 +644,40 @@
 							</div>
 						</div>
 
-						{@const displaySteps = steps.length > 0
-							? steps
-							: (['pending', 'running'].includes(detail.estimate.status)
-								? AGENT_KEYS.map((k) => ({ agent_key: k, status: 'pending', started_at: null, finished_at: null, duration_s: null, output_preview: null, error: null }))
-								: [])}
-						{#if displaySteps.length === 0}
-							<div class="empty-tab">Nenhum dado de agente disponível. Execute ou re-run o pipeline.</div>
-						{:else}
-							<div class="pipeline-steps">
-								{#each displaySteps as step (step.agent_key)}
-									<div class="pipeline-step {stepStatusClass(step.status)}">
-										<div
-											class="step-header"
-											role="button"
-											tabindex="0"
-											onclick={() => loadAgentOutput(iv.id, step.agent_key)}
-											onkeydown={(e) => e.key === 'Enter' && loadAgentOutput(iv.id, step.agent_key)}
-										>
-											<div class="step-left">
-												<span class="step-dot"></span>
-												<span class="step-name">{AGENT_LABELS[step.agent_key] ?? step.agent_key}</span>
-												<span class="step-key muted">{step.agent_key}</span>
-											</div>
-											<div class="step-right">
-												{#if step.duration_s}
-													<span class="step-duration">{step.duration_s.toFixed(1)}s</span>
-												{/if}
-												<span class="badge {step.status === 'done' ? 'badge-success' : step.status === 'failed' ? 'badge-error' : step.status === 'running' ? 'badge-info' : 'badge-neutral'}">{step.status}</span>
-											</div>
+						<div class="ck-stepper">
+							{#each displaySteps as step, i (step.agent_key)}
+								<button
+									class="ck-step ck-step-{step.status}"
+									class:ck-step-active={agentOutputKey === step.agent_key}
+									onclick={() => loadAgentOutput(iv.id, step.agent_key)}
+									title={step.error ?? AGENT_LABELS[step.agent_key] ?? step.agent_key}
+								>
+									<div class="ck-step-track">
+										<div class="ck-step-line" class:ck-line-hidden={i === 0}></div>
+										<div class="ck-step-circle">
+											{#if step.status === 'done'}✓{:else if step.status === 'failed'}✗{:else if step.status === 'running'}◉{:else}○{/if}
 										</div>
-										{#if step.error}
-											<div class="step-error">{step.error}</div>
-										{/if}
-										{#if agentOutputKey === step.agent_key}
-											<div class="step-output">
-												{#if loadingAgentOutput}
-													<span class="muted">Carregando output…</span>
-												{:else if agentOutputData}
-													<pre class="output-json">{JSON.stringify(agentOutputData, null, 2)}</pre>
-												{:else}
-													<span class="muted">Output não disponível</span>
-												{/if}
-											</div>
-										{/if}
+										<div class="ck-step-line" class:ck-line-hidden={i === displaySteps.length - 1}></div>
 									</div>
-								{/each}
+									<div class="ck-step-label">{AGENT_LABELS[step.agent_key] ?? step.agent_key}</div>
+									{#if step.duration_s}
+										<div class="ck-step-meta">{step.duration_s.toFixed(0)}s</div>
+									{:else if step.error}
+										<div class="ck-step-meta ck-step-meta-err">erro</div>
+									{/if}
+								</button>
+							{/each}
+						</div>
+
+						{#if agentOutputKey}
+							<div class="step-output">
+								{#if loadingAgentOutput}
+									<span class="muted">Carregando output…</span>
+								{:else if agentOutputData}
+									<pre class="output-json">{JSON.stringify(agentOutputData, null, 2)}</pre>
+								{:else}
+									<span class="muted">Output não disponível</span>
+								{/if}
 							</div>
 						{/if}
 						<!-- end displaySteps -->
@@ -1582,4 +1598,188 @@
 	.btn-cancel:hover {
 		background: rgba(255, 255, 255, 0.04);
 	}
+
+	/* ── Estimate inline timeline ── */
+	.est-timeline {
+		margin-top: 1.25rem;
+	}
+
+	.est-timeline-title {
+		font-size: 0.6875rem;
+		font-weight: 700;
+		text-transform: uppercase;
+		letter-spacing: 0.06em;
+		color: rgba(255, 255, 255, 0.35);
+		margin-bottom: 0.625rem;
+	}
+
+	.est-timeline-steps {
+		display: flex;
+		flex-direction: column;
+		gap: 0.3rem;
+	}
+
+	.est-step {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		padding: 0.35rem 0.625rem;
+		border-radius: 6px;
+		font-size: 0.8125rem;
+		border: 1px solid rgba(255, 255, 255, 0.05);
+		background: rgba(255, 255, 255, 0.02);
+	}
+
+	.est-step-done    { border-color: rgba(16,185,129,.25);  background: rgba(16,185,129,.06); }
+	.est-step-failed  { border-color: rgba(239,68,68,.25);   background: rgba(239,68,68,.06);  }
+	.est-step-running { border-color: rgba(99,102,241,.35);  background: rgba(99,102,241,.08); }
+
+	.est-step-dot {
+		font-size: 0.8125rem;
+		font-weight: 700;
+		line-height: 1;
+		flex-shrink: 0;
+		width: 16px;
+		text-align: center;
+	}
+
+	.est-step-done    .est-step-dot { color: #10b981; }
+	.est-step-failed  .est-step-dot { color: #f87171; }
+	.est-step-running .est-step-dot { color: #818cf8; }
+	.est-step-pending .est-step-dot { color: rgba(255, 255, 255, 0.2); }
+
+	.est-step-name {
+		flex: 1;
+		color: rgba(255, 255, 255, 0.6);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	.est-step-done .est-step-name { color: rgba(255, 255, 255, 0.85); }
+
+	.est-step-dur {
+		font-size: 0.6875rem;
+		color: rgba(255, 255, 255, 0.3);
+		flex-shrink: 0;
+	}
+
+	.est-step-err {
+		width: 14px;
+		height: 14px;
+		border-radius: 50%;
+		background: rgba(239, 68, 68, .25);
+		color: #f87171;
+		font-size: 0.625rem;
+		font-weight: 700;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		cursor: help;
+		flex-shrink: 0;
+	}
+
+	/* ── Cockpit pipeline stepper ── */
+	.ck-stepper {
+		display: flex;
+		align-items: flex-start;
+		width: 100%;
+		margin-bottom: 1rem;
+	}
+
+	.ck-step {
+		flex: 1;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 0.4rem;
+		background: none;
+		border: none;
+		cursor: pointer;
+		padding: 0;
+		min-width: 0;
+	}
+
+	.ck-step-track {
+		display: flex;
+		align-items: center;
+		width: 100%;
+	}
+
+	.ck-step-line {
+		flex: 1;
+		height: 2px;
+		background: rgba(255,255,255,0.1);
+		transition: background 0.3s;
+	}
+
+	.ck-line-hidden { background: transparent !important; }
+
+	.ck-step-done .ck-step-line    { background: #10b981; }
+	.ck-step-failed .ck-step-line  { background: rgba(239,68,68,.35); }
+
+	.ck-step-circle {
+		width: 34px;
+		height: 34px;
+		border-radius: 50%;
+		border: 2px solid rgba(255,255,255,0.15);
+		background: rgba(255,255,255,0.04);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		font-size: 1rem;
+		font-weight: 700;
+		color: rgba(255,255,255,0.25);
+		flex-shrink: 0;
+		transition: all 0.2s;
+	}
+
+	.ck-step:hover .ck-step-circle { border-color: rgba(255,255,255,0.35); background: rgba(255,255,255,0.08); }
+	.ck-step-active .ck-step-circle { box-shadow: 0 0 0 3px rgba(99,102,241,.4); }
+
+	.ck-step-done .ck-step-circle {
+		border-color: #10b981;
+		background: rgba(16,185,129,.15);
+		color: #10b981;
+	}
+
+	.ck-step-failed .ck-step-circle {
+		border-color: #f87171;
+		background: rgba(239,68,68,.15);
+		color: #f87171;
+	}
+
+	.ck-step-running .ck-step-circle {
+		border-color: #818cf8;
+		background: rgba(99,102,241,.15);
+		color: #818cf8;
+		animation: pulse-border 1.5s ease-in-out infinite;
+	}
+
+	@keyframes pulse-border {
+		0%, 100% { box-shadow: 0 0 0 0 rgba(99,102,241,.4); }
+		50%       { box-shadow: 0 0 0 6px rgba(99,102,241,.0); }
+	}
+
+	.ck-step-label {
+		font-size: 0.6875rem;
+		text-align: center;
+		color: rgba(255,255,255,0.4);
+		line-height: 1.3;
+		padding: 0 0.2rem;
+		word-break: break-word;
+	}
+
+	.ck-step-done .ck-step-label    { color: rgba(255,255,255,0.8); }
+	.ck-step-failed .ck-step-label  { color: #f87171; }
+	.ck-step-running .ck-step-label { color: #818cf8; }
+	.ck-step-active .ck-step-label  { font-weight: 600; }
+
+	.ck-step-meta {
+		font-size: 0.625rem;
+		color: rgba(255,255,255,0.3);
+		text-align: center;
+	}
+
+	.ck-step-meta-err { color: rgba(239,68,68,.7); cursor: help; }
 </style>

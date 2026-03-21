@@ -4,6 +4,9 @@
 	import { createChatState } from '$lib/stores/chat.svelte';
 	import { activeTone } from '$lib/stores/tone.svelte';
 	import { MATURITY_THRESHOLD } from '$lib/types/interview';
+	import { AGENT_LABELS, AGENT_KEYS } from '$lib/types/estimate';
+	import type { AgentStep } from '$lib/types/estimate';
+	import { scrollShadow } from '$lib/actions/scroll-shadow';
 
 	let { data } = $props();
 
@@ -34,6 +37,44 @@
 	let isRequestingEstimate = $state(false);
 	let existingEstimate = $state(data.existingEstimate ?? null);
 	let existingProject = $state(data.existingProject ?? null);
+
+	// Estimate panel state
+	let showEstimatePanel = $state(false);
+	let panelSteps = $state<AgentStep[]>(data.existingEstimate?.agent_steps ?? []);
+	let panelStatus = $state(data.existingEstimate?.status ?? '');
+	let panelPollTimer = $state<ReturnType<typeof setInterval> | null>(null);
+
+	async function fetchEstimateSteps() {
+		if (!existingEstimate) return;
+		try {
+			const res = await fetch(`/api/estimates/${existingEstimate.id}`);
+			if (!res.ok) return;
+			const est = await res.json();
+			panelSteps = est.agent_steps ?? [];
+			panelStatus = est.status;
+			existingEstimate = { ...existingEstimate, status: est.status, agent_steps: est.agent_steps ?? [] };
+		} catch { /* ignore */ }
+	}
+
+	function openEstimatePanel() {
+		showEstimatePanel = true;
+		fetchEstimateSteps();
+		if (['pending', 'running'].includes(panelStatus)) {
+			panelPollTimer = setInterval(fetchEstimateSteps, 5000);
+		}
+	}
+
+	function closeEstimatePanel() {
+		showEstimatePanel = false;
+		if (panelPollTimer) { clearInterval(panelPollTimer); panelPollTimer = null; }
+	}
+
+	$effect(() => {
+		if (!['pending', 'running'].includes(panelStatus) && panelPollTimer) {
+			clearInterval(panelPollTimer);
+			panelPollTimer = null;
+		}
+	});
 
 	// Editable title state
 	let isTitleEditing = $state(false);
@@ -98,7 +139,7 @@
 				throw new Error(body?.error || `Erro ${res.status}`);
 			}
 			const result = await res.json();
-			existingEstimate = { id: result.id, status: result.status };
+			existingEstimate = { id: result.id, status: result.status, agent_steps: [] };
 			goto(`/estimates/${result.id}`);
 		} catch (e) {
 			chat.error = `Erro ao solicitar estimativa: ${e instanceof Error ? e.message : 'tente novamente'}`;
@@ -152,7 +193,7 @@
 
 <div class="interview-page">
 	<!-- SIDEBAR -->
-	<aside class="sidebar">
+	<aside class="sidebar" use:scrollShadow>
 		<!-- Editable title -->
 		{#if isTitleEditing}
 			<div class="title-edit">
@@ -233,10 +274,10 @@
 
 		{#if existingEstimate}
 			<div class="sidebar-section estimate-action">
-				<a class="estimate-link" href="/estimates/{existingEstimate.id}">
+				<button class="estimate-link" onclick={openEstimatePanel}>
 					<span class="estimate-link-label">Ver Estimativa</span>
 					<span class="estimate-status-badge status-{existingEstimate.status}">{existingEstimate.status}</span>
-				</a>
+				</button>
 			</div>
 		{:else if canEstimate}
 			<div class="sidebar-section estimate-action">
@@ -264,11 +305,51 @@
 	</aside>
 
 	<!-- CHAT -->
-	<main class="chat-area">
+	<main class="chat-area" class:has-panel={showEstimatePanel}>
 		<header class="chat-header">
 			<h2>Entrevista</h2>
 			<StatusBadge status={data.interview.status} size="sm" />
 		</header>
+
+		{#if showEstimatePanel && existingEstimate}
+			{@const displaySteps = panelSteps.length > 0
+				? panelSteps
+				: AGENT_KEYS.map((k) => ({ agent_key: k, status: 'pending', started_at: null, finished_at: null, duration_s: null, output_preview: null, error: null }))}
+			<div class="estimate-panel">
+				<div class="estimate-panel-header">
+					<div class="estimate-panel-title">
+						<span class="estimate-panel-label">Pipeline de Estimativa</span>
+						<span class="estimate-panel-badge status-badge-{panelStatus}">{panelStatus}</span>
+						{#if ['pending', 'running'].includes(panelStatus)}
+							<span class="panel-spinner"></span>
+						{/if}
+					</div>
+					<div class="estimate-panel-actions">
+						<a href="/estimates/{existingEstimate.id}" class="panel-link-btn">Abrir completo →</a>
+						<button class="panel-close-btn" onclick={closeEstimatePanel} title="Fechar painel">✕</button>
+					</div>
+				</div>
+				<div class="pipeline-stepper">
+					{#each displaySteps as step, i (step.agent_key)}
+						<div class="stepper-step stepper-{step.status}">
+							<div class="stepper-track">
+								<div class="stepper-line" class:stepper-line-hidden={i === 0}></div>
+								<div class="stepper-circle">
+									{#if step.status === 'done'}✓{:else if step.status === 'failed'}✗{:else if step.status === 'running'}<span class="stepper-spin">◉</span>{:else}○{/if}
+								</div>
+								<div class="stepper-line" class:stepper-line-hidden={i === displaySteps.length - 1}></div>
+							</div>
+							<div class="stepper-label">{AGENT_LABELS[step.agent_key] ?? step.agent_key}</div>
+							{#if step.duration_s}
+								<div class="stepper-time">{step.duration_s.toFixed(0)}s</div>
+							{:else if step.error}
+								<div class="stepper-time stepper-err" title={step.error}>erro</div>
+							{/if}
+						</div>
+					{/each}
+				</div>
+			</div>
+		{/if}
 
 		{#if chat.error}
 			<div class="alert alert-error">
@@ -284,7 +365,7 @@
 			</div>
 		{/if}
 
-		<div class="messages" bind:this={chatContainer}>
+		<div class="messages" bind:this={chatContainer} use:scrollShadow>
 			{#if chat.messages.length === 0 && !chat.isStreaming}
 				<div class="empty-chat">
 					<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
@@ -358,7 +439,6 @@
 
 	/* ── Sidebar ── */
 	.sidebar {
-		background: var(--color-dark-surface, #1a1d27);
 		border-right: 1px solid var(--color-dark-border, rgba(255, 255, 255, 0.08));
 		padding: 1.25rem;
 		overflow-y: auto;
@@ -559,6 +639,8 @@
 		border: 1px solid rgba(99, 102, 241, 0.3);
 		border-radius: 8px;
 		text-decoration: none;
+		cursor: pointer;
+		font-family: inherit;
 		transition: background 0.15s;
 	}
 
@@ -814,6 +896,188 @@
 
 	textarea:disabled {
 		opacity: 0.5;
+	}
+
+	/* ── Estimate panel ── */
+	.estimate-panel {
+		border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+		background: var(--color-dark-surface, #1a1d27);
+		padding: 0.875rem 1.25rem;
+		flex-shrink: 0;
+	}
+
+	.estimate-panel-header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		margin-bottom: 0.75rem;
+	}
+
+	.estimate-panel-title {
+		display: flex;
+		align-items: center;
+		gap: 0.625rem;
+	}
+
+	.estimate-panel-label {
+		font-size: 0.8125rem;
+		font-weight: 600;
+		color: rgba(255, 255, 255, 0.7);
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+	}
+
+	.estimate-panel-badge {
+		font-size: 0.6875rem;
+		font-weight: 600;
+		padding: 0.2rem 0.5rem;
+		border-radius: 99px;
+		text-transform: lowercase;
+	}
+
+	.status-badge-done       { background: rgba(16,185,129,.18); color: #10b981; }
+	.status-badge-pending    { background: rgba(99,102,241,.18); color: #818cf8; }
+	.status-badge-running    { background: rgba(99,102,241,.18); color: #818cf8; }
+	.status-badge-failed     { background: rgba(239,68,68,.18);  color: #f87171; }
+	.status-badge-pending_approval { background: rgba(245,158,11,.18); color: #fbbf24; }
+
+	.panel-spinner {
+		width: 12px;
+		height: 12px;
+		border: 2px solid rgba(255,255,255,0.15);
+		border-top-color: var(--color-primary-500, #6366f1);
+		border-radius: 50%;
+		animation: spin 0.8s linear infinite;
+		flex-shrink: 0;
+	}
+
+	@keyframes spin { to { transform: rotate(360deg); } }
+
+	.estimate-panel-actions {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+	}
+
+	.panel-link-btn {
+		font-size: 0.75rem;
+		color: var(--color-primary-500, #6366f1);
+		text-decoration: none;
+		padding: 0.25rem 0.5rem;
+		border-radius: 4px;
+		transition: background 0.15s;
+	}
+
+	.panel-link-btn:hover { background: rgba(99,102,241,0.12); }
+
+	.panel-close-btn {
+		background: none;
+		border: none;
+		color: rgba(255,255,255,0.4);
+		cursor: pointer;
+		font-size: 0.875rem;
+		padding: 0.25rem 0.375rem;
+		border-radius: 4px;
+		line-height: 1;
+		transition: color 0.15s, background 0.15s;
+	}
+
+	.panel-close-btn:hover { color: rgba(255,255,255,0.8); background: rgba(255,255,255,0.06); }
+
+	/* ── Pipeline stepper ── */
+	.pipeline-stepper {
+		display: flex;
+		align-items: flex-start;
+		width: 100%;
+		overflow-x: auto;
+		padding-bottom: 0.25rem;
+	}
+
+	.stepper-step {
+		flex: 1;
+		min-width: 80px;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 0.375rem;
+	}
+
+	.stepper-track {
+		display: flex;
+		align-items: center;
+		width: 100%;
+	}
+
+	.stepper-line {
+		flex: 1;
+		height: 2px;
+		background: rgba(255,255,255,0.12);
+		transition: background 0.3s;
+	}
+
+	.stepper-line-hidden { background: transparent; }
+
+	.stepper-done .stepper-line    { background: #10b981; }
+	.stepper-failed .stepper-line  { background: rgba(239,68,68,.4); }
+
+	.stepper-circle {
+		width: 32px;
+		height: 32px;
+		border-radius: 50%;
+		border: 2px solid rgba(255,255,255,0.18);
+		background: rgba(255,255,255,0.04);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		font-size: 0.9375rem;
+		font-weight: 700;
+		color: rgba(255,255,255,0.3);
+		flex-shrink: 0;
+		transition: all 0.3s;
+	}
+
+	.stepper-done .stepper-circle {
+		border-color: #10b981;
+		background: rgba(16,185,129,.15);
+		color: #10b981;
+	}
+
+	.stepper-failed .stepper-circle {
+		border-color: #f87171;
+		background: rgba(239,68,68,.15);
+		color: #f87171;
+	}
+
+	.stepper-running .stepper-circle {
+		border-color: #818cf8;
+		background: rgba(99,102,241,.15);
+		color: #818cf8;
+	}
+
+	.stepper-spin { animation: spin 1s linear infinite; display: inline-block; }
+
+	.stepper-label {
+		font-size: 0.6875rem;
+		text-align: center;
+		color: rgba(255,255,255,0.45);
+		line-height: 1.3;
+		max-width: 90px;
+		padding: 0 0.25rem;
+	}
+
+	.stepper-done .stepper-label   { color: rgba(255,255,255,0.85); }
+	.stepper-failed .stepper-label { color: #f87171; }
+	.stepper-running .stepper-label { color: #818cf8; }
+
+	.stepper-time {
+		font-size: 0.625rem;
+		color: rgba(255,255,255,0.3);
+		text-align: center;
+	}
+
+	.stepper-err {
+		color: rgba(239,68,68,.7);
+		cursor: help;
 	}
 
 	/* ── Responsive ── */

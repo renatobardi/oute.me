@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { scrollShadow } from '$lib/actions/scroll-shadow';
 	import { auth } from '$lib/firebase';
 	import type { AdminKnowledge } from '$lib/server/admin-knowledge';
 
@@ -232,7 +233,7 @@
 
 			<div class="list-count">{filtered.length} registro{filtered.length !== 1 ? 's' : ''}</div>
 
-			<div class="list-items">
+			<div class="list-items" use:scrollShadow>
 				{#each filtered as entry (entry.id)}
 					{@const badge = typeBadge(entry.type)}
 					<button
@@ -260,7 +261,7 @@
 		</div>
 
 		<!-- Right: form -->
-		<div class="detail-panel">
+		<div class="detail-panel" use:scrollShadow>
 			{#if mode === null}
 				<div class="detail-empty">
 					<div class="empty-icon">📚</div>
