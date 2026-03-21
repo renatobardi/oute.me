@@ -14,7 +14,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		return jsonError(400, 'interview_id is required');
 	}
 
-	const interview = await getInterview(interview_id, user.uid);
+	const interview = await getInterview(interview_id, locals.dbUser!.id);
 	if (!interview) {
 		return jsonError(404, 'Interview not found');
 	}
@@ -23,7 +23,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		return jsonError(400, 'Interview maturity must be at least 0.70');
 	}
 
-	const existing = await getEstimateByInterview(interview_id, user.uid);
+	const existing = await getEstimateByInterview(interview_id, locals.dbUser!.id);
 	if (existing && ['pending', 'running'].includes(existing.status)) {
 		return jsonOk({ id: existing.id, job_id: existing.job_id, status: existing.status });
 	}
@@ -47,17 +47,23 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		])
 	);
 
-	const aiResponse = await postJSON<{ job_id: string; status: string }>('/estimate/run', {
-		interview_id,
-		state: interview.state,
-		conversation_summary: interview.state.conversation_summary || '',
-		documents_context,
-		llm_model: llm_model || 'gemini-2.5-flash',
-		agent_instructions,
-		agent_config,
-	});
+	let aiResponse: { job_id: string; status: string };
+	try {
+		aiResponse = await postJSON<{ job_id: string; status: string }>('/estimate/run', {
+			interview_id,
+			state: interview.state,
+			conversation_summary: interview.state.conversation_summary || '',
+			documents_context,
+			llm_model: llm_model || 'gemini-2.5-flash',
+			agent_instructions,
+			agent_config,
+		});
+	} catch (e) {
+		const msg = e instanceof Error ? e.message : 'AI service unavailable';
+		return jsonError(502, msg);
+	}
 
-	const estimate = await createEstimate(interview_id, user.uid, aiResponse.job_id);
+	const estimate = await createEstimate(interview_id, locals.dbUser!.id, aiResponse.job_id);
 	// Non-blocking — if migration 016 hasn't run yet this must not block estimate creation
 	createEstimateRun(estimate.id, aiResponse.job_id, llm_model || 'gemini-2.5-flash').catch(() => null);
 
