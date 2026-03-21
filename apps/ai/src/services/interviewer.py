@@ -81,6 +81,7 @@ async def process_message(
         initialized_state,
         request.documents_context,
         request.tone_instruction,
+        request.user_name,
     )
 
     history = [{"role": msg.role, "content": msg.content} for msg in request.history]
