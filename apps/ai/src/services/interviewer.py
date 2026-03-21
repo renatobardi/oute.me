@@ -48,7 +48,7 @@ async def _suggest_title(
         "Based on the user messages below from a software project scoping conversation, "
         "generate a short and representative project name (2 to 5 words). "
         "Use the same language as the messages. "
-        "Respond ONLY with valid JSON in the format: {\"title\": \"Project Name\"}\n\n"
+        'Respond ONLY with valid JSON in the format: {"title": "Project Name"}\n\n'
         f"User messages:\n{context}"
     )
     try:
@@ -106,7 +106,12 @@ async def process_message(
         logger.exception("stream_chat failed for interview %s", request.interview_id)
         yield _sse_event(
             "error",
-            {"message": "O serviço de IA está temporariamente indisponível. Tente novamente em instantes."},  # noqa: E501
+            {
+                "message": (
+                    "O serviço de IA está temporariamente indisponível."
+                    " Tente novamente em instantes."
+                )
+            },
         )
         return
 

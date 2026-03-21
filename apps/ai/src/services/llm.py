@@ -30,11 +30,16 @@ async def stream_chat(
 ) -> AsyncGenerator[str, None]:
     if _is_grok(llm_model):
         return grok.stream_chat(
-            system_prompt, history, user_message,
-            model=llm_model, max_seconds=max_seconds,
+            system_prompt,
+            history,
+            user_message,
+            model=llm_model,
+            max_seconds=max_seconds,
         )
     return gemini.stream_chat(
-        system_prompt, history, user_message,
+        system_prompt,
+        history,
+        user_message,
         max_seconds=max_seconds,
     )
 

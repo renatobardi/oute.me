@@ -31,12 +31,8 @@ async def emit_metric(metric_name: str, value: float, labels: dict[str, str] | N
         seconds = int(now)
         nanos = int((now - seconds) * 10**9)
 
-        interval = monitoring_v3.TimeInterval(
-            {"end_time": {"seconds": seconds, "nanos": nanos}}
-        )
-        point = monitoring_v3.Point(
-            {"interval": interval, "value": {"double_value": value}}
-        )
+        interval = monitoring_v3.TimeInterval({"end_time": {"seconds": seconds, "nanos": nanos}})
+        point = monitoring_v3.Point({"interval": interval, "value": {"double_value": value}})
         series.points = [point]
 
         client.create_time_series(name=project_name, time_series=[series])

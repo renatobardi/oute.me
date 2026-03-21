@@ -171,6 +171,7 @@ async def rerun_estimate(request: Request) -> dict[str, str]:
                     out = agent_outputs.get(key)
                     if out is not None:
                         import json as _json
+
                         previous_outputs[key] = (
                             _json.dumps(out) if not isinstance(out, str) else out
                         )

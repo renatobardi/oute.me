@@ -13,6 +13,7 @@ logger = logging.getLogger(__name__)
 # Shared models (used in final EstimateResult)
 # ---------------------------------------------------------------------------
 
+
 class CostScenario(BaseModel):
     name: str
     description: str
@@ -48,6 +49,7 @@ class RiskItem(BaseModel):
 # ---------------------------------------------------------------------------
 # Per-agent output models
 # ---------------------------------------------------------------------------
+
 
 class MarketBenchmarks(BaseModel):
     avg_cost_per_hour: float = 0
@@ -115,6 +117,7 @@ class KnowledgePrep(BaseModel):
 # Agent step tracking
 # ---------------------------------------------------------------------------
 
+
 class AgentStep(BaseModel):
     agent_key: str
     status: str = "pending"  # pending | running | done | failed
@@ -167,7 +170,9 @@ def parse_agent_output(agent_key: str, raw: str) -> BaseModel | None:
     except (json.JSONDecodeError, Exception) as exc:
         logger.warning(
             "Failed to parse output for agent %s: %s (raw length=%d)",
-            agent_key, exc, len(raw),
+            agent_key,
+            exc,
+            len(raw),
         )
         return None
 
@@ -175,6 +180,7 @@ def parse_agent_output(agent_key: str, raw: str) -> BaseModel | None:
 # ---------------------------------------------------------------------------
 # Aggregated EstimateResult
 # ---------------------------------------------------------------------------
+
 
 class EstimateResult(BaseModel):
     summary: str = ""
@@ -218,31 +224,25 @@ def assemble_estimate_result(
         architecture_overview=(
             arch.architecture_overview if isinstance(arch, ArchitectureDesign) else ""
         ),
-        milestones=(
-            arch.milestones if isinstance(arch, ArchitectureDesign) else []
-        ),
+        milestones=(arch.milestones if isinstance(arch, ArchitectureDesign) else []),
         tech_recommendations=(
             arch.tech_recommendations if isinstance(arch, ArchitectureDesign) else []
         ),
-        risks=(
-            arch.risks if isinstance(arch, ArchitectureDesign) else []
-        ),
-        cost_scenarios=(
-            costs.scenarios if isinstance(costs, CostEstimate) else []
-        ),
+        risks=(arch.risks if isinstance(arch, ArchitectureDesign) else []),
+        cost_scenarios=(costs.scenarios if isinstance(costs, CostEstimate) else []),
         similar_projects=(
             [sp.model_dump() for sp in similar.similar_projects]
-            if isinstance(similar, SimilarProjectsResult) else []
+            if isinstance(similar, SimilarProjectsResult)
+            else []
         ),
-        executive_summary=(
-            review.executive_summary if isinstance(review, ReviewResult) else ""
-        ),
+        executive_summary=(review.executive_summary if isinstance(review, ReviewResult) else ""),
     )
 
 
 # ---------------------------------------------------------------------------
 # Request / Response models
 # ---------------------------------------------------------------------------
+
 
 class EstimateRequest(BaseModel):
     interview_id: str

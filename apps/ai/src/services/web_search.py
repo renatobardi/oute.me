@@ -32,11 +32,13 @@ async def search_web(query: str, num_results: int = 5) -> list[dict[str, str]]:
         data = resp.json()
         results = []
         for item in data.get("items", []):
-            results.append({
-                "title": item.get("title", ""),
-                "url": item.get("link", ""),
-                "snippet": item.get("snippet", ""),
-            })
+            results.append(
+                {
+                    "title": item.get("title", ""),
+                    "url": item.get("link", ""),
+                    "snippet": item.get("snippet", ""),
+                }
+            )
         return results
     except Exception:
         logger.exception("Web search failed for query: %s", query)

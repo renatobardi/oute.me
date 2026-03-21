@@ -18,9 +18,7 @@ class StateBackend(Protocol):
     async def update_job(
         self, job_id: str, status: str, result: dict[str, object] | None = None
     ) -> None: ...
-    async def update_agent_steps(
-        self, job_id: str, steps: list[dict[str, object]]
-    ) -> None: ...
+    async def update_agent_steps(self, job_id: str, steps: list[dict[str, object]]) -> None: ...
 
 
 class RedisStateBackend:
@@ -51,9 +49,7 @@ class RedisStateBackend:
         data = json.dumps(job)
         await self._redis.setex(f"job:{job_id}", JOB_TTL_HOURS * 3600, data)
 
-    async def update_agent_steps(
-        self, job_id: str, steps: list[dict[str, object]]
-    ) -> None:
+    async def update_agent_steps(self, job_id: str, steps: list[dict[str, object]]) -> None:
         data_raw = await self._redis.get(f"job:{job_id}")
         if data_raw is None:
             return
@@ -111,9 +107,7 @@ class PostgresStateBackend:
             job_id,
         )
 
-    async def update_agent_steps(
-        self, job_id: str, steps: list[dict[str, object]]
-    ) -> None:
+    async def update_agent_steps(self, job_id: str, steps: list[dict[str, object]]) -> None:
         pool = await self._get_pool()
         await pool.execute(
             """UPDATE ai.job_state
