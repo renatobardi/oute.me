@@ -3,8 +3,6 @@
 	import { Button } from '@oute/ui';
 	import { auth } from '$lib/firebase';
 
-	let { data } = $props();
-
 	let full_name = $state('');
 	let company = $state('');
 	let role = $state('');
