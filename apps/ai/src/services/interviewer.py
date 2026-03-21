@@ -22,7 +22,7 @@ import logging
 import uuid
 from collections.abc import AsyncGenerator
 
-from src.models.interview import ChatRequest
+from src.models.interview import ChatRequest, calculate_maturity
 from src.services.interview_initializer import (
     ensure_domains_initialized,
     get_uncovered_vital_domains,
@@ -123,6 +123,8 @@ async def process_message(
     user_turns = sum(1 for m in request.history if m.role == "user")
 
     # Análise de estado e title suggestion em paralelo
+    import asyncio
+
     state_task = analyze_and_update_state(
         initialized_state,
         request.user_message,
@@ -136,13 +138,21 @@ async def process_message(
         else None
     )
 
-    if title_task is not None:
-        import asyncio
-        (updated_state, maturity), suggested_title = await asyncio.gather(
-            state_task, title_task
+    try:
+        if title_task is not None:
+            (updated_state, maturity), suggested_title = await asyncio.gather(
+                state_task, title_task
+            )
+        else:
+            updated_state, maturity = await state_task
+            suggested_title = None
+    except Exception:
+        logger.exception(
+            "Interview %s — state/title analysis failed, emitting state_update with current state",
+            request.interview_id,
         )
-    else:
-        updated_state, maturity = await state_task
+        updated_state = initialized_state
+        maturity = calculate_maturity(initialized_state)
         suggested_title = None
 
     logger.info(

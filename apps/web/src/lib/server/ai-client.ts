@@ -90,22 +90,31 @@ export function warmUpAiService(): void {
 export async function postFile(
 	path: string,
 	file: Blob,
-	filename: string
+	filename: string,
+	timeoutMs = 25_000
 ): Promise<{ extracted_text: string; status: string }> {
 	const url = `${getBaseUrl()}${path}`;
 	const authHeaders = await getAuthHeaders();
 	const formData = new FormData();
 	formData.append('file', file, filename);
 
-	const response = await fetch(url, {
-		method: 'POST',
-		headers: authHeaders,
-		body: formData,
-	});
+	const controller = new AbortController();
+	const timer = setTimeout(() => controller.abort(), timeoutMs);
 
-	if (!response.ok) {
-		throw new Error(`AI service error: ${response.status}`);
+	try {
+		const response = await fetch(url, {
+			method: 'POST',
+			headers: authHeaders,
+			body: formData,
+			signal: controller.signal,
+		});
+
+		if (!response.ok) {
+			throw new Error(`AI service error: ${response.status}`);
+		}
+
+		return response.json();
+	} finally {
+		clearTimeout(timer);
 	}
-
-	return response.json();
 }

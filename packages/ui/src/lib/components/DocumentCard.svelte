@@ -3,9 +3,10 @@
 		filename: string;
 		status: 'pending' | 'processing' | 'completed' | 'failed';
 		mimeType: string;
+		ondelete?: () => void;
 	}
 
-	let { filename, status, mimeType }: Props = $props();
+	let { filename, status, mimeType, ondelete }: Props = $props();
 
 	const icon = $derived(() => {
 		if (mimeType.startsWith('image/')) return '🖼';
@@ -30,6 +31,13 @@
 		<span class="doc-name">{filename}</span>
 		<span class="doc-status status-{status}">{statusLabel[status]}</span>
 	</div>
+	{#if ondelete}
+		<button class="doc-delete" onclick={ondelete} title="Remover documento" aria-label="Remover {filename}">
+			<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+				<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+			</svg>
+		</button>
+	{/if}
 </div>
 
 <style>
@@ -45,6 +53,29 @@
 
 	.doc-icon {
 		font-size: 1.25rem;
+		flex-shrink: 0;
+	}
+
+	.doc-delete {
+		flex-shrink: 0;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 24px;
+		height: 24px;
+		border-radius: 4px;
+		border: none;
+		background: transparent;
+		color: var(--color-neutral-500, #6b7280);
+		cursor: pointer;
+		padding: 0;
+		margin-left: auto;
+		transition: color 0.15s, background 0.15s;
+	}
+
+	.doc-delete:hover {
+		color: var(--color-error, #ef4444);
+		background: rgba(239, 68, 68, 0.1);
 	}
 
 	.doc-info {

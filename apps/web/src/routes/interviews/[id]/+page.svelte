@@ -226,6 +226,7 @@
 							filename={doc.filename}
 							status={doc.status}
 							mimeType={doc.mime_type}
+							ondelete={() => chat.deleteDocument(doc.id)}
 						/>
 					{/each}
 				</div>
