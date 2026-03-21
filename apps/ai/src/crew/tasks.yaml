@@ -164,32 +164,84 @@ estimate_costs:
 
 review_and_summarize:
   description: >
-    Revise toda a estimativa para garantir consistência e gere um sumário
-    executivo.
+    Revise toda a estimativa para garantir consistência interna e gere um
+    sumário executivo para stakeholders.
 
-    Requisitos:
+    ## Dados de Entrada
+
+    ### Requisitos Consolidados
     {consolidated_requirements}
 
-    Arquitetura:
+    ### Arquitetura e Milestones
     {architecture}
 
-    Cenários de custo:
+    ### Cenários de Custo
     {cost_scenarios}
 
-    Verifique:
-    1. Consistência entre milestones e custos
-    2. Cobertura de todos os requisitos
-    3. Realismo dos prazos
-    4. Completude das mitigações de risco
+    ## Checklist de Validação
 
-    Gere um sumário executivo de 3-5 parágrafos.
+    Execute cada verificação e registre issues encontradas:
+
+    1. **Consistência matemática**: Para cada cenário, verifique se
+       total_cost = total_hours x hourly_rate (tolerância de 5%).
+       Classifique desvios como category="mathematical", severity="critical".
+
+    2. **Ordenação de cenários**: Verifique se custo e duração seguem
+       conservador >= moderado >= otimista. Desvios são
+       category="cost_consistency", severity="critical".
+
+    3. **Cobertura de requisitos**: Compare cada requisito funcional com os
+       deliverables dos milestones. Calcule o percentual de cobertura
+       (requirements_coverage_pct). Requisitos não cobertos:
+       category="requirement_coverage", severity="warning".
+
+    4. **Cobertura de riscos**: Verifique se cada integração tem um risco
+       associado. Calcule risk_coverage_pct. Integrações sem risco:
+       category="risk_coverage", severity="warning".
+
+    5. **Realismo de prazos**: Verifique se duration_weeks é compatível
+       com total_hours / (team_size x 40 x 0.75). Desvios >20%:
+       category="timeline_consistency", severity="warning".
+
+    6. **Completude**: Campos vazios em architecture_overview, milestones,
+       ou scenarios são category="general", severity="critical".
+
+    Para cada issue, tente sugerir um ajuste concreto (adjustments_made)
+    com o campo afetado, valor original e valor sugerido.
+
+    ## Sumário Executivo
+
+    Escreva 3-5 parágrafos em português formal para decisores de negócio:
+    1. Visão geral do projeto e escopo
+    2. Arquitetura proposta e milestones principais
+    3. Faixa de investimento com os 3 cenários (valores em BRL)
+    4. Riscos principais e mitigações
+    5. Recomendação e próximos passos (opcional)
   expected_output: >
-    Um documento JSON com:
+    Um documento JSON com exatamente esta estrutura:
     {
       "validation": {
         "is_consistent": true,
-        "issues_found": [],
-        "adjustments_made": []
+        "issues_found": [
+          {
+            "category": "cost_consistency|timeline_consistency|requirement_coverage|risk_coverage|mathematical|general",
+            "severity": "critical|warning|info",
+            "description": "...",
+            "affected_agent": "cost_specialist|software_architect|...",
+            "resolved": false
+          }
+        ],
+        "adjustments_made": [
+          {
+            "description": "...",
+            "field_adjusted": "...",
+            "original_value": "...",
+            "adjusted_value": "...",
+            "reason": "..."
+          }
+        ],
+        "requirements_coverage_pct": 85.0,
+        "risk_coverage_pct": 70.0
       },
       "executive_summary": "..."
     }
@@ -197,28 +249,54 @@ review_and_summarize:
 
 prepare_knowledge:
   description: >
-    Prepare os dados da estimativa para armazenamento na base de conhecimento.
-    Extraia informações-chave que serão úteis para busca futura.
+    Prepare os dados da estimativa para armazenamento na base de conhecimento
+    vetorial, otimizando para busca por similaridade.
 
-    Resultado completo da estimativa:
-    {full_estimate}
+    Os dados de entrada estão disponíveis no contexto dos agentes anteriores:
+    requisitos consolidados, arquitetura, cenários de custo e revisão.
 
-    Gere um texto resumido que capture:
-    - Tipo de projeto e escopo
-    - Tecnologias utilizadas
-    - Faixa de custo e prazo
-    - Complexidade e tamanho da equipe
+    ## Regras para knowledge_text
+
+    Gere um texto corrido em português (NÃO JSON, NÃO lista) de 3-4
+    parágrafos (~500-1500 palavras) contendo:
+
+    - Parágrafo 1: Tipo de projeto, escopo principal, público-alvo,
+      funcionalidades-chave.
+    - Parágrafo 2: Stack tecnológica, arquitetura proposta, integrações
+      externas e suas complexidades.
+    - Parágrafo 3: Faixa de investimento (do cenário otimista ao
+      conservador em BRL), prazo estimado em semanas, tamanho de equipe.
+    - Parágrafo 4: Nível de complexidade, riscos principais, diferenciais
+      do projeto.
+
+    Use palavras-chave relevantes para busca semântica: nome das
+    tecnologias, tipo de projeto, domínio de negócio. Evite jargão
+    interno ou referências a IDs.
+
+    ## Regras para metadata
+
+    - project_type: categoria clara (ex: "e-commerce", "saas", "marketplace").
+    - technologies: lista das principais tecnologias da arquitetura.
+    - complexity: use o mesmo valor de complexity_assessment dos requisitos
+      ("low", "medium", "high" ou "very_high").
+    - cost_range: {"min": custo_otimista, "max": custo_conservador} em BRL.
+    - duration_range: {"min": semanas_otimista, "max": semanas_conservador}.
+    - team_size_range: {"min": equipe_otimista, "max": equipe_conservador}.
+    - integrations_count: total de integrações externas identificadas.
+    - requirements_count: total de requisitos funcionais.
   expected_output: >
-    Um documento JSON com:
+    Um documento JSON com exatamente esta estrutura:
     {
-      "knowledge_text": "...",
+      "knowledge_text": "Texto corrido em parágrafos descrevendo o projeto...",
       "metadata": {
         "project_type": "...",
         "technologies": ["..."],
-        "complexity": "...",
-        "cost_range": {"min": 0, "max": 0},
-        "duration_range": {"min_weeks": 0, "max_weeks": 0},
-        "team_size_range": {"min": 0, "max": 0}
+        "complexity": "low|medium|high|very_high",
+        "cost_range": {"min": 0.0, "max": 0.0},
+        "duration_range": {"min": 0.0, "max": 0.0},
+        "team_size_range": {"min": 0, "max": 0},
+        "integrations_count": 0,
+        "requirements_count": 0
       }
     }
   agent: knowledge_manager

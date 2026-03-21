@@ -41,6 +41,7 @@ export interface InterviewDocument {
 	filename: string;
 	mime_type: string;
 	storage_path: string;
+	file_hash: string | null;
 	extracted_text: string | null;
 	status: string;
 	created_at: Date;

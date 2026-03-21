@@ -95,20 +95,119 @@ class SimilarProject(BaseModel):
     metrics: dict[str, Any] = {}
 
 
+# --- Reviewer models ---
+
+IssueSeverity = Literal["critical", "warning", "info"]
+IssueCategory = Literal[
+    "cost_consistency",
+    "timeline_consistency",
+    "requirement_coverage",
+    "risk_coverage",
+    "mathematical",
+    "general",
+]
+
+
+class ValidationIssue(BaseModel):
+    category: IssueCategory
+    severity: IssueSeverity
+    description: str
+    affected_agent: str = ""
+    resolved: bool = False
+
+    @field_validator("category", mode="before")
+    @classmethod
+    def _normalize_category(cls, v: object) -> str:
+        if isinstance(v, str):
+            return v.strip().lower().replace(" ", "_")
+        return str(v).strip().lower()
+
+    @field_validator("severity", mode="before")
+    @classmethod
+    def _normalize_severity(cls, v: object) -> str:
+        if isinstance(v, str):
+            return v.strip().lower()
+        return str(v).strip().lower()
+
+
+class ValidationAdjustment(BaseModel):
+    description: str
+    field_adjusted: str = ""
+    original_value: str = ""
+    adjusted_value: str = ""
+    reason: str = ""
+
+
 class ValidationResult(BaseModel):
     is_consistent: bool = True
-    issues_found: list[str] = []
-    adjustments_made: list[str] = []
+    issues_found: list[ValidationIssue] = []
+    adjustments_made: list[ValidationAdjustment] = []
+    requirements_coverage_pct: float = Field(default=0.0, ge=0.0, le=100.0)
+    risk_coverage_pct: float = Field(default=0.0, ge=0.0, le=100.0)
+
+    @model_validator(mode="after")
+    def _auto_consistency(self) -> ValidationResult:
+        """Set is_consistent=False if any critical issue is unresolved."""
+        critical_unresolved = [
+            i for i in self.issues_found if i.severity == "critical" and not i.resolved
+        ]
+        if critical_unresolved:
+            self.is_consistent = False
+        return self
+
+
+# --- Knowledge Manager models ---
+
+ComplexityLevel = Literal["low", "medium", "high", "very_high"]
+
+
+class NumericRange(BaseModel):
+    min: float = Field(default=0, ge=0)
+    max: float = Field(default=0, ge=0)
+
+    @model_validator(mode="after")
+    def _ensure_min_le_max(self) -> NumericRange:
+        """Auto-correct if min > max."""
+        if self.min > self.max:
+            self.min, self.max = self.max, self.min
+        return self
 
 
 class KnowledgeMetadata(BaseModel):
     project_type: str = ""
     technologies: list[str] = []
-    complexity: str = ""
-    cost_range: dict[str, float] = {}
-    duration_range: dict[str, float] = {}
-    team_size_range: dict[str, float] = {}
+    complexity: ComplexityLevel = "medium"
+    cost_range: NumericRange = NumericRange()
+    duration_range: NumericRange = NumericRange()
+    team_size_range: NumericRange = NumericRange()
+    integrations_count: int = Field(default=0, ge=0)
+    requirements_count: int = Field(default=0, ge=0)
 
+    @field_validator("complexity", mode="before")
+    @classmethod
+    def _normalize_complexity(cls, v: object) -> str:
+        if isinstance(v, str):
+            normalized = v.strip().lower().replace(" ", "_")
+            valid = {"low", "medium", "high", "very_high"}
+            return normalized if normalized in valid else "medium"
+        return "medium"
+
+    @model_validator(mode="before")
+    @classmethod
+    def _coerce_ranges(cls, data: Any) -> Any:
+        """Accept legacy dict formats like {"min_weeks": X, "max_weeks": Y}."""
+        if isinstance(data, dict):
+            for range_field in ("cost_range", "duration_range", "team_size_range"):
+                val = data.get(range_field)
+                if isinstance(val, dict) and "min" not in val:
+                    keys = list(val.keys())
+                    if len(keys) >= 2:
+                        values = list(val.values())
+                        data[range_field] = {"min": values[0], "max": values[1]}
+        return data
+
+
+# --- Common per-agent output models ---
 
 class ConsolidatedRequirements(BaseModel):
     functional_requirements: list[str] = []
@@ -173,10 +272,24 @@ class ReviewResult(BaseModel):
     validation: ValidationResult = ValidationResult()
     executive_summary: str = ""
 
+    @field_validator("executive_summary", mode="before")
+    @classmethod
+    def _strip_summary(cls, v: object) -> str:
+        if isinstance(v, str):
+            return v.strip()
+        return str(v).strip()
+
 
 class KnowledgePrep(BaseModel):
-    knowledge_text: str = ""
+    knowledge_text: str = Field(default="", max_length=8000)
     metadata: KnowledgeMetadata = KnowledgeMetadata()
+
+    @field_validator("knowledge_text", mode="before")
+    @classmethod
+    def _strip_text(cls, v: object) -> str:
+        if isinstance(v, str):
+            return v.strip()
+        return str(v).strip()
 
 
 # ---------------------------------------------------------------------------
@@ -257,6 +370,7 @@ class EstimateResult(BaseModel):
     risks: list[RiskItem] = []
     similar_projects: list[dict[str, object]] = []
     executive_summary: str = ""
+    validation: ValidationResult | None = None
 
     @model_validator(mode="before")
     @classmethod
@@ -302,6 +416,7 @@ def assemble_estimate_result(
             else []
         ),
         executive_summary=(review.executive_summary if isinstance(review, ReviewResult) else ""),
+        validation=(review.validation if isinstance(review, ReviewResult) else None),
     )
 
 

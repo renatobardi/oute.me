@@ -139,15 +139,38 @@ export async function getRecentMessages(
 	return rows;
 }
 
+export async function checkDocumentDuplicate(
+	interviewId: string,
+	filename: string,
+	fileHash: string
+): Promise<{ reason: 'filename' | 'content' } | null> {
+	const [byName] = await sql<{ id: string }[]>`
+		SELECT id FROM public.documents
+		WHERE interview_id = ${interviewId} AND filename = ${filename}
+		LIMIT 1
+	`;
+	if (byName) return { reason: 'filename' };
+
+	const [byHash] = await sql<{ id: string }[]>`
+		SELECT id FROM public.documents
+		WHERE interview_id = ${interviewId} AND file_hash = ${fileHash}
+		LIMIT 1
+	`;
+	if (byHash) return { reason: 'content' };
+
+	return null;
+}
+
 export async function addDocument(
 	interviewId: string,
 	filename: string,
 	mimeType: string,
-	storagePath: string
+	storagePath: string,
+	fileHash: string
 ): Promise<InterviewDocument> {
 	const [row] = await sql<InterviewDocument[]>`
-		INSERT INTO public.documents (interview_id, filename, mime_type, storage_path)
-		VALUES (${interviewId}, ${filename}, ${mimeType}, ${storagePath})
+		INSERT INTO public.documents (interview_id, filename, mime_type, storage_path, file_hash)
+		VALUES (${interviewId}, ${filename}, ${mimeType}, ${storagePath}, ${fileHash})
 		RETURNING *
 	`;
 	return row;
