@@ -14,7 +14,24 @@
 	let agentSteps = $derived((estimate.agent_steps ?? []) as AgentStep[]);
 	let isApproving = $state(false);
 	let isRerunning = $state(false);
+	let rerunModal = $state(false);
+	let rerunFromAgent = $state('');
+	let rerunModel = $state('gemini-2.5-flash');
 	let projectName = $state('');
+
+	const LLM_MODELS = [
+		{ value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash' },
+		{ value: 'gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash Lite' },
+		{ value: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro' },
+	];
+
+	function openRerunModal() {
+		// Pre-select first failed agent
+		const failed = agentSteps.find((s) => s.status === 'failed');
+		rerunFromAgent = failed?.agent_key ?? '';
+		rerunModel = 'gemini-2.5-flash';
+		rerunModal = true;
+	}
 	let selectedScenario = $state('moderado');
 	let pollTimer = $state<ReturnType<typeof setInterval> | null>(null);
 	let elapsedSeconds = $state(0);
@@ -81,16 +98,20 @@
 	}
 
 	async function handleRerun() {
+		rerunModal = false;
 		isRerunning = true;
 		elapsedSeconds = 0;
 		try {
 			const token = await auth.currentUser?.getIdToken(false);
+			const body: Record<string, string> = { llm_model: rerunModel };
+			if (rerunFromAgent) body.from_agent = rerunFromAgent;
 			const res = await fetch(`/api/estimates/${estimate.id}/rerun`, {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json',
 					...(token ? { Authorization: `Bearer ${token}` } : {}),
 				},
+				body: JSON.stringify(body),
 			});
 			if (!res.ok) throw new Error('Rerun failed');
 			await invalidateAll();
@@ -188,7 +209,7 @@
 			{/if}
 
 			<div class="error-actions">
-				<Button onclick={handleRerun} disabled={isRerunning}>
+				<Button onclick={openRerunModal} disabled={isRerunning}>
 					{isRerunning ? 'Iniciando…' : 'Tentar novamente'}
 				</Button>
 				<Button variant="ghost" onclick={() => goto(`/interviews/${estimate.interview_id}`)}>
@@ -349,6 +370,45 @@
 		</div>
 	{/if}
 </div>
+
+{#if rerunModal}
+	<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+	<div class="modal-backdrop" onclick={() => (rerunModal = false)}>
+		<div class="modal" onclick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
+			<h3 class="modal-title">Re-run Pipeline</h3>
+
+			<label class="modal-field">
+				<span class="modal-label">Modelo LLM</span>
+				<select class="modal-select" bind:value={rerunModel}>
+					{#each LLM_MODELS as m (m.value)}
+						<option value={m.value}>{m.label}</option>
+					{/each}
+				</select>
+			</label>
+
+			<label class="modal-field">
+				<span class="modal-label">Recomeçar a partir de</span>
+				<select class="modal-select" bind:value={rerunFromAgent}>
+					<option value="">Início (rodar tudo)</option>
+					{#each AGENT_KEYS as key (key)}
+						<option value={key}>{AGENT_LABELS[key] ?? key}</option>
+					{/each}
+				</select>
+			</label>
+
+			{#if rerunFromAgent}
+				<p class="modal-hint">
+					Outputs anteriores a <strong>{AGENT_LABELS[rerunFromAgent] ?? rerunFromAgent}</strong> serão reutilizados.
+				</p>
+			{/if}
+
+			<div class="modal-actions">
+				<button class="btn-cancel" onclick={() => (rerunModal = false)}>Cancelar</button>
+				<Button onclick={handleRerun}>Iniciar Re-run</Button>
+			</div>
+		</div>
+	</div>
+{/if}
 
 <style>
 	.estimate-page {
@@ -842,5 +902,90 @@
 
 	.project-link-banner:hover {
 		background: rgba(16, 185, 129, 0.15);
+	}
+
+	/* ── Re-run modal ── */
+	.modal-backdrop {
+		position: fixed;
+		inset: 0;
+		background: rgba(0, 0, 0, 0.6);
+		z-index: 100;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+	}
+
+	.modal {
+		background: var(--color-dark-surface, #1a1d27);
+		border: 1px solid rgba(255, 255, 255, 0.12);
+		border-radius: 12px;
+		padding: 1.75rem;
+		width: 100%;
+		max-width: 400px;
+		display: flex;
+		flex-direction: column;
+		gap: 1rem;
+	}
+
+	.modal-title {
+		font-size: 1rem;
+		font-weight: 700;
+		color: #f9fafb;
+		margin: 0;
+	}
+
+	.modal-field {
+		display: flex;
+		flex-direction: column;
+		gap: 0.35rem;
+	}
+
+	.modal-label {
+		font-size: 0.75rem;
+		font-weight: 600;
+		color: var(--color-neutral-400, #9ca3af);
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+	}
+
+	.modal-select {
+		padding: 0.45rem 0.6rem;
+		background: rgba(255, 255, 255, 0.05);
+		border: 1px solid rgba(255, 255, 255, 0.1);
+		border-radius: 6px;
+		color: #f9fafb;
+		font-size: 0.875rem;
+	}
+
+	.modal-hint {
+		font-size: 0.8125rem;
+		color: var(--color-neutral-400, #9ca3af);
+		margin: 0;
+		padding: 0.5rem 0.75rem;
+		background: rgba(99, 102, 241, 0.08);
+		border-left: 3px solid var(--color-primary-500, #6366f1);
+		border-radius: 4px;
+	}
+
+	.modal-actions {
+		display: flex;
+		justify-content: flex-end;
+		gap: 0.75rem;
+		margin-top: 0.25rem;
+		align-items: center;
+	}
+
+	.btn-cancel {
+		padding: 0.45rem 1rem;
+		border-radius: 6px;
+		border: 1px solid rgba(255, 255, 255, 0.12);
+		background: transparent;
+		color: var(--color-neutral-400, #9ca3af);
+		font-size: 0.8125rem;
+		cursor: pointer;
+	}
+
+	.btn-cancel:hover {
+		background: rgba(255, 255, 255, 0.04);
 	}
 </style>
