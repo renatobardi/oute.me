@@ -18,10 +18,13 @@ async def analyze_and_update_state(
         indent=2,
     )
 
-    prompt = STATE_ANALYSIS_PROMPT.format(
-        user_message=user_message,
-        ai_response=ai_response,
-        current_domains=current_domains_str,
+    # Usar replace() em vez de .format() para evitar conflito com as chaves {}
+    # do exemplo JSON no corpo do prompt.
+    prompt = (
+        STATE_ANALYSIS_PROMPT
+        .replace("{user_message}", user_message)
+        .replace("{ai_response}", ai_response)
+        .replace("{current_domains}", current_domains_str)
     )
 
     try:
