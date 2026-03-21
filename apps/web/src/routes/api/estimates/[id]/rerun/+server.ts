@@ -47,7 +47,7 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
 	});
 
 	await updateEstimateJobId(estimate.id, aiResponse.job_id);
-	await createEstimateRun(estimate.id, aiResponse.job_id, body.llm_model || 'gemini-2.5-flash');
+	createEstimateRun(estimate.id, aiResponse.job_id, body.llm_model || 'gemini-2.5-flash').catch(() => null);
 
 	return jsonOk({ id: estimate.id, job_id: aiResponse.job_id, status: 'pending' });
 };

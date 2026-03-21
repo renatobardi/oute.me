@@ -93,12 +93,15 @@
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ interview_id: data.interview.id }),
 			});
-			if (!res.ok) throw new Error('Failed to create estimate');
+			if (!res.ok) {
+				const body = await res.json().catch(() => ({}));
+				throw new Error(body?.error || `Erro ${res.status}`);
+			}
 			const result = await res.json();
 			existingEstimate = { id: result.id, status: result.status };
 			goto(`/estimates/${result.id}`);
-		} catch {
-			chat.error = 'Erro ao solicitar estimativa.';
+		} catch (e) {
+			chat.error = `Erro ao solicitar estimativa: ${e instanceof Error ? e.message : 'tente novamente'}`;
 			isRequestingEstimate = false;
 		}
 	}

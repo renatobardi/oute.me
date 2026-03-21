@@ -92,7 +92,7 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
 		SET job_id = ${aiResponse.job_id}, status = 'pending', updated_at = now()
 		WHERE id = ${estimateRow.id}
 	`;
-	await createEstimateRun(estimateRow.id, aiResponse.job_id, body.llm_model || 'gemini-2.5-flash');
+	createEstimateRun(estimateRow.id, aiResponse.job_id, body.llm_model || 'gemini-2.5-flash').catch(() => null);
 
 	return jsonOk({ estimate_id: estimateRow.id, job_id: aiResponse.job_id, status: 'pending' });
 };

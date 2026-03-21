@@ -58,7 +58,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	});
 
 	const estimate = await createEstimate(interview_id, user.uid, aiResponse.job_id);
-	await createEstimateRun(estimate.id, aiResponse.job_id, llm_model || 'gemini-2.5-flash');
+	// Non-blocking — if migration 016 hasn't run yet this must not block estimate creation
+	createEstimateRun(estimate.id, aiResponse.job_id, llm_model || 'gemini-2.5-flash').catch(() => null);
 
 	return jsonOk({ id: estimate.id, job_id: aiResponse.job_id, status: 'pending' }, 201);
 };
