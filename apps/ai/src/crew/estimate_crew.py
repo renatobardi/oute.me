@@ -1,15 +1,38 @@
+from __future__ import annotations
+
 import json
 import logging
+import time
+from collections.abc import Callable
+from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 import yaml
 from crewai import Agent, Crew, Process, Task
 
 from src.crew.tools import VectorSearchTool, WebSearchTool
+from src.models.estimate import (
+    AgentStep,
+    assemble_estimate_result,
+    parse_agent_output,
+)
 
 logger = logging.getLogger(__name__)
 
 _CREW_DIR = Path(__file__).parent
+
+# Ordered list of agent keys matching the sequential pipeline
+AGENT_KEYS: list[str] = [
+    "architecture_interviewer",
+    "rag_analyst",
+    "software_architect",
+    "cost_specialist",
+    "reviewer",
+    "knowledge_manager",
+]
+
+StepCallback = Callable[[AgentStep], None]
 
 
 def _load_yaml(filename: str) -> dict[str, object]:
@@ -24,12 +47,20 @@ def _enrich_backstory(base: str, instructions: str) -> str:
     return f"{base}\n\n## Instruções de Trabalho\n{instructions}"
 
 
+@dataclass
+class EstimateCrew:
+    """Wraps a Crew with the ordered task→agent_key mapping."""
+
+    crew: Crew
+    tasks_by_key: dict[str, Task] = field(default_factory=dict)
+
+
 def build_estimate_crew(
     interview_state: dict[str, object],
     conversation_summary: str,
     documents_context: str,
     agent_instructions: dict[str, str] | None = None,
-) -> Crew:
+) -> EstimateCrew:
     agents_config = _load_yaml("agents.yaml")
     tasks_config = _load_yaml("tasks.yaml")
     instructions = agent_instructions or {}
@@ -37,72 +68,23 @@ def build_estimate_crew(
     llm = "vertex_ai/gemini-2.5-flash-lite"
 
     # --- Agents ---
-    architecture_interviewer = Agent(
-        role=agents_config["architecture_interviewer"]["role"],  # type: ignore[index]
-        goal=agents_config["architecture_interviewer"]["goal"],  # type: ignore[index]
-        backstory=_enrich_backstory(
-            str(agents_config["architecture_interviewer"]["backstory"]),  # type: ignore[index]
-            instructions.get("architecture_interviewer", ""),
-        ),
-        llm=llm,
-        verbose=False,
-    )
+    def _agent(key: str, **extra: Any) -> Agent:
+        cfg = agents_config[key]  # type: ignore[index]
+        return Agent(
+            role=cfg["role"],  # type: ignore[index]
+            goal=cfg["goal"],  # type: ignore[index]
+            backstory=_enrich_backstory(str(cfg["backstory"]), instructions.get(key, "")),  # type: ignore[index]
+            llm=llm,
+            verbose=False,
+            **extra,
+        )
 
-    rag_analyst = Agent(
-        role=agents_config["rag_analyst"]["role"],  # type: ignore[index]
-        goal=agents_config["rag_analyst"]["goal"],  # type: ignore[index]
-        backstory=_enrich_backstory(
-            str(agents_config["rag_analyst"]["backstory"]),  # type: ignore[index]
-            instructions.get("rag_analyst", ""),
-        ),
-        llm=llm,
-        tools=[VectorSearchTool(), WebSearchTool()],
-        verbose=False,
-    )
-
-    software_architect = Agent(
-        role=agents_config["software_architect"]["role"],  # type: ignore[index]
-        goal=agents_config["software_architect"]["goal"],  # type: ignore[index]
-        backstory=_enrich_backstory(
-            str(agents_config["software_architect"]["backstory"]),  # type: ignore[index]
-            instructions.get("software_architect", ""),
-        ),
-        llm=llm,
-        verbose=False,
-    )
-
-    cost_specialist = Agent(
-        role=agents_config["cost_specialist"]["role"],  # type: ignore[index]
-        goal=agents_config["cost_specialist"]["goal"],  # type: ignore[index]
-        backstory=_enrich_backstory(
-            str(agents_config["cost_specialist"]["backstory"]),  # type: ignore[index]
-            instructions.get("cost_specialist", ""),
-        ),
-        llm=llm,
-        verbose=False,
-    )
-
-    reviewer = Agent(
-        role=agents_config["reviewer"]["role"],  # type: ignore[index]
-        goal=agents_config["reviewer"]["goal"],  # type: ignore[index]
-        backstory=_enrich_backstory(
-            str(agents_config["reviewer"]["backstory"]),  # type: ignore[index]
-            instructions.get("reviewer", ""),
-        ),
-        llm=llm,
-        verbose=False,
-    )
-
-    knowledge_manager = Agent(
-        role=agents_config["knowledge_manager"]["role"],  # type: ignore[index]
-        goal=agents_config["knowledge_manager"]["goal"],  # type: ignore[index]
-        backstory=_enrich_backstory(
-            str(agents_config["knowledge_manager"]["backstory"]),  # type: ignore[index]
-            instructions.get("knowledge_manager", ""),
-        ),
-        llm=llm,
-        verbose=False,
-    )
+    architecture_interviewer = _agent("architecture_interviewer")
+    rag_analyst = _agent("rag_analyst", tools=[VectorSearchTool(), WebSearchTool()])
+    software_architect = _agent("software_architect")
+    cost_specialist = _agent("cost_specialist")
+    reviewer = _agent("reviewer")
+    knowledge_manager = _agent("knowledge_manager")
 
     # --- Format inputs ---
     state_str = json.dumps(interview_state, ensure_ascii=False, indent=2)
@@ -167,7 +149,18 @@ def build_estimate_crew(
         context=[task_consolidate, task_architecture, task_costs, task_review],
     )
 
-    return Crew(
+    all_tasks = [
+        task_consolidate,
+        task_search,
+        task_architecture,
+        task_costs,
+        task_review,
+        task_knowledge,
+    ]
+
+    tasks_by_key = dict(zip(AGENT_KEYS, all_tasks, strict=True))
+
+    crew = Crew(
         agents=[
             architecture_interviewer,
             rag_analyst,
@@ -176,14 +169,94 @@ def build_estimate_crew(
             reviewer,
             knowledge_manager,
         ],
-        tasks=[
-            task_consolidate,
-            task_search,
-            task_architecture,
-            task_costs,
-            task_review,
-            task_knowledge,
-        ],
+        tasks=all_tasks,
         process=Process.sequential,
         verbose=False,
     )
+
+    return EstimateCrew(crew=crew, tasks_by_key=tasks_by_key)
+
+
+def run_and_collect(
+    estimate_crew: EstimateCrew,
+    on_step: StepCallback | None = None,
+) -> dict[str, Any]:
+    """Run the crew and collect per-agent outputs into an aggregated result.
+
+    After crew.kickoff(), reads each task's output via task.output.raw,
+    parses and validates against per-agent Pydantic models, then assembles
+    the final EstimateResult.
+
+    Returns a dict with:
+      - All EstimateResult fields (for backward compatibility)
+      - "_agent_outputs": dict of raw parsed outputs per agent key
+      - "_agent_steps": list of AgentStep dicts
+    """
+    from pydantic import BaseModel
+
+    crew = estimate_crew.crew
+    tasks_by_key = estimate_crew.tasks_by_key
+
+    # Notify all agents as pending
+    steps: list[AgentStep] = []
+    for key in AGENT_KEYS:
+        step = AgentStep(agent_key=key, status="pending")
+        steps.append(step)
+
+    # Run the full crew
+    t0 = time.monotonic()
+    logger.info("Starting CrewAI pipeline with %d agents", len(AGENT_KEYS))
+
+    try:
+        crew.kickoff()
+    except Exception:
+        logger.exception("CrewAI pipeline failed")
+        raise
+
+    total_duration = time.monotonic() - t0
+    logger.info("CrewAI pipeline completed in %.1fs", total_duration)
+
+    # Collect per-agent outputs
+    agent_outputs: dict[str, BaseModel | None] = {}
+    agent_raw_outputs: dict[str, str] = {}
+
+    for key in AGENT_KEYS:
+        task = tasks_by_key[key]
+        raw = ""
+        if hasattr(task, "output") and task.output is not None:
+            raw = task.output.raw if hasattr(task.output, "raw") else str(task.output)
+
+        agent_raw_outputs[key] = raw
+        parsed = parse_agent_output(key, raw)
+        agent_outputs[key] = parsed
+
+        # Build step record
+        step = AgentStep(
+            agent_key=key,
+            status="done" if parsed is not None else "failed",
+            output_preview=raw[:500] if raw else None,
+            error=None if parsed is not None else f"Failed to parse output (length={len(raw)})",
+        )
+        if on_step:
+            on_step(step)
+
+        logger.info(
+            "Agent %s: status=%s output_length=%d",
+            key, step.status, len(raw),
+        )
+
+    # Assemble final result
+    result = assemble_estimate_result(agent_outputs)
+    result_dict = result.model_dump()
+
+    # Attach internal data for the runner
+    result_dict["_agent_outputs"] = {
+        k: v.model_dump() if v is not None else {"_raw": agent_raw_outputs.get(k, "")}
+        for k, v in agent_outputs.items()
+    }
+    result_dict["_agent_steps"] = [
+        s.model_dump() for s in steps
+        if s.status != "pending"  # only emit completed steps
+    ]
+
+    return result_dict

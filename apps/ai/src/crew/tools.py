@@ -1,19 +1,24 @@
+from __future__ import annotations
+
+import asyncio
+import logging
+
 from crewai.tools import BaseTool
+
+logger = logging.getLogger(__name__)
 
 
 def _run_async_in_sync[T](coro: object) -> T:
-    """Run an async coroutine from a sync context (CrewAI tool)."""
-    import asyncio
-    import concurrent.futures
+    """Run an async coroutine from CrewAI's sync tool context.
 
+    Since CrewAI tools run inside a ThreadPoolExecutor (separate thread
+    from the FastAPI event loop), we can safely create a new event loop.
+    """
     try:
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            with concurrent.futures.ThreadPoolExecutor() as executor:
-                return executor.submit(asyncio.run, coro).result()  # type: ignore[arg-type]
         return asyncio.run(coro)  # type: ignore[arg-type]
     except Exception:
-        return [] if not isinstance(coro, str) else ""  # type: ignore[return-value]
+        logger.exception("Failed to run async coroutine in sync context")
+        raise
 
 
 class VectorSearchTool(BaseTool):
@@ -31,7 +36,13 @@ class VectorSearchTool(BaseTool):
         try:
             results = _run_async_in_sync(search_similar(query, limit=5))
         except Exception:
-            results = []
+            logger.exception("Vector search failed for query: %s", query[:100])
+            return json.dumps(
+                {
+                    "results": [],
+                    "message": "Erro na busca vetorial. Continuando sem resultados internos.",
+                }
+            )
 
         if not results:
             return json.dumps(
@@ -60,7 +71,13 @@ class WebSearchTool(BaseTool):
         try:
             results = _run_async_in_sync(search_web(query))
         except Exception:
-            results = []
+            logger.exception("Web search failed for query: %s", query[:100])
+            return json.dumps(
+                {
+                    "results": [],
+                    "message": "Erro na busca web. Continuando sem resultados externos.",
+                }
+            )
 
         if not results:
             return json.dumps(

@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 import sys
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
@@ -64,6 +65,11 @@ logger = logging.getLogger(__name__)
 async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
     # Inicializa Vertex AI com ADC (Application Default Credentials)
     vertexai.init(project=settings.gcp_project, location=settings.gcp_location)
+
+    # LiteLLM (usado pelo CrewAI) precisa destas env vars para vertex_ai/ prefix
+    os.environ.setdefault("VERTEXAI_PROJECT", settings.gcp_project)
+    os.environ.setdefault("VERTEXAI_LOCATION", settings.gcp_location)
+
     logger.info(
         "Vertex AI inicializado",
         extra={"gcp_project": settings.gcp_project, "gcp_location": settings.gcp_location},

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import asyncio
 import json
 import logging
@@ -6,7 +8,7 @@ import uuid
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
-from src.crew.estimate_crew import build_estimate_crew
+from src.crew.estimate_crew import build_estimate_crew, run_and_collect
 from src.services.monitoring import emit_metric
 from src.services.state import StateBackend
 from src.services.vector_store import (
@@ -27,18 +29,11 @@ def _run_crew_sync(
     documents_context: str,
     agent_instructions: dict[str, str] | None = None,
 ) -> dict[str, Any]:
-    crew = build_estimate_crew(
+    """Build and run the CrewAI pipeline, returning an aggregated result dict."""
+    estimate_crew = build_estimate_crew(
         interview_state, conversation_summary, documents_context, agent_instructions or {},
     )
-    result = crew.kickoff()
-    raw = result.raw if hasattr(result, "raw") else str(result)
-
-    try:
-        parsed = json.loads(raw)
-    except (json.JSONDecodeError, TypeError):
-        parsed = {"raw_output": raw}
-
-    return parsed  # type: ignore[no-any-return]
+    return run_and_collect(estimate_crew)
 
 
 async def run_pipeline(
@@ -82,10 +77,21 @@ async def run_pipeline(
             agent_instructions,
         )
 
+        # Extract internal per-agent data before storing
+        agent_outputs = result.pop("_agent_outputs", {})
+        agent_steps = result.pop("_agent_steps", [])
+
         # Store knowledge vector for future RAG searches
         try:
-            knowledge = result.get("knowledge_text") or result.get("raw_output", "")
-            metadata = result.get("metadata", {})
+            knowledge_output = agent_outputs.get("knowledge_manager", {})
+            knowledge_text = (
+                knowledge_output.get("knowledge_text", "")
+                if isinstance(knowledge_output, dict) else ""
+            )
+            metadata = (
+                knowledge_output.get("metadata", {})
+                if isinstance(knowledge_output, dict) else {}
+            )
             if isinstance(metadata, str):
                 try:
                     metadata = json.loads(metadata)
@@ -94,15 +100,19 @@ async def run_pipeline(
             metadata["interview_id"] = interview_id
             metadata["estimate_job_id"] = job_id
 
-            if knowledge:
+            if knowledge_text:
                 await store_vector(
                     source_type="estimate",
                     source_id=interview_id,
-                    content=str(knowledge),
+                    content=str(knowledge_text),
                     metadata=metadata,
                 )
         except Exception:
             logger.exception("Failed to store knowledge vector for job %s", job_id)
+
+        # Store result with agent tracking data
+        result["_agent_steps"] = agent_steps
+        result["_agent_outputs"] = agent_outputs
 
         await backend.update_job(job_id, "done", result)
         duration_s = time.monotonic() - start_time
