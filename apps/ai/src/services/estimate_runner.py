@@ -17,7 +17,7 @@ from src.services.state import StateBackend
 from src.services.vector_store import (
     delete_vectors_by_source,
     embed_interview_data,
-    store_vector,
+    store_chunks,
 )
 
 logger = logging.getLogger(__name__)
@@ -203,24 +203,35 @@ async def run_pipeline(
         # Store knowledge vector for future RAG searches
         try:
             knowledge_output = agent_outputs.get("knowledge_manager", {})
-            knowledge_text = (
-                knowledge_output.get("knowledge_text", "")
-                if isinstance(knowledge_output, dict)
-                else ""
-            )
-            metadata = (
-                knowledge_output.get("metadata", {}) if isinstance(knowledge_output, dict) else {}
-            )
+            if isinstance(knowledge_output, dict):
+                knowledge_text = knowledge_output.get("knowledge_text", "")
+                metadata = knowledge_output.get("metadata", {})
+            else:
+                knowledge_text = ""
+                metadata = {}
+
             if isinstance(metadata, str):
                 try:
                     metadata = json.loads(metadata)
                 except json.JSONDecodeError:
                     metadata = {}
+
+            # Flatten NumericRange/Pydantic objects in metadata
+            if isinstance(metadata, dict):
+                for key in ("cost_range", "duration_range", "team_size_range"):
+                    val = metadata.get(key)
+                    if val is not None and hasattr(val, "model_dump"):
+                        metadata[key] = val.model_dump()
+
             metadata["interview_id"] = interview_id
             metadata["estimate_job_id"] = job_id
 
             if knowledge_text:
-                await store_vector(
+                # Deduplicate: remove old estimate vectors for this interview
+                await delete_vectors_by_source(interview_id, ["estimate"])
+
+                # Use chunked storage for long texts (embedding model has token limits)
+                await store_chunks(
                     source_type="estimate",
                     source_id=interview_id,
                     content=str(knowledge_text),
