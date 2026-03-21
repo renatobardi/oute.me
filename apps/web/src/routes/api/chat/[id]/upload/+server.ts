@@ -1,7 +1,13 @@
+import { createHash } from 'crypto';
 import type { RequestHandler } from './$types';
 import { requireAuth } from '$lib/server/api-utils';
 import { getOrCreateUser } from '$lib/server/users';
-import { getInterview, addDocument, updateDocumentStatus } from '$lib/server/interviews';
+import {
+	getInterview,
+	addDocument,
+	updateDocumentStatus,
+	checkDocumentDuplicate
+} from '$lib/server/interviews';
 import { postFile } from '$lib/server/ai-client';
 import { jsonOk, jsonError } from '$lib/server/api-utils';
 import { uploadFile, storageBackend } from '$lib/server/storage';
@@ -56,7 +62,19 @@ export const POST: RequestHandler = async ({ locals, params, request }) => {
 		return jsonError(400, 'Failed to read file');
 	}
 
-	// 2. Upload to storage (GCS in prod, local in dev)
+	// 2. Compute SHA-256 and reject duplicates (same name or same content)
+	const fileHash = createHash('sha256').update(buffer).digest('hex');
+
+	const duplicate = await checkDocumentDuplicate(params.id, file.name, fileHash);
+	if (duplicate) {
+		const message =
+			duplicate.reason === 'filename'
+				? `Já existe um arquivo com o nome "${file.name}" nesta entrevista.`
+				: 'Este arquivo já foi enviado anteriormente (conteúdo idêntico).';
+		return jsonError(409, message);
+	}
+
+	// 3. Upload to storage (GCS in prod, local in dev)
 	const storagePath = `interviews/${params.id}/${Date.now()}_${file.name}`;
 	try {
 		await uploadFile(storagePath, buffer, file.type);
@@ -68,16 +86,16 @@ export const POST: RequestHandler = async ({ locals, params, request }) => {
 		return jsonError(500, 'Failed to save file');
 	}
 
-	// 3. Create DB record
+	// 4. Create DB record
 	let doc: { id: string };
 	try {
-		doc = await addDocument(params.id, file.name, file.type, storagePath);
+		doc = await addDocument(params.id, file.name, file.type, storagePath, fileHash);
 	} catch (err) {
 		console.error(`[Upload] Failed to create document record for interview ${params.id}:`, err);
 		return jsonError(500, 'Failed to register document');
 	}
 
-	// 4. Send to AI service for text extraction (best-effort — does not fail the upload)
+	// 5. Send to AI service for text extraction (best-effort — does not fail the upload)
 	let processedStatus: 'completed' | 'failed' | 'pending' = 'pending';
 	let extractedText: string | undefined;
 
