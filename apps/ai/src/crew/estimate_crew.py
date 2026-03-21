@@ -68,6 +68,7 @@ def build_estimate_crew(
     config = agent_config or {}
 
     default_llm = "vertex_ai/gemini-2.5-flash-lite"
+    agent_timeout_s = 90  # per-agent hard limit
 
     # --- Agents ---
     def _agent(key: str, **extra: Any) -> Agent:
@@ -81,6 +82,7 @@ def build_estimate_crew(
             backstory=_enrich_backstory(str(cfg["backstory"]), instructions.get(key, "")),  # type: ignore[index]
             llm=default_llm,
             llm_config={"temperature": temperature, "max_tokens": max_tokens},
+            max_execution_time=agent_timeout_s,
             verbose=False,
             **extra,
         )
@@ -225,6 +227,10 @@ def run_and_collect(
     # Collect per-agent outputs with retry on parse failure
     agent_outputs: dict[str, BaseModel | None] = {}
     agent_raw_outputs: dict[str, str] = {}
+    # Distribute total_duration evenly across agents as best-effort timing
+    per_agent_duration = round(total_duration / len(AGENT_KEYS), 2)
+
+    import re
 
     for i, key in enumerate(AGENT_KEYS):
         task = tasks_by_key[key]
@@ -242,7 +248,6 @@ def run_and_collect(
                 extra={"agent": key, "event": "retry", "raw_length": len(raw)},
             )
             # Try extracting the first JSON object/array found anywhere in the raw text
-            import re
             json_match = re.search(r"\{[\s\S]+\}", raw)
             if json_match:
                 try:
@@ -257,10 +262,11 @@ def run_and_collect(
 
         agent_outputs[key] = parsed
 
-        # Build step record — replace the pending placeholder in-place
+        # Build step record with timing — replace the pending placeholder in-place
         step = AgentStep(
             agent_key=key,
             status="done" if parsed is not None else "failed",
+            duration_s=per_agent_duration,
             output_preview=raw[:500] if raw else None,
             error=None if parsed is not None else f"Parse failed (raw_length={len(raw)})",
         )
@@ -275,6 +281,7 @@ def run_and_collect(
                 "agent": key,
                 "event": "step_done",
                 "status": step.status,
+                "duration_s": per_agent_duration,
                 "output_length": len(raw),
             },
         )
