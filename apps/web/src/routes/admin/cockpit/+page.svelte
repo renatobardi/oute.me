@@ -643,45 +643,42 @@
 							</div>
 						</div>
 
-						<div class="pipeline-steps">
-								{#each displaySteps as step (step.agent_key)}
-									<div class="pipeline-step {stepStatusClass(step.status)}">
-										<div
-											class="step-header"
-											role="button"
-											tabindex="0"
-											onclick={() => loadAgentOutput(iv.id, step.agent_key)}
-											onkeydown={(e) => e.key === 'Enter' && loadAgentOutput(iv.id, step.agent_key)}
-										>
-											<div class="step-left">
-												<span class="step-dot"></span>
-												<span class="step-name">{AGENT_LABELS[step.agent_key] ?? step.agent_key}</span>
-												<span class="step-key muted">{step.agent_key}</span>
-											</div>
-											<div class="step-right">
-												{#if step.duration_s}
-													<span class="step-duration">{step.duration_s.toFixed(1)}s</span>
-												{/if}
-												<span class="badge {step.status === 'done' ? 'badge-success' : step.status === 'failed' ? 'badge-error' : step.status === 'running' ? 'badge-info' : 'badge-neutral'}">{step.status}</span>
-											</div>
+						<div class="ck-stepper">
+							{#each displaySteps as step, i (step.agent_key)}
+								<button
+									class="ck-step ck-step-{step.status}"
+									class:ck-step-active={agentOutputKey === step.agent_key}
+									onclick={() => loadAgentOutput(iv.id, step.agent_key)}
+									title={step.error ?? AGENT_LABELS[step.agent_key] ?? step.agent_key}
+								>
+									<div class="ck-step-track">
+										<div class="ck-step-line" class:ck-line-hidden={i === 0}></div>
+										<div class="ck-step-circle">
+											{#if step.status === 'done'}✓{:else if step.status === 'failed'}✗{:else if step.status === 'running'}◉{:else}○{/if}
 										</div>
-										{#if step.error}
-											<div class="step-error">{step.error}</div>
-										{/if}
-										{#if agentOutputKey === step.agent_key}
-											<div class="step-output">
-												{#if loadingAgentOutput}
-													<span class="muted">Carregando output…</span>
-												{:else if agentOutputData}
-													<pre class="output-json">{JSON.stringify(agentOutputData, null, 2)}</pre>
-												{:else}
-													<span class="muted">Output não disponível</span>
-												{/if}
-											</div>
-										{/if}
+										<div class="ck-step-line" class:ck-line-hidden={i === displaySteps.length - 1}></div>
 									</div>
-								{/each}
+									<div class="ck-step-label">{AGENT_LABELS[step.agent_key] ?? step.agent_key}</div>
+									{#if step.duration_s}
+										<div class="ck-step-meta">{step.duration_s.toFixed(0)}s</div>
+									{:else if step.error}
+										<div class="ck-step-meta ck-step-meta-err">erro</div>
+									{/if}
+								</button>
+							{/each}
 						</div>
+
+						{#if agentOutputKey}
+							<div class="step-output">
+								{#if loadingAgentOutput}
+									<span class="muted">Carregando output…</span>
+								{:else if agentOutputData}
+									<pre class="output-json">{JSON.stringify(agentOutputData, null, 2)}</pre>
+								{:else}
+									<span class="muted">Output não disponível</span>
+								{/if}
+							</div>
+						{/if}
 						<!-- end displaySteps -->
 
 						{#if detail.estimateRuns.length > 0}
@@ -834,6 +831,12 @@
 
 	.list-items {
 		overflow-y: auto;
+		background:
+			linear-gradient(#1a1d27 30%, transparent) center top / 100% 2.5rem no-repeat local,
+			linear-gradient(transparent, #1a1d27 70%) center bottom / 100% 2.5rem no-repeat local,
+			radial-gradient(farthest-side at 50% 0, rgba(0,0,0,.25), transparent) center top / 100% 10px no-repeat scroll,
+			radial-gradient(farthest-side at 50% 100%, rgba(0,0,0,.25), transparent) center bottom / 100% 10px no-repeat scroll;
+		background-color: #1a1d27;
 		flex: 1;
 	}
 
@@ -921,6 +924,12 @@
 		border-radius: 10px;
 		padding: 1.5rem;
 		overflow-y: auto;
+		background:
+			linear-gradient(#1a1d27 30%, transparent) center top / 100% 2.5rem no-repeat local,
+			linear-gradient(transparent, #1a1d27 70%) center bottom / 100% 2.5rem no-repeat local,
+			radial-gradient(farthest-side at 50% 0, rgba(0,0,0,.25), transparent) center top / 100% 10px no-repeat scroll,
+			radial-gradient(farthest-side at 50% 100%, rgba(0,0,0,.25), transparent) center bottom / 100% 10px no-repeat scroll;
+		background-color: #1a1d27;
 		max-height: calc(100vh - 8rem);
 	}
 
@@ -1680,4 +1689,108 @@
 		cursor: help;
 		flex-shrink: 0;
 	}
+
+	/* ── Cockpit pipeline stepper ── */
+	.ck-stepper {
+		display: flex;
+		align-items: flex-start;
+		width: 100%;
+		margin-bottom: 1rem;
+	}
+
+	.ck-step {
+		flex: 1;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 0.4rem;
+		background: none;
+		border: none;
+		cursor: pointer;
+		padding: 0;
+		min-width: 0;
+	}
+
+	.ck-step-track {
+		display: flex;
+		align-items: center;
+		width: 100%;
+	}
+
+	.ck-step-line {
+		flex: 1;
+		height: 2px;
+		background: rgba(255,255,255,0.1);
+		transition: background 0.3s;
+	}
+
+	.ck-line-hidden { background: transparent !important; }
+
+	.ck-step-done .ck-step-line    { background: #10b981; }
+	.ck-step-failed .ck-step-line  { background: rgba(239,68,68,.35); }
+
+	.ck-step-circle {
+		width: 34px;
+		height: 34px;
+		border-radius: 50%;
+		border: 2px solid rgba(255,255,255,0.15);
+		background: rgba(255,255,255,0.04);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		font-size: 1rem;
+		font-weight: 700;
+		color: rgba(255,255,255,0.25);
+		flex-shrink: 0;
+		transition: all 0.2s;
+	}
+
+	.ck-step:hover .ck-step-circle { border-color: rgba(255,255,255,0.35); background: rgba(255,255,255,0.08); }
+	.ck-step-active .ck-step-circle { box-shadow: 0 0 0 3px rgba(99,102,241,.4); }
+
+	.ck-step-done .ck-step-circle {
+		border-color: #10b981;
+		background: rgba(16,185,129,.15);
+		color: #10b981;
+	}
+
+	.ck-step-failed .ck-step-circle {
+		border-color: #f87171;
+		background: rgba(239,68,68,.15);
+		color: #f87171;
+	}
+
+	.ck-step-running .ck-step-circle {
+		border-color: #818cf8;
+		background: rgba(99,102,241,.15);
+		color: #818cf8;
+		animation: pulse-border 1.5s ease-in-out infinite;
+	}
+
+	@keyframes pulse-border {
+		0%, 100% { box-shadow: 0 0 0 0 rgba(99,102,241,.4); }
+		50%       { box-shadow: 0 0 0 6px rgba(99,102,241,.0); }
+	}
+
+	.ck-step-label {
+		font-size: 0.6875rem;
+		text-align: center;
+		color: rgba(255,255,255,0.4);
+		line-height: 1.3;
+		padding: 0 0.2rem;
+		word-break: break-word;
+	}
+
+	.ck-step-done .ck-step-label    { color: rgba(255,255,255,0.8); }
+	.ck-step-failed .ck-step-label  { color: #f87171; }
+	.ck-step-running .ck-step-label { color: #818cf8; }
+	.ck-step-active .ck-step-label  { font-weight: 600; }
+
+	.ck-step-meta {
+		font-size: 0.625rem;
+		color: rgba(255,255,255,0.3);
+		text-align: center;
+	}
+
+	.ck-step-meta-err { color: rgba(239,68,68,.7); cursor: help; }
 </style>
