@@ -2,7 +2,7 @@
 	import { auth } from '$lib/firebase';
 	import type { CockpitInterview, CockpitDetail } from '$lib/server/admin-cockpit';
 	import type { AgentStep } from '$lib/types/estimate';
-	import { AGENT_LABELS } from '$lib/types/estimate';
+	import { AGENT_LABELS, AGENT_KEYS } from '$lib/types/estimate';
 
 	let { data } = $props();
 
@@ -616,11 +616,16 @@
 							</div>
 						</div>
 
-						{#if steps.length === 0}
+						{@const displaySteps = steps.length > 0
+							? steps
+							: (['pending', 'running'].includes(detail.estimate.status)
+								? AGENT_KEYS.map((k) => ({ agent_key: k, status: 'pending', started_at: null, finished_at: null, duration_s: null, output_preview: null, error: null }))
+								: [])}
+						{#if displaySteps.length === 0}
 							<div class="empty-tab">Nenhum dado de agente disponível. Execute ou re-run o pipeline.</div>
 						{:else}
 							<div class="pipeline-steps">
-								{#each steps as step (step.agent_key)}
+								{#each displaySteps as step (step.agent_key)}
 									<div class="pipeline-step {stepStatusClass(step.status)}">
 										<div
 											class="step-header"
@@ -659,6 +664,7 @@
 								{/each}
 							</div>
 						{/if}
+						<!-- end displaySteps -->
 
 						{#if detail.estimateRuns.length > 0}
 							<div class="section-title" style="margin-top:1.5rem">Histórico de Runs</div>
