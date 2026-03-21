@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Any
+from typing import Any, Literal
 
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 logger = logging.getLogger(__name__)
 
@@ -13,16 +13,48 @@ logger = logging.getLogger(__name__)
 # Shared models (used in final EstimateResult)
 # ---------------------------------------------------------------------------
 
+ScenarioName = Literal["conservador", "moderado", "otimista"]
+
 
 class CostScenario(BaseModel):
-    name: str
+    name: ScenarioName
     description: str
-    total_hours: float
-    hourly_rate: float
-    total_cost: float
-    duration_weeks: int
-    team_size: int
-    confidence: float
+    total_hours: float = Field(gt=0)
+    hourly_rate: float = Field(gt=0)
+    total_cost: float = Field(gt=0)
+    duration_weeks: float = Field(gt=0)
+    team_size: int = Field(ge=1)
+    confidence: float = Field(ge=0.0, le=1.0)
+    currency: str = "BRL"
+    risk_buffer_percent: float = Field(default=0.0, ge=0.0, le=100.0)
+
+    @field_validator("name", mode="before")
+    @classmethod
+    def _normalize_name(cls, v: object) -> str:
+        """Normalize scenario name: strip whitespace, lowercase."""
+        if isinstance(v, str):
+            return v.strip().lower()
+        return str(v).strip().lower()
+
+    @model_validator(mode="after")
+    def _fix_total_cost(self) -> CostScenario:
+        """Auto-correct total_cost if it deviates >5% from hours x rate."""
+        expected = self.total_hours * self.hourly_rate
+        if expected > 0:
+            deviation = abs(self.total_cost - expected) / expected
+            if deviation > 0.05:
+                logger.warning(
+                    "CostScenario '%s': total_cost %.2f deviates %.1f%% from "
+                    "total_hours(%.1f) x hourly_rate(%.2f) = %.2f -- auto-correcting",
+                    self.name,
+                    self.total_cost,
+                    deviation * 100,
+                    self.total_hours,
+                    self.hourly_rate,
+                    expected,
+                )
+                self.total_cost = round(expected, 2)
+        return self
 
 
 class Milestone(BaseModel):
@@ -99,8 +131,42 @@ class ArchitectureDesign(BaseModel):
     risks: list[RiskItem] = []
 
 
+_SCENARIO_ORDER: dict[str, int] = {"conservador": 0, "moderado": 1, "otimista": 2}
+
+
 class CostEstimate(BaseModel):
     scenarios: list[CostScenario] = []
+
+    @model_validator(mode="after")
+    def _validate_scenarios(self) -> CostEstimate:
+        """Ensure exactly 3 scenarios in the correct order (cost descending)."""
+        if len(self.scenarios) != 3:
+            logger.warning(
+                "CostEstimate: expected 3 scenarios, got %d",
+                len(self.scenarios),
+            )
+
+        # Sort by expected order: conservador, moderado, otimista
+        names = [s.name for s in self.scenarios]
+        expected_order = sorted(names, key=lambda n: _SCENARIO_ORDER.get(n, 99))
+        if names != expected_order:
+            logger.warning(
+                "CostEstimate: scenarios out of order %s — reordering",
+                names,
+            )
+            self.scenarios.sort(key=lambda s: _SCENARIO_ORDER.get(s.name, 99))
+
+        # Validate cost ordering: conservador >= moderado >= otimista
+        if len(self.scenarios) == 3:
+            costs = [s.total_cost for s in self.scenarios]
+            if not (costs[0] >= costs[1] >= costs[2]):
+                logger.warning(
+                    "CostEstimate: cost ordering inconsistent "
+                    "(conservador=%.2f, moderado=%.2f, otimista=%.2f)",
+                    *costs,
+                )
+
+        return self
 
 
 class ReviewResult(BaseModel):

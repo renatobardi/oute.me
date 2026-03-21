@@ -1,5 +1,7 @@
+export type ScenarioName = 'conservador' | 'moderado' | 'otimista';
+
 export interface CostScenario {
-	name: string;
+	name: ScenarioName;
 	description: string;
 	total_hours: number;
 	hourly_rate: number;
@@ -7,6 +9,8 @@ export interface CostScenario {
 	duration_weeks: number;
 	team_size: number;
 	confidence: number;
+	currency: string;
+	risk_buffer_percent: number;
 }
 
 export interface Milestone {
