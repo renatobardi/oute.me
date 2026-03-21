@@ -62,7 +62,7 @@
 </script>
 
 <svelte:head>
-	<title>Usuários — Admin oute.me</title>
+	<title>Usuários — Admin oute.pro</title>
 </svelte:head>
 
 <div class="page">
