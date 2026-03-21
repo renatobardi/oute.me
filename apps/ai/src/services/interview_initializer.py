@@ -54,6 +54,8 @@ DESIGN DAS PERGUNTAS POR DOMÍNIO:
   Total entrevista: 18 sub-questões → maturity 100% = todas respondidas com vitais OK
 """
 
+from typing import Any
+
 from src.models.interview import DomainState, InterviewState
 
 # ---------------------------------------------------------------------------
@@ -113,7 +115,7 @@ def ensure_domains_initialized(state: InterviewState) -> InterviewState:
     return updated
 
 
-def get_domain_progress_summary(state: InterviewState) -> dict[str, dict[str, object]]:
+def get_domain_progress_summary(state: InterviewState) -> dict[str, dict[str, Any]]:
     """
     Retorna um resumo de progresso por domínio.
     Útil para logging e para o system prompt.

@@ -8,9 +8,9 @@
 		"build": "vite build",
 		"preview": "vite preview",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
-		"lint": "eslint .",
+		"lint": "svelte-kit sync && eslint .",
 		"format": "prettier --write .",
-		"test": "vitest run"
+		"test": "svelte-kit sync && vitest run"
 	},
 	"dependencies": {
 		"@google-cloud/storage": "^7.19.0",

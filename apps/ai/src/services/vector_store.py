@@ -15,7 +15,9 @@ _MAX_CHUNK_CHARS = _MAX_CHUNK_TOKENS * _CHARS_PER_TOKEN
 _OVERLAP_CHARS = _OVERLAP_TOKENS * _CHARS_PER_TOKEN
 
 
-def chunk_text(text: str, max_chars: int = _MAX_CHUNK_CHARS, overlap: int = _OVERLAP_CHARS) -> list[str]:
+def chunk_text(
+    text: str, max_chars: int = _MAX_CHUNK_CHARS, overlap: int = _OVERLAP_CHARS
+) -> list[str]:
     """Split text into overlapping chunks for embedding."""
     if len(text) <= max_chars:
         return [text]

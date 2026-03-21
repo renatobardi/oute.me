@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 from fastapi import APIRouter, Header, HTTPException, Request
 
@@ -15,7 +16,7 @@ logger = logging.getLogger(__name__)
 _INTERNAL_KEYS = {"_agent_steps", "_agent_outputs"}
 
 
-def _extract_agent_steps(result: dict | None) -> list[AgentStep]:
+def _extract_agent_steps(result: dict[str, Any] | None) -> list[AgentStep]:
     """Extract AgentStep list from the result dict (stored internally as _agent_steps)."""
     if not result:
         return []
@@ -29,7 +30,7 @@ def _extract_agent_steps(result: dict | None) -> list[AgentStep]:
     return steps
 
 
-def _clean_result(result: dict | None) -> dict | None:
+def _clean_result(result: dict[str, Any] | None) -> dict[str, Any] | None:
     """Remove internal keys before sending result to clients."""
     if not result:
         return result
@@ -66,12 +67,12 @@ async def execute_estimate(
     payload = await request.json()
     job_id: str = payload["job_id"]
     interview_id: str = payload["interview_id"]
-    interview_state: dict = payload["interview_state"]
+    interview_state: dict[str, Any] = payload["interview_state"]
     conversation_summary: str = payload["conversation_summary"]
     documents_context: str = payload["documents_context"]
     llm_model: str = payload.get("llm_model", "gemini-2.5-flash")
     agent_instructions: dict[str, str] = payload.get("agent_instructions", {})
-    agent_config: dict[str, dict] = payload.get("agent_config", {})
+    agent_config: dict[str, dict[str, Any]] = payload.get("agent_config", {})
     from_agent: str | None = payload.get("from_agent")
     previous_outputs: dict[str, str] | None = payload.get("previous_outputs")
 
@@ -103,8 +104,9 @@ async def get_status(job_id: str) -> EstimateStatusResponse:
         raise HTTPException(status_code=404, detail="Job not found")
 
     raw_result = job.get("result")
-    agent_steps = _extract_agent_steps(raw_result)  # type: ignore[arg-type]
-    clean_result = _clean_result(raw_result)  # type: ignore[arg-type]
+    result_dict = raw_result if isinstance(raw_result, dict) else None
+    agent_steps = _extract_agent_steps(result_dict)
+    clean_result = _clean_result(result_dict)
 
     return EstimateStatusResponse(
         job_id=job_id,
@@ -115,7 +117,7 @@ async def get_status(job_id: str) -> EstimateStatusResponse:
 
 
 @router.get("/status/{job_id}/agent/{agent_key}")
-async def get_agent_output(job_id: str, agent_key: str) -> dict:
+async def get_agent_output(job_id: str, agent_key: str) -> dict[str, Any]:
     """Retorna o output completo de um agente específico (para o admin cockpit)."""
     backend = create_state_backend()
     job = await backend.get_job(job_id)
@@ -123,9 +125,10 @@ async def get_agent_output(job_id: str, agent_key: str) -> dict:
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found")
 
-    raw_result = job.get("result") or {}
-    agent_outputs = raw_result.get("_agent_outputs", {})  # type: ignore[union-attr]
-    output = agent_outputs.get(agent_key)
+    raw_result = job.get("result")
+    result_dict2 = raw_result if isinstance(raw_result, dict) else {}
+    agent_outputs = result_dict2.get("_agent_outputs", {})
+    output = agent_outputs.get(agent_key) if isinstance(agent_outputs, dict) else None
 
     if output is None:
         raise HTTPException(status_code=404, detail=f"Output for agent '{agent_key}' not found")
@@ -158,8 +161,9 @@ async def rerun_estimate(request: Request) -> dict[str, str]:
     if from_agent and from_agent in AGENT_KEYS and payload.get("job_id"):
         old_job = await backend.get_job(str(payload["job_id"]))
         if old_job:
-            raw_result = old_job.get("result") or {}
-            agent_outputs = raw_result.get("_agent_outputs", {})  # type: ignore[union-attr]
+            old_raw = old_job.get("result")
+            old_result = old_raw if isinstance(old_raw, dict) else {}
+            agent_outputs = old_result.get("_agent_outputs", {})
             if isinstance(agent_outputs, dict):
                 reuse_until = AGENT_KEYS.index(from_agent)
                 previous_outputs = {}
