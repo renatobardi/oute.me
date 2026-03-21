@@ -40,7 +40,10 @@ SAMPLE_INTERVIEW_STATE: dict[str, object] = {
             "confirmed": True,
         },
         "q_scope_002": {
-            "value": "Catálogo de produtos com busca full-text, carrinho de compras, checkout com múltiplos meios de pagamento",
+            "value": (
+                "Catálogo de produtos com busca full-text, carrinho de compras,"
+                " checkout com múltiplos meios de pagamento"
+            ),
             "source": "user",
             "confirmed": True,
         },
@@ -60,12 +63,18 @@ SAMPLE_INTERVIEW_STATE: dict[str, object] = {
             "confirmed": True,
         },
         "q_tech_001": {
-            "value": "Preferência por React/Next.js no frontend e Node.js no backend. Banco PostgreSQL.",
+            "value": (
+                "Preferência por React/Next.js no frontend e Node.js no backend."
+                " Banco PostgreSQL."
+            ),
             "source": "user",
             "confirmed": True,
         },
         "q_integrations_001": {
-            "value": "Integração com gateway de pagamento (Stripe ou PagSeguro), sistema de frete (Correios API), e ERP via webhooks",
+            "value": (
+                "Integração com gateway de pagamento (Stripe ou PagSeguro),"
+                " sistema de frete (Correios API), e ERP via webhooks"
+            ),
             "source": "user",
             "confirmed": True,
         },

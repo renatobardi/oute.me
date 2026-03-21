@@ -78,7 +78,7 @@ def build_estimate_crew(
 
     # --- Agents ---
     def _agent(key: str, **extra: Any) -> Agent:
-        cfg = agents_config[key]  # type: ignore[index]
+        cfg = agents_config[key]
         agent_cfg = config.get(key, {})
         temperature = agent_cfg.get("temperature", 0.7)
         max_tokens = agent_cfg.get("max_tokens", 4096)
