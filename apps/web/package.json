@@ -10,7 +10,7 @@
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"lint": "svelte-kit sync && eslint .",
 		"format": "prettier --write .",
-		"test": "svelte-kit sync && vitest run"
+		"test": "svelte-kit sync && vitest run --passWithNoTests"
 	},
 	"dependencies": {
 		"@google-cloud/storage": "^7.19.0",

@@ -1,6 +1,6 @@
 import type { RequestHandler } from './$types';
 import { requireAuth, jsonOk, jsonError } from '$lib/server/api-utils';
-import { getEstimateByInterview, createEstimateRun } from '$lib/server/estimates';
+import { createEstimateRun } from '$lib/server/estimates';
 import { getDocuments } from '$lib/server/interviews';
 import { getJSON, postJSON } from '$lib/server/ai-client';
 import { getAllInstructions } from '$lib/server/agent-instructions';

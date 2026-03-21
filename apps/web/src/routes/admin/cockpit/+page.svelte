@@ -170,7 +170,7 @@
 		}
 	}
 
-	function openRerunModal(interviewId: string) {
+	function openRerunModal(_interviewId: string) {
 		// Pre-select the first failed agent if any
 		const steps = (detail?.estimate?.agent_steps ?? []) as AgentStep[];
 		const failedStep = steps.find((s) => s.status === 'failed');
@@ -207,15 +207,6 @@
 		} finally {
 			rerunning = false;
 			setTimeout(() => (rerunMsg = ''), 4000);
-		}
-	}
-
-	function stepStatusClass(status: string) {
-		switch (status) {
-			case 'done': return 'step-done';
-			case 'running': return 'step-running';
-			case 'failed': return 'step-failed';
-			default: return 'step-pending';
 		}
 	}
 

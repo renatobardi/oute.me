@@ -37,11 +37,27 @@ def _configure_logging() -> None:
                 if hasattr(record, "__dict__"):
                     for k, v in record.__dict__.items():
                         if k not in (
-                            "name", "msg", "args", "levelname", "levelno",
-                            "pathname", "filename", "module", "exc_info",
-                            "exc_text", "stack_info", "lineno", "funcName",
-                            "created", "msecs", "relativeCreated", "thread",
-                            "threadName", "processName", "process", "message",
+                            "name",
+                            "msg",
+                            "args",
+                            "levelname",
+                            "levelno",
+                            "pathname",
+                            "filename",
+                            "module",
+                            "exc_info",
+                            "exc_text",
+                            "stack_info",
+                            "lineno",
+                            "funcName",
+                            "created",
+                            "msecs",
+                            "relativeCreated",
+                            "thread",
+                            "threadName",
+                            "processName",
+                            "process",
+                            "message",
                         ):
                             entry[k] = v
                 return json.dumps(entry, ensure_ascii=False, default=str)

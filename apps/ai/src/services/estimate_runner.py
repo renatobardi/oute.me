@@ -60,9 +60,7 @@ def _make_task_done_callback(
     It marks the given agent_key as 'done' and schedules an async
     update to the state backend via run_coroutine_threadsafe.
     """
-    steps: list[dict[str, Any]] = [
-        {"agent_key": k, "status": "pending"} for k in AGENT_KEYS
-    ]
+    steps: list[dict[str, Any]] = [{"agent_key": k, "status": "pending"} for k in AGENT_KEYS]
 
     def on_task_done(agent_key: str) -> None:
         for step in steps:
@@ -109,7 +107,10 @@ async def run_pipeline(
                 ["interview_summary", "interview_responses", "interview_document"],
             )
             await embed_interview_data(
-                interview_id, interview_state, conversation_summary, documents_context,
+                interview_id,
+                interview_state,
+                conversation_summary,
+                documents_context,
             )
         except Exception:
             logger.exception("Failed to embed interview data for job %s (continuing)", job_id)
@@ -189,11 +190,11 @@ async def run_pipeline(
             knowledge_output = agent_outputs.get("knowledge_manager", {})
             knowledge_text = (
                 knowledge_output.get("knowledge_text", "")
-                if isinstance(knowledge_output, dict) else ""
+                if isinstance(knowledge_output, dict)
+                else ""
             )
             metadata = (
-                knowledge_output.get("metadata", {})
-                if isinstance(knowledge_output, dict) else {}
+                knowledge_output.get("metadata", {}) if isinstance(knowledge_output, dict) else {}
             )
             if isinstance(metadata, str):
                 try:
@@ -221,7 +222,9 @@ async def run_pipeline(
         duration_s = time.monotonic() - start_time
         logger.info(
             "Estimate job %s completed in %.1fs (model: %s)",
-            job_id, duration_s, llm_model,
+            job_id,
+            duration_s,
+            llm_model,
         )
         await emit_metric(
             "llm/pipeline_duration", duration_s, {"status": "done", "llm_model": llm_model}
@@ -314,9 +317,16 @@ async def start_estimate(
     if settings.cloud_tasks_queue and settings.ai_service_url:
         # Prod: Cloud Tasks entrega a task para /estimate/execute
         await _dispatch_cloud_tasks(
-            job_id, interview_id, interview_state,
-            conversation_summary, documents_context, llm_model, agent_instructions, agent_config,
-            from_agent, previous_outputs,
+            job_id,
+            interview_id,
+            interview_state,
+            conversation_summary,
+            documents_context,
+            llm_model,
+            agent_instructions,
+            agent_config,
+            from_agent,
+            previous_outputs,
         )
     else:
         # Dev fallback: background asyncio task

@@ -73,23 +73,17 @@ async def _extract_docx(file_bytes: bytes) -> str:
     return _extract_docx_local(file_bytes)
 
 
-async def _extract_with_document_ai(
-    file_bytes: bytes, mime_type: str, processor_id: str
-) -> str:
+async def _extract_with_document_ai(file_bytes: bytes, mime_type: str, processor_id: str) -> str:
     from google.cloud import documentai
 
     from src.config import settings
 
-    processor_name = (
-        f"projects/{settings.gcp_project}/locations/us/processors/{processor_id}"
-    )
+    processor_name = f"projects/{settings.gcp_project}/locations/us/processors/{processor_id}"
 
     def _call() -> str:
         client = documentai.DocumentProcessorServiceClient()
         raw_document = documentai.RawDocument(content=file_bytes, mime_type=mime_type)
-        request = documentai.ProcessRequest(
-            name=processor_name, raw_document=raw_document
-        )
+        request = documentai.ProcessRequest(name=processor_name, raw_document=raw_document)
         result = client.process_document(request=request)
         return result.document.text[:MAX_EXTRACTED_LENGTH]
 
