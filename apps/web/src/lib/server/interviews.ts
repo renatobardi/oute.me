@@ -172,3 +172,20 @@ export async function getDocuments(interviewId: string): Promise<InterviewDocume
 		ORDER BY created_at ASC
 	`;
 }
+
+export async function deleteDocument(
+	docId: string,
+	interviewId: string,
+	userId: string
+): Promise<{ storage_path: string } | null> {
+	const [row] = await sql<{ storage_path: string }[]>`
+		DELETE FROM public.documents
+		WHERE id = ${docId}
+		  AND interview_id = ${interviewId}
+		  AND interview_id IN (
+		    SELECT id FROM public.interviews WHERE user_id = ${userId}
+		  )
+		RETURNING storage_path
+	`;
+	return row ?? null;
+}

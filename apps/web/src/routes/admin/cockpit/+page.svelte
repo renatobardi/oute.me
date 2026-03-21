@@ -6,7 +6,7 @@
 
 	let interviews = $state<CockpitInterview[]>(data.interviews);
 	let search = $state('');
-	let statusFilter = $state('');
+	let statusFilter = $state('active');
 	let selectedId = $state<string | null>(null);
 	let detail = $state<CockpitDetail | null>(null);
 	let loadingDetail = $state(false);
@@ -145,7 +145,6 @@
 		return map[mime] ?? mime;
 	}
 
-	const statuses = $derived([...new Set(interviews.map((i) => i.status))].sort());
 </script>
 
 <svelte:head>
@@ -165,9 +164,8 @@
 				/>
 				<select class="status-select" bind:value={statusFilter}>
 					<option value="">Todos</option>
-					{#each statuses as s}
-						<option value={s}>{s}</option>
-					{/each}
+					<option value="active">Ativos</option>
+					<option value="archived">Arquivados</option>
 				</select>
 			</div>
 

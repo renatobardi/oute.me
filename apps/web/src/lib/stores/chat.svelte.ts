@@ -51,6 +51,7 @@ export function createChatState(
 		}))
 	);
 	let isStreaming = $state(false);
+	let streamGen = 0; // generation counter to avoid finally() clearing a newer stream
 	let maturity = $state(initialMaturity);
 	let domains = $state(initialDomains);
 	let title = $state<string | null>(initialTitle);
@@ -70,6 +71,7 @@ export function createChatState(
 		error = null;
 		isStreaming = true;
 		currentStreamText = '';
+		const myGen = ++streamGen;
 
 		const userMsg: ChatMessage = {
 			id: crypto.randomUUID(),
@@ -147,6 +149,8 @@ export function createChatState(
 								},
 							];
 							currentStreamText = '';
+							// Libera o input imediatamente — state_update chega em background
+							isStreaming = false;
 						}
 					} catch {
 						// skip malformed events
@@ -156,7 +160,7 @@ export function createChatState(
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Erro ao enviar mensagem';
 		} finally {
-			isStreaming = false;
+			if (streamGen === myGen) isStreaming = false;
 		}
 	}
 
@@ -192,6 +196,21 @@ export function createChatState(
 			return true;
 		} catch (e) {
 			uploadError = e instanceof Error ? e.message : 'Erro ao enviar documento';
+			return false;
+		}
+	}
+
+	async function deleteDocument(docId: string): Promise<boolean> {
+		const authHeaders = await getAuthHeaders();
+		try {
+			const response = await fetch(`/api/chat/${interviewId}/documents/${docId}`, {
+				method: 'DELETE',
+				headers: authHeaders,
+			});
+			if (!response.ok) return false;
+			documents = documents.filter((d) => d.id !== docId);
+			return true;
+		} catch {
 			return false;
 		}
 	}
@@ -240,6 +259,7 @@ export function createChatState(
 		},
 		sendMessage,
 		uploadDocument,
+		deleteDocument,
 		setTitle,
 	};
 }
