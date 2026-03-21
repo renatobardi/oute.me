@@ -1,5 +1,4 @@
 import type { RequestHandler } from './$types';
-import { error } from '@sveltejs/kit';
 import { requireAuth } from '$lib/server/api-utils';
 import { getOrCreateUser } from '$lib/server/users';
 import { getInterview, addDocument, updateDocumentStatus } from '$lib/server/interviews';
@@ -30,7 +29,7 @@ export const POST: RequestHandler = async ({ locals, params, request }) => {
 
 	const interview = await getInterview(params.id, user.id);
 	if (!interview) {
-		throw error(404, 'Interview not found');
+		return jsonError(404, 'Interview not found');
 	}
 
 	const formData = await request.formData();

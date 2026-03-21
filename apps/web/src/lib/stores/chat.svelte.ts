@@ -129,6 +129,9 @@ export function createChatState(
 						} else if (eventType === 'state_update') {
 							maturity = data.maturity;
 							domains = data.domains;
+							if (!titleUserSet && data.suggested_title) {
+								title = data.suggested_title as string;
+							}
 						} else if (eventType === 'title_update') {
 							if (!titleUserSet) {
 								title = data.title as string;
@@ -172,7 +175,7 @@ export function createChatState(
 
 			if (!response.ok) {
 				const errorData = await response.json().catch(() => ({ error: 'Upload failed' }));
-				uploadError = `Erro no upload: ${errorData.error || 'Upload failed'}`;
+				uploadError = `Erro no upload: ${errorData.error || errorData.message || 'Upload failed'}`;
 				return false;
 			}
 
