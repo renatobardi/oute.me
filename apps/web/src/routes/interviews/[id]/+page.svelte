@@ -194,14 +194,16 @@
 					<li class="domain-item">
 						<div class="domain-header">
 							<span class="domain-name">{domainLabels[key] || key}</span>
-							<span class="domain-count">{domain.answered}/{domain.total}</span>
+							<div class="domain-header-right">
+								{#if domain.vital_answered}
+									<span class="vital-tag">vital</span>
+								{/if}
+								<span class="domain-count">{domain.answered}/{domain.total}</span>
+							</div>
 						</div>
 						<div class="domain-track">
 							<div class="domain-fill" style="width: {progress}%"></div>
 						</div>
-						{#if domain.vital_answered}
-							<span class="vital-tag">vital</span>
-						{/if}
 					</li>
 				{/each}
 			</ul>
@@ -498,15 +500,17 @@
 		transition: width 0.4s ease;
 	}
 
+	.domain-header-right {
+		display: flex;
+		align-items: center;
+		gap: 0.375rem;
+	}
+
 	.vital-tag {
-		position: absolute;
-		top: 0;
-		right: -0.125rem;
 		font-size: 0.625rem;
 		color: var(--color-success, #10b981);
 		text-transform: uppercase;
 		letter-spacing: 0.04em;
-		transform: translateY(-0.125rem);
 	}
 
 	/* ── Estimate action ── */

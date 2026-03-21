@@ -1,10 +1,8 @@
 import type { RequestHandler } from './$types';
 import { error } from '@sveltejs/kit';
 import { requireAuth } from '$lib/server/api-utils';
-import { readFile } from 'fs/promises';
-import { join } from 'path';
-import { env } from '$env/dynamic/private';
 import sql from '$lib/server/db';
+import { downloadFile } from '$lib/server/storage';
 
 export const GET: RequestHandler = async ({ locals, params }) => {
 	requireAuth(locals);
@@ -20,12 +18,9 @@ export const GET: RequestHandler = async ({ locals, params }) => {
 	const doc = rows[0];
 	if (!doc) throw error(404, 'Document not found');
 
-	const storageBase = env.STORAGE_LOCAL_PATH ?? './data/uploads';
-	const fullPath = join(storageBase, doc.storage_path);
-
 	let fileBytes: Buffer;
 	try {
-		fileBytes = await readFile(fullPath);
+		fileBytes = await downloadFile(doc.storage_path);
 	} catch {
 		throw error(404, 'File not found on storage');
 	}

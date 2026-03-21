@@ -34,13 +34,22 @@ from src.services.state_analyzer import analyze_and_update_state
 logger = logging.getLogger(__name__)
 
 
-async def _suggest_title(user_message: str, llm_model: str) -> str | None:
-    """Generate a short project name from the user's initial description."""
+async def _suggest_title(
+    user_message: str,
+    llm_model: str,
+    history: list[dict[str, str]] | None = None,
+) -> str | None:
+    """Generate a short project name from the conversation context."""
+    user_messages = [m["content"] for m in (history or []) if m.get("role") == "user"]
+    if user_message not in user_messages:
+        user_messages.append(user_message)
+    context = "\n".join(f"- {m}" for m in user_messages[-5:])
     prompt = (
-        "Read the user's software project description below and generate a short, representative "
-        "project name (2 to 5 words). Use the same language as the description. "
+        "Based on the user messages below from a software project scoping conversation, "
+        "generate a short and representative project name (2 to 5 words). "
+        "Use the same language as the messages. "
         "Respond ONLY with valid JSON in the format: {\"title\": \"Project Name\"}\n\n"
-        f"User message: \"{user_message}\""
+        f"User messages:\n{context}"
     )
     try:
         result = await analyze_json(prompt, llm_model=llm_model, max_seconds=15.0)
@@ -120,9 +129,9 @@ async def process_message(
         full_response,
     )
 
-    should_suggest_title = user_turns <= 2 and request.current_title is None
+    should_suggest_title = user_turns <= 5 and request.current_title is None
     title_task = (
-        _suggest_title(request.user_message, request.llm_model)
+        _suggest_title(request.user_message, request.llm_model, history)
         if should_suggest_title
         else None
     )
