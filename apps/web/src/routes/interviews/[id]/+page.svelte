@@ -6,6 +6,7 @@
 	import { MATURITY_THRESHOLD } from '$lib/types/interview';
 	import { AGENT_LABELS, AGENT_KEYS } from '$lib/types/estimate';
 	import type { AgentStep } from '$lib/types/estimate';
+	import { scrollShadow } from '$lib/actions/scroll-shadow';
 
 	let { data } = $props();
 
@@ -138,7 +139,7 @@
 				throw new Error(body?.error || `Erro ${res.status}`);
 			}
 			const result = await res.json();
-			existingEstimate = { id: result.id, status: result.status };
+			existingEstimate = { id: result.id, status: result.status, agent_steps: [] };
 			goto(`/estimates/${result.id}`);
 		} catch (e) {
 			chat.error = `Erro ao solicitar estimativa: ${e instanceof Error ? e.message : 'tente novamente'}`;
@@ -192,7 +193,7 @@
 
 <div class="interview-page">
 	<!-- SIDEBAR -->
-	<aside class="sidebar">
+	<aside class="sidebar" use:scrollShadow>
 		<!-- Editable title -->
 		{#if isTitleEditing}
 			<div class="title-edit">
@@ -324,7 +325,7 @@
 						{/if}
 					</div>
 					<div class="estimate-panel-actions">
-						<a href="/estimates/{existingEstimate.id}" class="panel-link-btn" target="_blank">Abrir completo ↗</a>
+						<a href="/estimates/{existingEstimate.id}" class="panel-link-btn">Abrir completo →</a>
 						<button class="panel-close-btn" onclick={closeEstimatePanel} title="Fechar painel">✕</button>
 					</div>
 				</div>
@@ -364,7 +365,7 @@
 			</div>
 		{/if}
 
-		<div class="messages" bind:this={chatContainer}>
+		<div class="messages" bind:this={chatContainer} use:scrollShadow>
 			{#if chat.messages.length === 0 && !chat.isStreaming}
 				<div class="empty-chat">
 					<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
@@ -438,12 +439,6 @@
 
 	/* ── Sidebar ── */
 	.sidebar {
-		background:
-			linear-gradient(#1a1d27 30%, transparent) center top / 100% 2.5rem no-repeat local,
-			linear-gradient(transparent, #1a1d27 70%) center bottom / 100% 2.5rem no-repeat local,
-			radial-gradient(farthest-side at 50% 0, rgba(0,0,0,.25), transparent) center top / 100% 10px no-repeat scroll,
-			radial-gradient(farthest-side at 50% 100%, rgba(0,0,0,.25), transparent) center bottom / 100% 10px no-repeat scroll;
-		background-color: #1a1d27;
 		border-right: 1px solid var(--color-dark-border, rgba(255, 255, 255, 0.08));
 		padding: 1.25rem;
 		overflow-y: auto;
@@ -772,12 +767,6 @@
 		flex-direction: column;
 		gap: 0.25rem;
 		min-height: 0;
-		background:
-			linear-gradient(#0f1117 30%, transparent) center top / 100% 2.5rem no-repeat local,
-			linear-gradient(transparent, #0f1117 70%) center bottom / 100% 2.5rem no-repeat local,
-			radial-gradient(farthest-side at 50% 0, rgba(0,0,0,.3), transparent) center top / 100% 10px no-repeat scroll,
-			radial-gradient(farthest-side at 50% 100%, rgba(0,0,0,.3), transparent) center bottom / 100% 10px no-repeat scroll;
-		background-color: #0f1117;
 	}
 
 	.empty-chat {

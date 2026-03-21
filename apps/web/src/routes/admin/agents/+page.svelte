@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { scrollShadow } from '$lib/actions/scroll-shadow';
 	import { auth } from '$lib/firebase';
 	import type { AgentInstruction } from '$lib/server/agent-instructions';
 
@@ -104,7 +105,7 @@
 		<div class="list-panel">
 			<div class="list-count">{instructions.length} agente{instructions.length !== 1 ? 's' : ''}</div>
 
-			<div class="list-items">
+			<div class="list-items" use:scrollShadow>
 				{#each instructions as agent (agent.id)}
 					<button
 						class="list-item"
@@ -125,7 +126,7 @@
 		</div>
 
 		<!-- Right: editor -->
-		<div class="detail-panel">
+		<div class="detail-panel" use:scrollShadow>
 			{#if !selected}
 				<div class="detail-empty">Selecione um agente para editar as instruções.</div>
 			{:else}
@@ -244,12 +245,6 @@
 
 	.list-items {
 		overflow-y: auto;
-		background:
-			linear-gradient(#1a1d27 30%, transparent) center top / 100% 2.5rem no-repeat local,
-			linear-gradient(transparent, #1a1d27 70%) center bottom / 100% 2.5rem no-repeat local,
-			radial-gradient(farthest-side at 50% 0, rgba(0,0,0,.25), transparent) center top / 100% 10px no-repeat scroll,
-			radial-gradient(farthest-side at 50% 100%, rgba(0,0,0,.25), transparent) center bottom / 100% 10px no-repeat scroll;
-		background-color: #1a1d27;
 		flex: 1;
 	}
 
@@ -312,12 +307,6 @@
 		padding: 1.5rem;
 		max-height: calc(100vh - 8rem);
 		overflow-y: auto;
-		background:
-			linear-gradient(#1a1d27 30%, transparent) center top / 100% 2.5rem no-repeat local,
-			linear-gradient(transparent, #1a1d27 70%) center bottom / 100% 2.5rem no-repeat local,
-			radial-gradient(farthest-side at 50% 0, rgba(0,0,0,.25), transparent) center top / 100% 10px no-repeat scroll,
-			radial-gradient(farthest-side at 50% 100%, rgba(0,0,0,.25), transparent) center bottom / 100% 10px no-repeat scroll;
-		background-color: #1a1d27;
 	}
 
 	.detail-empty {

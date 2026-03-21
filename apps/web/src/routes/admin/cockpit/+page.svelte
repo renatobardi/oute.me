@@ -3,6 +3,7 @@
 	import type { CockpitInterview, CockpitDetail } from '$lib/server/admin-cockpit';
 	import type { AgentStep } from '$lib/types/estimate';
 	import { AGENT_LABELS, AGENT_KEYS } from '$lib/types/estimate';
+	import { scrollShadow } from '$lib/actions/scroll-shadow';
 
 	let { data } = $props();
 
@@ -262,7 +263,7 @@
 
 			<div class="list-count">{filtered.length} entrevista{filtered.length !== 1 ? 's' : ''}</div>
 
-			<div class="list-items">
+			<div class="list-items" use:scrollShadow>
 				{#each filtered as iv (iv.id)}
 					<button
 						class="list-item"
@@ -299,7 +300,7 @@
 		</div>
 
 		<!-- Right panel: detail -->
-		<div class="detail-panel">
+		<div class="detail-panel" use:scrollShadow>
 			{#if !selectedId}
 				<div class="detail-empty">Selecione uma entrevista para ver os detalhes.</div>
 			{:else if loadingDetail}
@@ -831,12 +832,6 @@
 
 	.list-items {
 		overflow-y: auto;
-		background:
-			linear-gradient(#1a1d27 30%, transparent) center top / 100% 2.5rem no-repeat local,
-			linear-gradient(transparent, #1a1d27 70%) center bottom / 100% 2.5rem no-repeat local,
-			radial-gradient(farthest-side at 50% 0, rgba(0,0,0,.25), transparent) center top / 100% 10px no-repeat scroll,
-			radial-gradient(farthest-side at 50% 100%, rgba(0,0,0,.25), transparent) center bottom / 100% 10px no-repeat scroll;
-		background-color: #1a1d27;
 		flex: 1;
 	}
 
@@ -924,12 +919,6 @@
 		border-radius: 10px;
 		padding: 1.5rem;
 		overflow-y: auto;
-		background:
-			linear-gradient(#1a1d27 30%, transparent) center top / 100% 2.5rem no-repeat local,
-			linear-gradient(transparent, #1a1d27 70%) center bottom / 100% 2.5rem no-repeat local,
-			radial-gradient(farthest-side at 50% 0, rgba(0,0,0,.25), transparent) center top / 100% 10px no-repeat scroll,
-			radial-gradient(farthest-side at 50% 100%, rgba(0,0,0,.25), transparent) center bottom / 100% 10px no-repeat scroll;
-		background-color: #1a1d27;
 		max-height: calc(100vh - 8rem);
 	}
 
