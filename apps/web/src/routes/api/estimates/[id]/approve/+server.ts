@@ -1,3 +1,4 @@
+import { error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { requireAuth, jsonOk, jsonError } from '$lib/server/api-utils';
 import { logAuditEvent } from '$lib/server/audit';
@@ -7,7 +8,10 @@ import type { EstimateResult } from '$lib/types/estimate';
 
 export const POST: RequestHandler = async ({ params, request, locals }) => {
 	const user = requireAuth(locals);
-	const estimate = await getEstimate(params.id, user.uid);
+	if (!locals.dbUser) {
+		throw error(401, 'Authentication required');
+	}
+	const estimate = await getEstimate(params.id, locals.dbUser.id);
 
 	if (!estimate) {
 		return jsonError(404, 'Estimate not found');
@@ -39,7 +43,7 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
 
 	const project = await createProjectFromEstimate(
 		estimate.id,
-		user.uid,
+		locals.dbUser.id,
 		projectName,
 		estimate.result as unknown as EstimateResult,
 		scenario

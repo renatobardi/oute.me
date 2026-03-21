@@ -3,8 +3,8 @@ import { requireAuth, jsonOk, jsonError } from '$lib/server/api-utils';
 import { getProject, updateMilestoneStatus } from '$lib/server/projects';
 
 export const PATCH: RequestHandler = async ({ params, request, locals }) => {
-	const user = requireAuth(locals);
-	const project = await getProject(params.id, user.uid);
+	requireAuth(locals);
+	const project = await getProject(params.id, locals.dbUser!.id);
 
 	if (!project) {
 		return jsonError(404, 'Project not found');

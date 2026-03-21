@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>oute.me — Architecture</title>
+  <title>oute.pro — Architecture</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,300;0,14..32,400;0,14..32,500;0,14..32,600;0,14..32,700&display=swap" rel="stylesheet">
@@ -307,29 +307,17 @@
          EDGES  (rendered first → behind nodes)
     ═════════════════════════════════════════════ -->
 
-    <!-- browser → oute.me -->
-    <path id="e-br-me" class="edge" stroke="#818cf8"
-          d="M 468 130 C 468 148 390 148 390 168"
-          marker-end="url(#ah-pri)"
-          data-from="browser" data-to="outeme"/>
-
-    <!-- browser → oute.pro -->
+    <!-- browser → oute.pro (domínio primário) -->
     <path id="e-br-pro" class="edge" stroke="#818cf8"
-          d="M 548 130 C 548 148 670 148 670 168"
+          d="M 508 130 C 508 148 508 148 508 168"
           marker-end="url(#ah-pri)"
           data-from="browser" data-to="outepro"/>
 
-    <!-- oute.pro → oute.me (301) -->
-    <path id="e-pro-me" class="edge" stroke="#fbbf24" stroke-dasharray="5 3"
-          d="M 570 198 L 490 198"
-          marker-end="url(#ah-yel)"
-          data-from="outepro" data-to="outeme"/>
-
-    <!-- oute.me → SvelteKit -->
-    <path id="e-me-sk" class="edge" stroke="#818cf8"
-          d="M 390 238 C 390 272 460 272 460 308"
+    <!-- oute.pro → SvelteKit -->
+    <path id="e-pro-sk" class="edge" stroke="#818cf8"
+          d="M 508 238 C 508 272 460 272 460 308"
           marker-end="url(#ah-pri)"
-          data-from="outeme" data-to="sveltekit"/>
+          data-from="outepro" data-to="sveltekit"/>
 
     <!-- SvelteKit → FastAPI (proxy SSE, dashed) -->
     <path id="e-sk-fa" class="edge" stroke="#f87171" stroke-dasharray="5 3"
@@ -380,9 +368,7 @@
           data-from="fastapi" data-to="gcs"/>
 
     <!-- ── Edge labels ─────────────────────────── -->
-    <text class="elabel" x="424" y="144">HTTPS</text>
-    <text class="elabel" x="580" y="144">HTTPS</text>
-    <text class="elabel" x="500" y="193">301 redirect</text>
+    <text class="elabel" x="508" y="154">HTTPS</text>
     <text class="elabel" x="202" y="416">proxy SSE</text>
     <text class="elabel" x="820" y="416">verifica token</text>
     <text class="elabel" x="285" y="485">SQL direto</text>
@@ -398,27 +384,19 @@
     <!-- ── L1 · Client ─────────────────────────── -->
     <g class="node" id="browser"
        data-t="Browser / Cliente"
-       data-b="Acessa via oute.me ou oute.pro. Firebase Auth SDK (cliente) para login. Token enviado no header de cada request ao BFF.">
+       data-b="Acessa via oute.pro. Firebase Auth SDK (cliente) para login. Token enviado no header de cada request ao BFF.">
       <rect x="370" y="52" width="276" height="68" rx="12" fill="url(#g-blu)" stroke="#3b82f6" stroke-width="1.5"/>
       <text x="508" y="80"  text-anchor="middle" font-family="Inter,sans-serif" font-size="14" font-weight="600" fill="#fff">Browser / Cliente</text>
       <text x="508" y="100" text-anchor="middle" font-family="Inter,sans-serif" font-size="11" fill="#93c5fd">Firebase Auth SDK (cliente)</text>
     </g>
 
     <!-- ── L2 · Edge ────────────────────────────── -->
-    <g class="node" id="outeme"
-       data-t="oute.me"
-       data-b="Domínio principal. DNS gerenciado pelo GCP. Domain mapping no Cloud Run prod. TLS automático via GCP.">
-      <rect x="278" y="168" width="224" height="68" rx="12" fill="url(#g-ind)" stroke="#6366f1" stroke-width="1.5"/>
-      <text x="390" y="196" text-anchor="middle" font-family="Inter,sans-serif" font-size="14" font-weight="600" fill="#fff">oute.me</text>
-      <text x="390" y="216" text-anchor="middle" font-family="Inter,sans-serif" font-size="11" fill="#c7d2fe">GCP Cloud Run · domain mapping</text>
-    </g>
-
     <g class="node" id="outepro"
        data-t="oute.pro"
-       data-b="Domínio externo. CNAME → ghs.googlehosted.com. Redireciona 301 para oute.me via hooks.server.ts. Nunca serve conteúdo diferente.">
-      <rect x="568" y="168" width="224" height="68" rx="12" fill="url(#g-ora)" stroke="#f97316" stroke-width="1.5"/>
-      <text x="680" y="196" text-anchor="middle" font-family="Inter,sans-serif" font-size="14" font-weight="600" fill="#fff">oute.pro</text>
-      <text x="680" y="216" text-anchor="middle" font-family="Inter,sans-serif" font-size="11" fill="#fed7aa">CNAME externo → 301 → oute.me</text>
+       data-b="Domínio único. A records → Google IPs + CNAME www → ghs.googlehosted.com. Domain mapping no Cloud Run prod. TLS automático via GCP.">
+      <rect x="396" y="168" width="224" height="68" rx="12" fill="url(#g-ind)" stroke="#6366f1" stroke-width="1.5"/>
+      <text x="508" y="196" text-anchor="middle" font-family="Inter,sans-serif" font-size="14" font-weight="600" fill="#fff">oute.pro</text>
+      <text x="508" y="216" text-anchor="middle" font-family="Inter,sans-serif" font-size="11" fill="#c7d2fe">GCP Cloud Run · domain mapping</text>
     </g>
 
     <!-- ── L3 · App ─────────────────────────────── -->
@@ -517,7 +495,7 @@
   </div>
 </div>
 
-<footer>oute.me · Architecture v1.0 · 2026</footer>
+<footer>oute.pro · Architecture v1.0 · 2026</footer>
 
 <!-- ── Tooltip ────────────────────────────────────── -->
 <div id="tip"></div>

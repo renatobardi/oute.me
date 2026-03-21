@@ -41,6 +41,13 @@
 	<nav class="navbar">
 		<a href={data.user ? '/interviews' : '/'} class="logo">oute.pro</a>
 		{#if data.user}
+			<div class="nav-links">
+				<a href="/interviews" class="nav-link">Entrevistas</a>
+				<a href="/projects" class="nav-link">Projetos</a>
+				{#if data.isAdmin}
+					<a href="/admin" class="nav-link nav-link-admin">Administração</a>
+				{/if}
+			</div>
 			<SettingsMenu userName={data.user.displayName || data.user.email} isAdmin={data.isAdmin ?? false} />
 		{/if}
 	</nav>
@@ -85,6 +92,37 @@
 		font-weight: 700;
 		color: var(--color-primary-500, #6366f1);
 		text-decoration: none;
+	}
+
+	.nav-links {
+		display: flex;
+		gap: 0.25rem;
+		flex: 1;
+		margin-left: 2rem;
+	}
+
+	.nav-link {
+		font-size: 0.875rem;
+		font-weight: 500;
+		color: rgba(255, 255, 255, 0.6);
+		text-decoration: none;
+		padding: 0.3rem 0.75rem;
+		border-radius: 6px;
+		transition: color 0.15s, background 0.15s;
+	}
+
+	.nav-link:hover {
+		color: rgba(255, 255, 255, 0.95);
+		background: rgba(255, 255, 255, 0.06);
+	}
+
+	.nav-link-admin {
+		color: var(--color-warning, #f59e0b);
+	}
+
+	.nav-link-admin:hover {
+		color: var(--color-warning, #f59e0b);
+		background: color-mix(in srgb, var(--color-warning, #f59e0b) 10%, transparent);
 	}
 
 	.content {

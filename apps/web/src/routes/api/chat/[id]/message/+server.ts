@@ -80,6 +80,7 @@ export const POST: RequestHandler = async ({ locals, params, request }) => {
 		is_resumption: isResumption,
 		llm_model: llmModel,
 		current_title: interview.title ?? null,
+		user_name: user.display_name || user.full_name || null,
 	};
 
 	const aiResponse = await proxySSE('/chat/message', chatRequest);

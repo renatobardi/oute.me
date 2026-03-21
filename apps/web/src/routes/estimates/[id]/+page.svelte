@@ -7,28 +7,33 @@
 	let { data } = $props();
 
 	let estimate = $derived(data.estimate);
+	let project = $derived(data.project ?? null);
 	let result = $derived(estimate.result as EstimateResult | null);
 	let isApproving = $state(false);
 	let projectName = $state('');
+
 	let selectedScenario = $state('moderado');
 	let pollTimer = $state<ReturnType<typeof setInterval> | null>(null);
+	let elapsedSeconds = $state(0);
+	let elapsedTimer = $state<ReturnType<typeof setInterval> | null>(null);
 
 	$effect(() => {
 		if (['pending', 'running'].includes(estimate.status)) {
 			pollTimer = setInterval(async () => {
 				await invalidateAll();
 			}, 5000);
+			elapsedTimer = setInterval(() => { elapsedSeconds += 1; }, 1000);
 		}
-
 		return () => {
 			if (pollTimer) clearInterval(pollTimer);
+			if (elapsedTimer) clearInterval(elapsedTimer);
 		};
 	});
 
 	$effect(() => {
-		if (!['pending', 'running'].includes(estimate.status) && pollTimer) {
-			clearInterval(pollTimer);
-			pollTimer = null;
+		if (!['pending', 'running'].includes(estimate.status)) {
+			if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+			if (elapsedTimer) { clearInterval(elapsedTimer); elapsedTimer = null; }
 		}
 	});
 
@@ -58,6 +63,12 @@
 			maximumFractionDigits: 0,
 		}).format(value);
 	}
+
+	function fmtDuration(s: number | null): string {
+		if (s === null) return '';
+		if (s < 60) return `${s.toFixed(0)}s`;
+		return `${Math.floor(s / 60)}m ${Math.round(s % 60)}s`;
+	}
 </script>
 
 <svelte:head>
@@ -66,30 +77,43 @@
 
 <div class="estimate-page">
 	<header class="page-header">
-		<button class="back-btn" onclick={() => goto('/interviews')}>← Voltar</button>
+		<button class="back-btn" onclick={() => goto(`/interviews/${estimate.interview_id}`)}>← Entrevista</button>
 		<div class="header-info">
 			<h1>Estimativa</h1>
 			<StatusBadge status={estimate.status} />
 		</div>
+		{#if project}
+			<a class="project-link-header" href="/projects/{project.id}">Ver Projeto →</a>
+		{/if}
 	</header>
 
-	{#if ['pending', 'running'].includes(estimate.status)}
+	{#if estimate.status === 'pending_approval'}
 		<div class="loading-state">
-			<div class="spinner"></div>
-			<h2>Gerando estimativa...</h2>
-			<p>Nossos agentes de IA estão analisando seu projeto. Isso pode levar alguns minutos.</p>
-			<div class="pipeline-steps">
-				<ProgressBar value={estimate.status === 'pending' ? 10 : 50} label="Progresso" variant="primary" />
-			</div>
-		</div>
-	{:else if estimate.status === 'failed'}
-		<div class="error-state">
-			<h2>Erro na estimativa</h2>
-			<p>Ocorreu um erro ao gerar a estimativa. Tente novamente.</p>
-			<Button onclick={() => goto(`/interviews/${estimate.interview_id}`)}>
+			<div class="approval-icon">⏳</div>
+			<h2>Estimativa solicitada</h2>
+			<p>Sua solicitação foi recebida e está aguardando análise da nossa equipe.<br>Você será notificado quando o processo iniciar.</p>
+			<Button variant="ghost" onclick={() => goto(`/interviews/${estimate.interview_id}`)}>
 				Voltar à Entrevista
 			</Button>
 		</div>
+
+	{:else if ['pending', 'running'].includes(estimate.status)}
+		<div class="loading-state">
+			<div class="spinner"></div>
+			<h2>Gerando estimativa…</h2>
+			<p>Nossos especialistas de IA estão analisando seu projeto.<br>Esse processo pode levar alguns minutos.</p>
+			<span class="elapsed-label">{elapsedSeconds}s</span>
+		</div>
+
+	{:else if estimate.status === 'failed'}
+		<div class="error-state">
+			<h2>Erro na estimativa</h2>
+			<p>Ocorreu um problema ao gerar sua estimativa. Nossa equipe foi notificada e irá verificar.</p>
+			<Button variant="ghost" onclick={() => goto(`/interviews/${estimate.interview_id}`)}>
+				Voltar à Entrevista
+			</Button>
+		</div>
+
 	{:else if result}
 		<div class="result-content">
 			<!-- Executive Summary -->
@@ -234,11 +258,15 @@
 			{:else if estimate.approved_at}
 				<div class="approved-banner">
 					Estimativa aprovada. Projeto criado com sucesso.
+					{#if project}
+						<a class="project-link-banner" href="/projects/{project.id}">Ver Projeto →</a>
+					{/if}
 				</div>
 			{/if}
 		</div>
 	{/if}
 </div>
+
 
 <style>
 	.estimate-page {
@@ -252,6 +280,29 @@
 
 	.page-header {
 		margin-bottom: 2rem;
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.75rem;
+	}
+
+	.page-header .header-info {
+		flex: 1;
+	}
+
+	.project-link-header {
+		font-size: 0.875rem;
+		font-weight: 600;
+		color: var(--color-primary-500, #6366f1);
+		text-decoration: none;
+		padding: 0.35rem 0.75rem;
+		border: 1px solid rgba(99, 102, 241, 0.4);
+		border-radius: 6px;
+		transition: background 0.15s;
+	}
+
+	.project-link-header:hover {
+		background: rgba(99, 102, 241, 0.1);
 	}
 
 	.back-btn {
@@ -276,27 +327,25 @@
 		margin: 0;
 	}
 
-	.loading-state,
-	.error-state {
+	/* ── Loading state ── */
+	.loading-state, .error-state {
 		text-align: center;
-		padding: 4rem 2rem;
+		padding: 3rem 2rem;
 	}
 
-	.loading-state h2,
-	.error-state h2 {
+	.loading-state h2, .error-state h2 {
 		color: rgba(255, 255, 255, 0.9);
 		margin-bottom: 0.5rem;
 	}
 
-	.loading-state p,
-	.error-state p {
+	.loading-state p, .error-state p {
 		color: rgba(255, 255, 255, 0.5);
 		margin-bottom: 2rem;
 	}
 
-	.pipeline-steps {
-		max-width: 400px;
-		margin: 0 auto;
+	.approval-icon {
+		font-size: 3rem;
+		margin-bottom: 1rem;
 	}
 
 	.spinner {
@@ -305,17 +354,21 @@
 		border: 3px solid rgba(255, 255, 255, 0.1);
 		border-top-color: var(--color-primary-500, #6366f1);
 		border-radius: 50%;
-		animation: spin 1s linear infinite;
+		animation: spin 0.9s linear infinite;
 		margin: 0 auto 1.5rem;
 	}
 
-	@keyframes spin {
-		to { transform: rotate(360deg); }
+	@keyframes spin { to { transform: rotate(360deg); } }
+
+	.elapsed-label {
+		font-size: 0.875rem;
+		color: rgba(255, 255, 255, 0.35);
+		margin-top: -1rem;
 	}
 
-	.section {
-		margin-bottom: 2.5rem;
-	}
+
+	/* ── Result sections ── */
+	.section { margin-bottom: 2.5rem; }
 
 	.section h2 {
 		font-size: 1.25rem;
@@ -325,8 +378,7 @@
 		border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 	}
 
-	.summary-text,
-	.architecture-text {
+	.summary-text, .architecture-text {
 		line-height: 1.7;
 		color: rgba(255, 255, 255, 0.7);
 		white-space: pre-line;
@@ -424,9 +476,7 @@
 		padding-left: 1.25rem;
 	}
 
-	.deliverables li {
-		color: rgba(255, 255, 255, 0.6);
-	}
+	.deliverables li { color: rgba(255, 255, 255, 0.6); }
 
 	.tech-grid {
 		display: grid;
@@ -472,17 +522,9 @@
 		border-left: 3px solid;
 	}
 
-	.risk-high {
-		border-left-color: var(--color-error, #ef4444);
-	}
-
-	.risk-medium {
-		border-left-color: var(--color-warning, #f59e0b);
-	}
-
-	.risk-low {
-		border-left-color: var(--color-success, #10b981);
-	}
+	.risk-high { border-left-color: var(--color-error, #ef4444); }
+	.risk-medium { border-left-color: var(--color-warning, #f59e0b); }
+	.risk-low { border-left-color: var(--color-success, #10b981); }
 
 	.risk-header {
 		display: flex;
@@ -530,8 +572,7 @@
 		color: rgba(255, 255, 255, 0.6);
 	}
 
-	.form-field input,
-	.form-field select {
+	.form-field input, .form-field select {
 		background: var(--color-dark-surface, #1a1d27);
 		border: 1px solid rgba(255, 255, 255, 0.1);
 		border-radius: 8px;
@@ -542,8 +583,7 @@
 		outline: none;
 	}
 
-	.form-field input:focus,
-	.form-field select:focus {
+	.form-field input:focus, .form-field select:focus {
 		border-color: var(--color-primary-500, #6366f1);
 	}
 
@@ -555,11 +595,115 @@
 	}
 
 	.approved-banner {
-		padding: 1rem;
+		padding: 1rem 1.25rem;
 		background: color-mix(in srgb, var(--color-success, #10b981) 15%, transparent);
 		color: var(--color-success, #10b981);
 		border-radius: 8px;
-		text-align: center;
 		font-weight: 500;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 1.25rem;
+		flex-wrap: wrap;
+	}
+
+	.project-link-banner {
+		font-size: 0.875rem;
+		font-weight: 700;
+		color: var(--color-success, #10b981);
+		text-decoration: none;
+		padding: 0.25rem 0.75rem;
+		border: 1px solid rgba(16, 185, 129, 0.5);
+		border-radius: 6px;
+		transition: background 0.15s;
+	}
+
+	.project-link-banner:hover {
+		background: rgba(16, 185, 129, 0.15);
+	}
+
+	/* ── Re-run modal ── */
+	.modal-backdrop {
+		position: fixed;
+		inset: 0;
+		background: rgba(0, 0, 0, 0.6);
+		z-index: 100;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+	}
+
+	.modal {
+		background: var(--color-dark-surface, #1a1d27);
+		border: 1px solid rgba(255, 255, 255, 0.12);
+		border-radius: 12px;
+		padding: 1.75rem;
+		width: 100%;
+		max-width: 400px;
+		display: flex;
+		flex-direction: column;
+		gap: 1rem;
+	}
+
+	.modal-title {
+		font-size: 1rem;
+		font-weight: 700;
+		color: #f9fafb;
+		margin: 0;
+	}
+
+	.modal-field {
+		display: flex;
+		flex-direction: column;
+		gap: 0.35rem;
+	}
+
+	.modal-label {
+		font-size: 0.75rem;
+		font-weight: 600;
+		color: var(--color-neutral-400, #9ca3af);
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+	}
+
+	.modal-select {
+		padding: 0.45rem 0.6rem;
+		background: rgba(255, 255, 255, 0.05);
+		border: 1px solid rgba(255, 255, 255, 0.1);
+		border-radius: 6px;
+		color: #f9fafb;
+		font-size: 0.875rem;
+	}
+
+	.modal-hint {
+		font-size: 0.8125rem;
+		color: var(--color-neutral-400, #9ca3af);
+		margin: 0;
+		padding: 0.5rem 0.75rem;
+		background: rgba(99, 102, 241, 0.08);
+		border-left: 3px solid var(--color-primary-500, #6366f1);
+		border-radius: 4px;
+	}
+
+	.modal-actions {
+		display: flex;
+		justify-content: flex-end;
+		gap: 0.75rem;
+		margin-top: 0.25rem;
+		align-items: center;
+	}
+
+	.btn-cancel {
+		padding: 0.45rem 1rem;
+		border-radius: 6px;
+		border: 1px solid rgba(255, 255, 255, 0.12);
+		background: transparent;
+		color: var(--color-neutral-400, #9ca3af);
+		font-size: 0.8125rem;
+		cursor: pointer;
+	}
+
+	.btn-cancel:hover {
+		background: rgba(255, 255, 255, 0.04);
 	}
 </style>

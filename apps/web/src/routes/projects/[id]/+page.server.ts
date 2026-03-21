@@ -3,11 +3,11 @@ import type { PageServerLoad } from './$types';
 import { getProject, getMilestones, getTasks, getProjectDocuments } from '$lib/server/projects';
 
 export const load: PageServerLoad = async ({ params, locals }) => {
-	if (!locals.user) {
+	if (!locals.user || !locals.dbUser) {
 		throw error(401, 'Authentication required');
 	}
 
-	const project = await getProject(params.id, locals.user.uid);
+	const project = await getProject(params.id, locals.dbUser.id);
 	if (!project) {
 		throw error(404, 'Project not found');
 	}

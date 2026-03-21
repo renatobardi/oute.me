@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { auth } from '$lib/firebase';
 	import type { CockpitInterview, CockpitDetail } from '$lib/server/admin-cockpit';
+	import type { AgentStep } from '$lib/types/estimate';
+	import { AGENT_LABELS, AGENT_KEYS } from '$lib/types/estimate';
 
 	let { data } = $props();
 
@@ -13,6 +15,20 @@
 	let activeTab = $state<string | null>(null);
 	let loadingMoreMessages = $state(false);
 	let messagesOffset = $state(20);
+	let agentOutputKey = $state<string | null>(null);
+	let agentOutputData = $state<Record<string, unknown> | null>(null);
+	let loadingAgentOutput = $state(false);
+	let rerunning = $state(false);
+	let rerunMsg = $state('');
+	let rerunModal = $state(false);
+	let rerunFromAgent = $state<string>('');
+	let rerunModel = $state('gemini-2.5-flash');
+
+	const LLM_MODELS = [
+		{ value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash' },
+		{ value: 'gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash Lite' },
+		{ value: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro' },
+	];
 
 	async function getToken() {
 		return (await auth.currentUser?.getIdToken(false)) ?? '';
@@ -116,14 +132,89 @@
 		switch (status) {
 			case 'completed':
 			case 'approved':
+			case 'done':
 				return 'badge-success';
 			case 'estimating':
 			case 'in_progress':
+			case 'pending':
+			case 'running':
 				return 'badge-info';
+			case 'pending_approval':
+				return 'badge-warning';
 			case 'failed':
 				return 'badge-error';
 			default:
 				return 'badge-neutral';
+		}
+	}
+
+	async function loadAgentOutput(interviewId: string, agentKey: string) {
+		if (agentOutputKey === agentKey) {
+			agentOutputKey = null;
+			agentOutputData = null;
+			return;
+		}
+		agentOutputKey = agentKey;
+		agentOutputData = null;
+		loadingAgentOutput = true;
+		try {
+			const token = await getToken();
+			const res = await fetch(
+				`/api/admin/cockpit/interviews/${interviewId}/pipeline?agent=${agentKey}`,
+				{ headers: token ? { Authorization: `Bearer ${token}` } : {} }
+			);
+			if (res.ok) agentOutputData = await res.json();
+		} finally {
+			loadingAgentOutput = false;
+		}
+	}
+
+	function openRerunModal(interviewId: string) {
+		// Pre-select the first failed agent if any
+		const steps = (detail?.estimate?.agent_steps ?? []) as AgentStep[];
+		const failedStep = steps.find((s) => s.status === 'failed');
+		rerunFromAgent = failedStep?.agent_key ?? '';
+		rerunModel = 'gemini-2.5-flash';
+		rerunModal = true;
+	}
+
+	async function triggerRerun(interviewId: string) {
+		rerunModal = false;
+		rerunning = true;
+		rerunMsg = '';
+		try {
+			const token = await getToken();
+			const body: Record<string, string> = { llm_model: rerunModel };
+			if (rerunFromAgent) body.from_agent = rerunFromAgent;
+			const res = await fetch(`/api/admin/cockpit/interviews/${interviewId}/pipeline`, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					...(token ? { Authorization: `Bearer ${token}` } : {}),
+				},
+				body: JSON.stringify(body),
+			});
+			if (res.ok) {
+				rerunMsg = 'Re-run iniciado!';
+				await selectInterview(interviewId);
+			} else {
+				const err = await res.json().catch(() => ({ error: 'Erro desconhecido' }));
+				rerunMsg = `Erro: ${err.error ?? res.statusText}`;
+			}
+		} catch {
+			rerunMsg = 'Erro de conexão';
+		} finally {
+			rerunning = false;
+			setTimeout(() => (rerunMsg = ''), 4000);
+		}
+	}
+
+	function stepStatusClass(status: string) {
+		switch (status) {
+			case 'done': return 'step-done';
+			case 'running': return 'step-running';
+			case 'failed': return 'step-failed';
+			default: return 'step-pending';
 		}
 	}
 
@@ -293,6 +384,14 @@
 									>{detail.estimate.status}</span
 								>
 							</div>
+						</button>
+						<button
+							class="tab-card"
+							class:tab-active={activeTab === 'pipeline'}
+							onclick={() => { toggleTab('pipeline'); agentOutputKey = null; agentOutputData = null; }}
+						>
+							<div class="tab-label">Pipeline</div>
+							<div class="tab-value">{detail.estimate.agent_steps?.length ?? 0} passos</div>
 						</button>
 					{/if}
 
@@ -488,6 +587,102 @@
 						</div>
 					</div>
 
+				{:else if activeTab === 'pipeline' && detail.estimate}
+					{@const steps = (detail.estimate.agent_steps ?? []) as AgentStep[]}
+					<div class="tab-content">
+						<div class="pipeline-header">
+							<div class="section-title">Pipeline de Agentes</div>
+							<div class="pipeline-actions">
+								{#if rerunMsg}
+									<span class="pipeline-msg">{rerunMsg}</span>
+								{/if}
+								{#if detail.estimate.status === 'pending_approval'}
+									<button
+										class="btn-rerun btn-start"
+										onclick={() => triggerRerun(iv.id)}
+										disabled={rerunning}
+									>
+										{rerunning ? 'Iniciando…' : 'Iniciar Pipeline'}
+									</button>
+								{:else}
+									<button
+										class="btn-rerun"
+										onclick={() => openRerunModal(iv.id)}
+										disabled={rerunning || ['pending','running'].includes(detail.estimate.status)}
+									>
+										{rerunning ? 'Iniciando…' : 'Re-run Pipeline'}
+									</button>
+								{/if}
+							</div>
+						</div>
+
+						{@const displaySteps = steps.length > 0
+							? steps
+							: (['pending', 'running'].includes(detail.estimate.status)
+								? AGENT_KEYS.map((k) => ({ agent_key: k, status: 'pending', started_at: null, finished_at: null, duration_s: null, output_preview: null, error: null }))
+								: [])}
+						{#if displaySteps.length === 0}
+							<div class="empty-tab">Nenhum dado de agente disponível. Execute ou re-run o pipeline.</div>
+						{:else}
+							<div class="pipeline-steps">
+								{#each displaySteps as step (step.agent_key)}
+									<div class="pipeline-step {stepStatusClass(step.status)}">
+										<div
+											class="step-header"
+											role="button"
+											tabindex="0"
+											onclick={() => loadAgentOutput(iv.id, step.agent_key)}
+											onkeydown={(e) => e.key === 'Enter' && loadAgentOutput(iv.id, step.agent_key)}
+										>
+											<div class="step-left">
+												<span class="step-dot"></span>
+												<span class="step-name">{AGENT_LABELS[step.agent_key] ?? step.agent_key}</span>
+												<span class="step-key muted">{step.agent_key}</span>
+											</div>
+											<div class="step-right">
+												{#if step.duration_s}
+													<span class="step-duration">{step.duration_s.toFixed(1)}s</span>
+												{/if}
+												<span class="badge {step.status === 'done' ? 'badge-success' : step.status === 'failed' ? 'badge-error' : step.status === 'running' ? 'badge-info' : 'badge-neutral'}">{step.status}</span>
+											</div>
+										</div>
+										{#if step.error}
+											<div class="step-error">{step.error}</div>
+										{/if}
+										{#if agentOutputKey === step.agent_key}
+											<div class="step-output">
+												{#if loadingAgentOutput}
+													<span class="muted">Carregando output…</span>
+												{:else if agentOutputData}
+													<pre class="output-json">{JSON.stringify(agentOutputData, null, 2)}</pre>
+												{:else}
+													<span class="muted">Output não disponível</span>
+												{/if}
+											</div>
+										{/if}
+									</div>
+								{/each}
+							</div>
+						{/if}
+						<!-- end displaySteps -->
+
+						{#if detail.estimateRuns.length > 0}
+							<div class="section-title" style="margin-top:1.5rem">Histórico de Runs</div>
+							<div class="runs-list">
+								{#each detail.estimateRuns as run (run.id)}
+									<div class="run-row">
+										<span class="badge {statusBadgeClass(run.status)}">{run.status}</span>
+										<span class="muted">{run.llm_model ?? '—'}</span>
+										{#if run.total_duration_s}
+											<span class="muted">{run.total_duration_s.toFixed(1)}s</span>
+										{/if}
+										<span class="muted">{fmtDate(run.created_at)}</span>
+									</div>
+								{/each}
+							</div>
+						{/if}
+					</div>
+
 				{:else if activeTab === 'projeto-gerado' && detail.project}
 					<div class="tab-content">
 						<div class="section-title">Projeto</div>
@@ -500,6 +695,10 @@
 								<span class="info-row-label">ID</span>
 								<span class="info-row-value mono">{detail.project.id}</span>
 							</div>
+							<div class="info-row">
+								<span class="info-row-label">Link</span>
+								<a class="project-cockpit-link" href="/projects/{detail.project.id}" target="_blank">Ver Projeto →</a>
+							</div>
 						</div>
 					</div>
 				{/if}
@@ -507,6 +706,47 @@
 		</div>
 	</div>
 </div>
+
+{#if rerunModal && selectedId}
+	<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+	<div class="modal-backdrop" onclick={() => (rerunModal = false)}>
+		<div class="modal" onclick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
+			<h3 class="modal-title">Re-run Pipeline</h3>
+
+			<label class="modal-field">
+				<span class="modal-label">Modelo LLM</span>
+				<select class="modal-select" bind:value={rerunModel}>
+					{#each LLM_MODELS as m (m.value)}
+						<option value={m.value}>{m.label}</option>
+					{/each}
+				</select>
+			</label>
+
+			<label class="modal-field">
+				<span class="modal-label">Recomeçar a partir de</span>
+				<select class="modal-select" bind:value={rerunFromAgent}>
+					<option value="">Início (rodar tudo)</option>
+					{#each Object.entries(AGENT_LABELS) as [key, label] (key)}
+						<option value={key}>{label}</option>
+					{/each}
+				</select>
+			</label>
+
+			{#if rerunFromAgent}
+				<p class="modal-hint">
+					Outputs anteriores a <strong>{AGENT_LABELS[rerunFromAgent] ?? rerunFromAgent}</strong> serão reutilizados.
+				</p>
+			{/if}
+
+			<div class="modal-actions">
+				<button class="btn-cancel" onclick={() => (rerunModal = false)}>Cancelar</button>
+				<button class="btn-rerun" onclick={() => triggerRerun(selectedId!)}>
+					Iniciar Re-run
+				</button>
+			</div>
+		</div>
+	</div>
+{/if}
 
 <style>
 	.page {
@@ -861,6 +1101,16 @@
 		word-break: break-all;
 	}
 
+	.project-cockpit-link {
+		font-size: 0.875rem;
+		color: #6ee7b7;
+		text-decoration: none;
+	}
+
+	.project-cockpit-link:hover {
+		text-decoration: underline;
+	}
+
 	.summary-row {
 		align-items: flex-start;
 	}
@@ -1086,7 +1336,250 @@
 		color: var(--color-neutral-500, #6b7280);
 	}
 
+	.badge-warning {
+		background: color-mix(in srgb, var(--color-warning, #f59e0b) 15%, transparent);
+		color: var(--color-warning, #f59e0b);
+	}
+
 	.muted {
 		color: var(--color-neutral-500, #6b7280);
+	}
+
+	/* ── Pipeline tab ── */
+
+	.pipeline-header {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		margin-bottom: 1rem;
+	}
+
+	.pipeline-actions {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+	}
+
+	.pipeline-msg {
+		font-size: 0.8125rem;
+		color: var(--color-success, #10b981);
+	}
+
+	.btn-rerun {
+		padding: 0.35rem 0.9rem;
+		background: var(--color-primary-600, #4f46e5);
+		border: none;
+		border-radius: 6px;
+		color: #fff;
+		font-size: 0.8125rem;
+		font-weight: 600;
+		cursor: pointer;
+	}
+
+	.btn-rerun:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+
+	.btn-start {
+		background: var(--color-success, #10b981);
+	}
+
+	.pipeline-steps {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+	}
+
+	.pipeline-step {
+		border: 1px solid rgba(255, 255, 255, 0.07);
+		border-radius: 8px;
+		overflow: hidden;
+	}
+
+	.step-done { border-left: 3px solid var(--color-success, #10b981); }
+	.step-failed { border-left: 3px solid var(--color-error, #ef4444); }
+	.step-running { border-left: 3px solid var(--color-primary-500, #6366f1); }
+	.step-pending { border-left: 3px solid rgba(255,255,255,0.12); }
+
+	.step-header {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		padding: 0.6rem 0.75rem;
+		cursor: pointer;
+		background: rgba(255, 255, 255, 0.02);
+	}
+
+	.step-header:hover {
+		background: rgba(255, 255, 255, 0.05);
+	}
+
+	.step-left {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+	}
+
+	.step-dot {
+		width: 8px;
+		height: 8px;
+		border-radius: 50%;
+		background: currentColor;
+	}
+
+	.step-done .step-dot { color: var(--color-success, #10b981); }
+	.step-failed .step-dot { color: var(--color-error, #ef4444); }
+	.step-running .step-dot { color: var(--color-primary-500, #6366f1); }
+	.step-pending .step-dot { color: rgba(255,255,255,0.25); }
+
+	.step-name {
+		font-size: 0.8125rem;
+		font-weight: 600;
+		color: #f9fafb;
+	}
+
+	.step-key {
+		font-family: monospace;
+		font-size: 0.7rem;
+	}
+
+	.step-right {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+	}
+
+	.step-duration {
+		font-size: 0.75rem;
+		font-family: monospace;
+		color: var(--color-neutral-400, #9ca3af);
+	}
+
+	.step-error {
+		padding: 0.4rem 0.75rem;
+		font-size: 0.75rem;
+		color: var(--color-error, #ef4444);
+		background: rgba(239, 68, 68, 0.08);
+		border-top: 1px solid rgba(239, 68, 68, 0.15);
+	}
+
+	.step-output {
+		padding: 0.75rem;
+		border-top: 1px solid rgba(255, 255, 255, 0.06);
+		background: var(--color-dark-bg, #0f1117);
+	}
+
+	.output-json {
+		font-family: 'SF Mono', 'Cascadia Code', monospace;
+		font-size: 0.75rem;
+		line-height: 1.5;
+		color: #d1d5db;
+		white-space: pre-wrap;
+		word-break: break-all;
+		max-height: 400px;
+		overflow-y: auto;
+		margin: 0;
+	}
+
+	.runs-list {
+		display: flex;
+		flex-direction: column;
+		gap: 0.4rem;
+	}
+
+	.run-row {
+		display: flex;
+		align-items: center;
+		gap: 0.6rem;
+		padding: 0.4rem 0.6rem;
+		background: rgba(255, 255, 255, 0.02);
+		border-radius: 6px;
+		font-size: 0.8125rem;
+	}
+
+	/* ── Re-run modal ── */
+
+	.modal-backdrop {
+		position: fixed;
+		inset: 0;
+		background: rgba(0, 0, 0, 0.6);
+		z-index: 100;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+	}
+
+	.modal {
+		background: var(--color-dark-surface, #1a1d27);
+		border: 1px solid rgba(255, 255, 255, 0.12);
+		border-radius: 12px;
+		padding: 1.75rem;
+		width: 100%;
+		max-width: 420px;
+		display: flex;
+		flex-direction: column;
+		gap: 1rem;
+	}
+
+	.modal-title {
+		font-size: 1rem;
+		font-weight: 700;
+		color: #f9fafb;
+		margin: 0;
+	}
+
+	.modal-field {
+		display: flex;
+		flex-direction: column;
+		gap: 0.35rem;
+	}
+
+	.modal-label {
+		font-size: 0.75rem;
+		font-weight: 600;
+		color: var(--color-neutral-400, #9ca3af);
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+	}
+
+	.modal-select {
+		padding: 0.45rem 0.6rem;
+		background: rgba(255, 255, 255, 0.05);
+		border: 1px solid rgba(255, 255, 255, 0.1);
+		border-radius: 6px;
+		color: #f9fafb;
+		font-size: 0.875rem;
+	}
+
+	.modal-hint {
+		font-size: 0.8125rem;
+		color: var(--color-neutral-400, #9ca3af);
+		margin: 0;
+		padding: 0.5rem 0.75rem;
+		background: rgba(99, 102, 241, 0.08);
+		border-left: 3px solid var(--color-primary-500, #6366f1);
+		border-radius: 4px;
+	}
+
+	.modal-actions {
+		display: flex;
+		justify-content: flex-end;
+		gap: 0.75rem;
+		margin-top: 0.25rem;
+	}
+
+	.btn-cancel {
+		padding: 0.45rem 1rem;
+		border-radius: 6px;
+		border: 1px solid rgba(255, 255, 255, 0.12);
+		background: transparent;
+		color: var(--color-neutral-400, #9ca3af);
+		font-size: 0.8125rem;
+		cursor: pointer;
+	}
+
+	.btn-cancel:hover {
+		background: rgba(255, 255, 255, 0.04);
 	}
 </style>

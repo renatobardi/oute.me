@@ -43,7 +43,7 @@ async function createMilestonesFromEstimate(
 ): Promise<void> {
 	for (let i = 0; i < milestones.length; i++) {
 		const m = milestones[i];
-		await sql`
+		const [milestone] = await sql<{ id: string }[]>`
 			INSERT INTO public.milestones (
 				project_id, name, description, duration_weeks,
 				sort_order, deliverables, dependencies
@@ -53,7 +53,20 @@ async function createMilestonesFromEstimate(
 				${m.duration_weeks}, ${i},
 				${sql.json(m.deliverables)}, ${sql.json(m.dependencies)}
 			)
+			RETURNING id
 		`;
+		if (milestone && m.deliverables?.length > 0) {
+			for (let j = 0; j < m.deliverables.length; j++) {
+				await sql`
+					INSERT INTO public.tasks (
+						milestone_id, project_id, title, sort_order
+					)
+					VALUES (
+						${milestone.id}, ${projectId}, ${m.deliverables[j]}, ${j}
+					)
+				`;
+			}
+		}
 	}
 }
 

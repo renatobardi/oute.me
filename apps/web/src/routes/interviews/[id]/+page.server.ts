@@ -2,6 +2,8 @@ import type { PageServerLoad } from './$types';
 import { error, redirect } from '@sveltejs/kit';
 import { getOrCreateUser } from '$lib/server/users';
 import { getInterview, getMessages, getDocuments } from '$lib/server/interviews';
+import { getEstimateByInterview } from '$lib/server/estimates';
+import { getProjectByEstimate } from '$lib/server/projects';
 import { getUserActiveTone } from '$lib/server/tones';
 import { warmUpAiService } from '$lib/server/ai-client';
 
@@ -22,11 +24,27 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 		throw error(404, 'Entrevista não encontrada');
 	}
 
-	const [messages, documents, activeTone] = await Promise.all([
+	const [messages, documents, activeTone, existingEstimate] = await Promise.all([
 		getMessages(params.id),
 		getDocuments(params.id),
 		getUserActiveTone(user.id),
+		getEstimateByInterview(params.id, user.id),
 	]);
 
-	return { interview, messages, documents, toneAction: activeTone?.action ?? null };
+	const existingProject = existingEstimate?.approved_at
+		? await getProjectByEstimate(existingEstimate.id, user.id).catch(() => null)
+		: null;
+
+	return {
+		interview,
+		messages,
+		documents,
+		toneAction: activeTone?.action ?? null,
+		existingEstimate: existingEstimate
+			? { id: existingEstimate.id, status: existingEstimate.status }
+			: null,
+		existingProject: existingProject
+			? { id: existingProject.id, name: existingProject.name }
+			: null,
+	};
 };

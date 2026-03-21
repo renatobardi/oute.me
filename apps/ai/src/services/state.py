@@ -18,6 +18,9 @@ class StateBackend(Protocol):
     async def update_job(
         self, job_id: str, status: str, result: dict[str, object] | None = None
     ) -> None: ...
+    async def update_agent_steps(
+        self, job_id: str, steps: list[dict[str, object]]
+    ) -> None: ...
 
 
 class RedisStateBackend:
@@ -47,6 +50,18 @@ class RedisStateBackend:
             job["result"] = result
         data = json.dumps(job)
         await self._redis.setex(f"job:{job_id}", JOB_TTL_HOURS * 3600, data)
+
+    async def update_agent_steps(
+        self, job_id: str, steps: list[dict[str, object]]
+    ) -> None:
+        data_raw = await self._redis.get(f"job:{job_id}")
+        if data_raw is None:
+            return
+        job = json.loads(data_raw)
+        result = job.get("result") or {}
+        result["_agent_steps"] = steps
+        job["result"] = result
+        await self._redis.setex(f"job:{job_id}", JOB_TTL_HOURS * 3600, json.dumps(job))
 
 
 class PostgresStateBackend:
@@ -93,6 +108,20 @@ class PostgresStateBackend:
                WHERE job_id = $3""",
             status,
             result_json,
+            job_id,
+        )
+
+    async def update_agent_steps(
+        self, job_id: str, steps: list[dict[str, object]]
+    ) -> None:
+        pool = await self._get_pool()
+        await pool.execute(
+            """UPDATE ai.job_state
+               SET result = COALESCE(result, '{}'::jsonb)
+                         || jsonb_build_object('_agent_steps', $1::jsonb),
+                   updated_at = now()
+               WHERE job_id = $2""",
+            json.dumps(steps),
             job_id,
         )
 

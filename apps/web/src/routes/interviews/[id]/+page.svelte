@@ -30,7 +30,10 @@
 	let inputText = $state('');
 	let fileInput = $state<HTMLInputElement | null>(null);
 	let chatContainer = $state<HTMLElement | null>(null);
+	let textareaRef = $state<HTMLTextAreaElement | null>(null);
 	let isRequestingEstimate = $state(false);
+	let existingEstimate = $state(data.existingEstimate ?? null);
+	let existingProject = $state(data.existingProject ?? null);
 
 	// Editable title state
 	let isTitleEditing = $state(false);
@@ -90,11 +93,15 @@
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ interview_id: data.interview.id }),
 			});
-			if (!res.ok) throw new Error('Failed to create estimate');
+			if (!res.ok) {
+				const body = await res.json().catch(() => ({}));
+				throw new Error(body?.error || `Erro ${res.status}`);
+			}
 			const result = await res.json();
+			existingEstimate = { id: result.id, status: result.status };
 			goto(`/estimates/${result.id}`);
-		} catch {
-			chat.error = 'Erro ao solicitar estimativa.';
+		} catch (e) {
+			chat.error = `Erro ao solicitar estimativa: ${e instanceof Error ? e.message : 'tente novamente'}`;
 			isRequestingEstimate = false;
 		}
 	}
@@ -102,6 +109,12 @@
 	$effect(() => {
 		if (chatContainer && (chat.messages.length || chat.currentStreamText)) {
 			chatContainer.scrollTop = chatContainer.scrollHeight;
+		}
+	});
+
+	$effect(() => {
+		if (!chat.isStreaming && textareaRef) {
+			textareaRef.focus();
 		}
 	});
 
@@ -209,7 +222,23 @@
 			</ul>
 		</div>
 
-		{#if canEstimate}
+		{#if existingProject}
+			<div class="sidebar-section estimate-action">
+				<a class="estimate-link project-link" href="/projects/{existingProject.id}">
+					<span class="estimate-link-label">Ver Projeto</span>
+					<span class="project-link-name">{existingProject.name}</span>
+				</a>
+			</div>
+		{/if}
+
+		{#if existingEstimate}
+			<div class="sidebar-section estimate-action">
+				<a class="estimate-link" href="/estimates/{existingEstimate.id}">
+					<span class="estimate-link-label">Ver Estimativa</span>
+					<span class="estimate-status-badge status-{existingEstimate.status}">{existingEstimate.status}</span>
+				</a>
+			</div>
+		{:else if canEstimate}
 			<div class="sidebar-section estimate-action">
 				<Button onclick={requestEstimate} disabled={isRequestingEstimate} size="lg">
 					{isRequestingEstimate ? 'Solicitando...' : 'Solicitar Estimativa'}
@@ -302,6 +331,7 @@
 				</svg>
 			</button>
 			<textarea
+				bind:this={textareaRef}
 				bind:value={inputText}
 				onkeydown={handleKeydown}
 				oninput={autoResize}
@@ -517,6 +547,73 @@
 	/* ── Estimate action ── */
 	.estimate-action :global(.btn) {
 		width: 100%;
+	}
+
+	.estimate-link {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		width: 100%;
+		padding: 0.6rem 0.9rem;
+		background: rgba(99, 102, 241, 0.12);
+		border: 1px solid rgba(99, 102, 241, 0.3);
+		border-radius: 8px;
+		text-decoration: none;
+		transition: background 0.15s;
+	}
+
+	.estimate-link:hover {
+		background: rgba(99, 102, 241, 0.2);
+	}
+
+	.estimate-link-label {
+		font-size: 0.875rem;
+		font-weight: 600;
+		color: #c7d2fe;
+	}
+
+	.estimate-status-badge {
+		font-size: 0.7rem;
+		font-weight: 600;
+		padding: 0.15rem 0.4rem;
+		border-radius: 4px;
+		text-transform: uppercase;
+		letter-spacing: 0.03em;
+	}
+
+	.status-pending,
+	.status-running {
+		background: rgba(99, 102, 241, 0.2);
+		color: #a5b4fc;
+	}
+
+	.status-done,
+	.status-approved {
+		background: rgba(16, 185, 129, 0.2);
+		color: #6ee7b7;
+	}
+
+	.status-failed {
+		background: rgba(239, 68, 68, 0.2);
+		color: #fca5a5;
+	}
+
+	.project-link {
+		background: rgba(16, 185, 129, 0.1);
+		border-color: rgba(16, 185, 129, 0.3);
+	}
+
+	.project-link:hover {
+		background: rgba(16, 185, 129, 0.18);
+	}
+
+	.project-link-name {
+		font-size: 0.75rem;
+		color: #6ee7b7;
+		max-width: 120px;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 
 	/* ── Documents ── */
