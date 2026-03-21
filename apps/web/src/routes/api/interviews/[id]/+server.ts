@@ -1,7 +1,7 @@
 import type { RequestHandler } from './$types';
 import { requireAuth, jsonOk, jsonError } from '$lib/server/api-utils';
 import { getOrCreateUser } from '$lib/server/users';
-import { getInterview, getMessages, getDocuments } from '$lib/server/interviews';
+import { getInterview, getMessages, getDocuments, updateInterviewTitle } from '$lib/server/interviews';
 
 export const GET: RequestHandler = async ({ locals, params }) => {
 	const auth = requireAuth(locals);
@@ -18,4 +18,23 @@ export const GET: RequestHandler = async ({ locals, params }) => {
 	]);
 
 	return jsonOk({ interview, messages, documents });
+};
+
+export const PATCH: RequestHandler = async ({ locals, params, request }) => {
+	const auth = requireAuth(locals);
+	const user = await getOrCreateUser(auth.uid, auth.email, auth.name);
+
+	const interview = await getInterview(params.id, user.id);
+	if (!interview) {
+		return jsonError(404, 'Interview not found');
+	}
+
+	const body = await request.json();
+	const title = body.title as string;
+	if (!title?.trim()) {
+		return jsonError(400, 'Title is required');
+	}
+
+	await updateInterviewTitle(params.id, title.trim());
+	return jsonOk({ title: title.trim() });
 };
