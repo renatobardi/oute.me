@@ -139,7 +139,7 @@
 				throw new Error(body?.error || `Erro ${res.status}`);
 			}
 			const result = await res.json();
-			existingEstimate = { id: result.id, status: result.status };
+			existingEstimate = { id: result.id, status: result.status, agent_steps: [] };
 			goto(`/estimates/${result.id}`);
 		} catch (e) {
 			chat.error = `Erro ao solicitar estimativa: ${e instanceof Error ? e.message : 'tente novamente'}`;
