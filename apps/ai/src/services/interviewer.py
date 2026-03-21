@@ -27,11 +27,38 @@ from src.services.interview_initializer import (
     ensure_domains_initialized,
     get_uncovered_vital_domains,
 )
-from src.services.llm import stream_chat
+from src.services.llm import analyze_json, stream_chat
 from src.services.prompts import build_system_prompt
 from src.services.state_analyzer import analyze_and_update_state
 
 logger = logging.getLogger(__name__)
+
+
+async def _suggest_title(
+    user_message: str,
+    llm_model: str,
+    history: list[dict[str, str]] | None = None,
+) -> str | None:
+    """Generate a short project name from the conversation context."""
+    user_messages = [m["content"] for m in (history or []) if m.get("role") == "user"]
+    if user_message not in user_messages:
+        user_messages.append(user_message)
+    context = "\n".join(f"- {m}" for m in user_messages[-5:])
+    prompt = (
+        "Based on the user messages below from a software project scoping conversation, "
+        "generate a short and representative project name (2 to 5 words). "
+        "Use the same language as the messages. "
+        "Respond ONLY with valid JSON in the format: {\"title\": \"Project Name\"}\n\n"
+        f"User messages:\n{context}"
+    )
+    try:
+        result = await analyze_json(prompt, llm_model=llm_model, max_seconds=15.0)
+        title = result.get("title")
+        if isinstance(title, str) and title.strip():
+            return title.strip()
+    except Exception:
+        logger.warning("Failed to generate suggested title", exc_info=True)
+    return None
 
 
 async def process_message(
@@ -92,12 +119,31 @@ async def process_message(
         },
     )
 
-    # Análise de estado assíncrona (não bloqueia o streaming)
-    updated_state, maturity = await analyze_and_update_state(
-        initialized_state,      # usa o estado inicializado, não o original
+    # Conta quantas mensagens do usuário já existem no histórico (excluindo a atual)
+    user_turns = sum(1 for m in request.history if m.role == "user")
+
+    # Análise de estado e title suggestion em paralelo
+    state_task = analyze_and_update_state(
+        initialized_state,
         request.user_message,
         full_response,
     )
+
+    should_suggest_title = user_turns <= 5 and request.current_title is None
+    title_task = (
+        _suggest_title(request.user_message, request.llm_model, history)
+        if should_suggest_title
+        else None
+    )
+
+    if title_task is not None:
+        import asyncio
+        (updated_state, maturity), suggested_title = await asyncio.gather(
+            state_task, title_task
+        )
+    else:
+        updated_state, maturity = await state_task
+        suggested_title = None
 
     logger.info(
         "Interview %s — maturity: %.3f | vitals uncovered: %s",
@@ -106,15 +152,16 @@ async def process_message(
         get_uncovered_vital_domains(updated_state),
     )
 
-    yield _sse_event(
-        "state_update",
-        {
-            "maturity": maturity,
-            "domains": {k: v.model_dump() for k, v in updated_state.domains.items()},
-            "open_questions": updated_state.open_questions,
-            "state": updated_state.model_dump(),
-        },
-    )
+    state_update_data: dict[str, object] = {
+        "maturity": maturity,
+        "domains": {k: v.model_dump() for k, v in updated_state.domains.items()},
+        "open_questions": updated_state.open_questions,
+        "state": updated_state.model_dump(),
+    }
+    if suggested_title:
+        state_update_data["suggested_title"] = suggested_title
+
+    yield _sse_event("state_update", state_update_data)
 
 
 def _sse_event(event: str, data: dict[str, object]) -> dict[str, str]:

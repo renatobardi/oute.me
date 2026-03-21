@@ -40,6 +40,19 @@ export async function createKnowledgeEntry(data: {
 	return rows[0];
 }
 
+export async function updateKnowledgeEntry(
+	id: string,
+	data: { title: string; content: string; original_url: string | null }
+): Promise<AdminKnowledge> {
+	const rows = await sql<AdminKnowledge[]>`
+		UPDATE public.admin_knowledge
+		SET title = ${data.title}, content = ${data.content}, original_url = ${data.original_url}, updated_at = now()
+		WHERE id = ${id}
+		RETURNING *
+	`;
+	return rows[0];
+}
+
 export async function deleteKnowledgeEntry(id: string): Promise<void> {
 	await sql`DELETE FROM public.admin_knowledge WHERE id = ${id}`;
 }

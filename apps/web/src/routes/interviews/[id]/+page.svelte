@@ -23,13 +23,54 @@
 			filename: d.filename,
 			status: d.status as 'pending' | 'processing' | 'completed' | 'failed',
 			mime_type: d.mime_type,
-		}))
+		})),
+		data.interview.title
 	);
 
 	let inputText = $state('');
 	let fileInput = $state<HTMLInputElement | null>(null);
 	let chatContainer = $state<HTMLElement | null>(null);
 	let isRequestingEstimate = $state(false);
+
+	// Editable title state
+	let isTitleEditing = $state(false);
+	let titleEditValue = $state('');
+	let isTitleHovered = $state(false);
+
+	function startTitleEdit() {
+		titleEditValue = chat.title ?? '';
+		isTitleEditing = true;
+	}
+
+	function cancelTitleEdit() {
+		isTitleEditing = false;
+	}
+
+	async function saveTitleEdit() {
+		const newTitle = titleEditValue.trim();
+		if (!newTitle || newTitle === chat.title) {
+			isTitleEditing = false;
+			return;
+		}
+		try {
+			const res = await fetch(`/api/interviews/${data.interview.id}`, {
+				method: 'PATCH',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ title: newTitle }),
+			});
+			if (res.ok) {
+				chat.setTitle(newTitle);
+			}
+		} catch {
+			// silently fail
+		}
+		isTitleEditing = false;
+	}
+
+	function handleTitleKeydown(e: KeyboardEvent) {
+		if (e.key === 'Enter') saveTitleEdit();
+		else if (e.key === 'Escape') cancelTitleEdit();
+	}
 
 	let canEstimate = $derived(chat.maturity >= MATURITY_THRESHOLD && !chat.isStreaming);
 
@@ -93,13 +134,53 @@
 </script>
 
 <svelte:head>
-	<title>{data.interview.title || 'Entrevista'} — oute.pro</title>
+	<title>{chat.title || 'Entrevista'} — oute.pro</title>
 </svelte:head>
 
 <div class="interview-page">
 	<!-- SIDEBAR -->
 	<aside class="sidebar">
-		<h2 class="sidebar-title">{data.interview.title || 'Nova Entrevista'}</h2>
+		<!-- Editable title -->
+		{#if isTitleEditing}
+			<div class="title-edit">
+				<input
+					class="title-input"
+					bind:value={titleEditValue}
+					onkeydown={handleTitleKeydown}
+					maxlength={80}
+					autofocus
+				/>
+				<div class="title-edit-actions">
+					<button class="title-action-btn confirm" onclick={saveTitleEdit} title="Salvar">
+						<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+							<polyline points="20 6 9 17 4 12"/>
+						</svg>
+					</button>
+					<button class="title-action-btn cancel" onclick={cancelTitleEdit} title="Cancelar">
+						<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+							<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+						</svg>
+					</button>
+				</div>
+			</div>
+		{:else}
+			<!-- svelte-ignore a11y_no_static_element_interactions -->
+			<div
+				class="sidebar-title-wrap"
+				onmouseenter={() => (isTitleHovered = true)}
+				onmouseleave={() => (isTitleHovered = false)}
+			>
+				<h2 class="sidebar-title">{chat.title || 'Nova Entrevista'}</h2>
+				{#if isTitleHovered}
+					<button class="title-edit-btn" onclick={startTitleEdit} title="Editar nome">
+						<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+							<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+							<path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+						</svg>
+					</button>
+				{/if}
+			</div>
+		{/if}
 
 		<div class="sidebar-section">
 			<MaturityBar maturity={chat.maturity} domains={chat.domains} />
@@ -113,14 +194,16 @@
 					<li class="domain-item">
 						<div class="domain-header">
 							<span class="domain-name">{domainLabels[key] || key}</span>
-							<span class="domain-count">{domain.answered}/{domain.total}</span>
+							<div class="domain-header-right">
+								{#if domain.vital_answered}
+									<span class="vital-tag">vital</span>
+								{/if}
+								<span class="domain-count">{domain.answered}/{domain.total}</span>
+							</div>
 						</div>
 						<div class="domain-track">
 							<div class="domain-fill" style="width: {progress}%"></div>
 						</div>
-						{#if domain.vital_answered}
-							<span class="vital-tag">vital</span>
-						{/if}
 					</li>
 				{/each}
 			</ul>
@@ -253,14 +336,98 @@
 		gap: 0.25rem;
 	}
 
+	/* ── Editable title ── */
+	.sidebar-title-wrap {
+		display: flex;
+		align-items: center;
+		gap: 0.375rem;
+		margin-bottom: 1rem;
+		min-width: 0;
+	}
+
 	.sidebar-title {
 		font-size: 1.125rem;
 		font-weight: 700;
 		color: #f9fafb;
-		margin: 0 0 1rem;
+		margin: 0;
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
+		flex: 1;
+		min-width: 0;
+	}
+
+	.title-edit-btn {
+		flex-shrink: 0;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		background: none;
+		border: none;
+		color: var(--color-neutral-500, #6b7280);
+		cursor: pointer;
+		padding: 0.25rem;
+		border-radius: 4px;
+		transition: color 0.15s, background 0.15s;
+	}
+
+	.title-edit-btn:hover {
+		color: var(--color-primary-500, #6366f1);
+		background: rgba(99, 102, 241, 0.1);
+	}
+
+	.title-edit {
+		margin-bottom: 1rem;
+	}
+
+	.title-input {
+		width: 100%;
+		background: var(--color-dark-bg, #0f1117);
+		border: 1px solid var(--color-primary-500, #6366f1);
+		border-radius: 6px;
+		color: #f9fafb;
+		font-size: 1rem;
+		font-weight: 700;
+		padding: 0.375rem 0.5rem;
+		outline: none;
+		box-sizing: border-box;
+	}
+
+	.title-edit-actions {
+		display: flex;
+		gap: 0.375rem;
+		margin-top: 0.375rem;
+		justify-content: flex-end;
+	}
+
+	.title-action-btn {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 28px;
+		height: 28px;
+		border-radius: 6px;
+		border: none;
+		cursor: pointer;
+		transition: background 0.15s;
+	}
+
+	.title-action-btn.confirm {
+		background: rgba(16, 185, 129, 0.15);
+		color: var(--color-success, #10b981);
+	}
+
+	.title-action-btn.confirm:hover {
+		background: rgba(16, 185, 129, 0.25);
+	}
+
+	.title-action-btn.cancel {
+		background: rgba(239, 68, 68, 0.15);
+		color: var(--color-error, #ef4444);
+	}
+
+	.title-action-btn.cancel:hover {
+		background: rgba(239, 68, 68, 0.25);
 	}
 
 	.sidebar-section {
@@ -333,15 +500,17 @@
 		transition: width 0.4s ease;
 	}
 
+	.domain-header-right {
+		display: flex;
+		align-items: center;
+		gap: 0.375rem;
+	}
+
 	.vital-tag {
-		position: absolute;
-		top: 0;
-		right: -0.125rem;
 		font-size: 0.625rem;
 		color: var(--color-success, #10b981);
 		text-transform: uppercase;
 		letter-spacing: 0.04em;
-		transform: translateY(-0.125rem);
 	}
 
 	/* ── Estimate action ── */

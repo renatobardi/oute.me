@@ -28,6 +28,8 @@ export interface KnowledgeVector {
 
 export interface CockpitDetail {
 	interview: Interview;
+	user_name: string | null;
+	user_email: string;
 	messages: InterviewMessage[];
 	messageTotal: number;
 	documents: InterviewDocument[];
@@ -69,8 +71,11 @@ export async function getAllInterviewsForAdmin(): Promise<CockpitInterview[]> {
 export async function getCockpitInterviewDetail(interviewId: string): Promise<CockpitDetail | null> {
 	const [interviewRows, messageRows, messageCountRows, documentRows, estimateRows, vectorRows] =
 		await Promise.all([
-			sql<Interview[]>`
-				SELECT * FROM public.interviews WHERE id = ${interviewId}
+			sql<(Interview & { user_name: string | null; user_email: string })[]>`
+				SELECT i.*, u.display_name AS user_name, u.email AS user_email
+				FROM public.interviews i
+				JOIN public.users u ON u.id = i.user_id
+				WHERE i.id = ${interviewId}
 			`,
 			sql<InterviewMessage[]>`
 				SELECT * FROM public.interview_messages
@@ -118,6 +123,8 @@ export async function getCockpitInterviewDetail(interviewId: string): Promise<Co
 
 	return {
 		interview,
+		user_name: interviewRows[0]?.user_name ?? null,
+		user_email: interviewRows[0]?.user_email ?? '',
 		messages: messageRows.reverse(),
 		messageTotal: parseInt(messageCountRows[0]?.count ?? '0', 10),
 		documents: documentRows,

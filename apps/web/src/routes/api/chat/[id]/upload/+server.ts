@@ -5,6 +5,7 @@ import { getOrCreateUser } from '$lib/server/users';
 import { getInterview, addDocument, updateDocumentStatus } from '$lib/server/interviews';
 import { postFile } from '$lib/server/ai-client';
 import { jsonOk, jsonError } from '$lib/server/api-utils';
+import { uploadFile, storageBackend } from '$lib/server/storage';
 
 const ALLOWED_TYPES = new Set([
 	'application/pdf',
@@ -47,31 +48,65 @@ export const POST: RequestHandler = async ({ locals, params, request }) => {
 		return jsonError(400, 'File too large (max 10MB)');
 	}
 
-	const storagePath = `interviews/${params.id}/${Date.now()}_${file.name}`;
+	// 1. Read file bytes
+	let buffer: Buffer;
+	try {
+		buffer = Buffer.from(await file.arrayBuffer());
+	} catch (err) {
+		console.error(`[Upload] Failed to read file bytes for interview ${params.id}:`, err);
+		return jsonError(400, 'Failed to read file');
+	}
 
-	let doc: { id: string } | undefined;
+	// 2. Upload to storage (GCS in prod, local in dev)
+	const storagePath = `interviews/${params.id}/${Date.now()}_${file.name}`;
+	try {
+		await uploadFile(storagePath, buffer, file.type);
+	} catch (err) {
+		console.error(
+			`[Upload] Failed to save file to ${storageBackend()} for interview ${params.id}:`,
+			err
+		);
+		return jsonError(500, 'Failed to save file');
+	}
+
+	// 3. Create DB record
+	let doc: { id: string };
 	try {
 		doc = await addDocument(params.id, file.name, file.type, storagePath);
-		const result = await postFile('/chat/process-document', file, file.name);
-
-		await updateDocumentStatus(
-			doc.id,
-			result.status === 'completed' ? 'completed' : 'failed',
-			result.extracted_text
-		);
-
-		return jsonOk({
-			document: {
-				id: doc.id,
-				filename: file.name,
-				status: result.status,
-			},
-		});
 	} catch (err) {
-		console.error(`[Upload] Failed for interview ${params.id}:`, err);
-		if (doc?.id) {
-			await updateDocumentStatus(doc.id, 'failed').catch(() => {});
-		}
-		return jsonError(502, 'Failed to process document');
+		console.error(`[Upload] Failed to create document record for interview ${params.id}:`, err);
+		return jsonError(500, 'Failed to register document');
 	}
+
+	// 4. Send to AI service for text extraction (best-effort — does not fail the upload)
+	let processedStatus: 'completed' | 'failed' | 'pending' = 'pending';
+	let extractedText: string | undefined;
+
+	try {
+		const result = await postFile(
+			'/chat/process-document',
+			new File([new Uint8Array(buffer)], file.name, { type: file.type }),
+			file.name
+		);
+		processedStatus = result.status === 'completed' ? 'completed' : 'failed';
+		extractedText = result.extracted_text;
+	} catch (err) {
+		console.error(
+			`[Upload] AI processing failed for document ${doc.id} (interview ${params.id}):`,
+			err
+		);
+		processedStatus = 'failed';
+	}
+
+	await updateDocumentStatus(doc.id, processedStatus, extractedText).catch((err) => {
+		console.error(`[Upload] Failed to update document status for ${doc.id}:`, err);
+	});
+
+	return jsonOk({
+		document: {
+			id: doc.id,
+			filename: file.name,
+			status: processedStatus,
+		},
+	});
 };

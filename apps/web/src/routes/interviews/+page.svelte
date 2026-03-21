@@ -5,6 +5,20 @@
 
 	let { data } = $props();
 	let creating = $state(false);
+	let filter = $state<'all' | 'active' | 'archived'>('active');
+	let interviews = $state(data.interviews);
+
+	const filtered = $derived(() => {
+		const base = filter === 'all'
+			? interviews
+			: interviews.filter(i => i.status === filter);
+
+		return [...base].sort((a, b) => {
+			if (a.status === 'archived' && b.status !== 'archived') return 1;
+			if (a.status !== 'archived' && b.status === 'archived') return -1;
+			return new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime();
+		});
+	});
 
 	async function createInterview() {
 		creating = true;
@@ -20,6 +34,24 @@
 			}
 		} finally {
 			creating = false;
+		}
+	}
+
+	async function toggleArchive(event: MouseEvent, interviewId: string, current: string) {
+		event.preventDefault();
+		event.stopPropagation();
+
+		const newStatus = current === 'archived' ? 'active' : 'archived';
+		const res = await fetch(`/api/interviews/${interviewId}`, {
+			method: 'PATCH',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ status: newStatus }),
+		});
+
+		if (res.ok) {
+			interviews = interviews.map(i =>
+				i.id === interviewId ? { ...i, status: newStatus } : i
+			);
 		}
 	}
 
@@ -43,7 +75,7 @@
 		</Button>
 	</SectionHeader>
 
-	{#if data.interviews.length === 0}
+	{#if interviews.length === 0}
 		<div class="empty">
 			<div class="empty-icon">
 				<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
@@ -59,29 +91,87 @@
 			</Button>
 		</div>
 	{:else}
-		<div class="grid">
-			{#each data.interviews as interview (interview.id)}
-				<a href={resolveRoute('/interviews/[id]', { id: interview.id })} class="card">
-					<div class="card-header">
-						<h3 class="card-title">{interview.title || 'Sem título'}</h3>
-						<StatusBadge status={interview.status} size="sm" />
-					</div>
-
-					<div class="card-maturity">
-						<MaturityBar
-							maturity={interview.maturity}
-							domains={interview.state.domains}
-						/>
-					</div>
-
-					<div class="card-footer">
-						<time datetime={new Date(interview.created_at).toISOString()}>
-							{formatDate(interview.created_at)}
-						</time>
-					</div>
-				</a>
-			{/each}
+		<div class="filter-bar">
+			<button
+				class="filter-btn"
+				class:active={filter === 'active'}
+				onclick={() => filter = 'active'}
+			>
+				Ativos
+			</button>
+			<button
+				class="filter-btn"
+				class:active={filter === 'all'}
+				onclick={() => filter = 'all'}
+			>
+				Todos
+			</button>
+			<button
+				class="filter-btn"
+				class:active={filter === 'archived'}
+				onclick={() => filter = 'archived'}
+			>
+				Arquivados
+			</button>
 		</div>
+
+		{#if filtered().length === 0}
+			<div class="empty-filter">
+				<p>Nenhuma entrevista {filter === 'archived' ? 'arquivada' : 'ativa'} encontrada.</p>
+			</div>
+		{:else}
+			<div class="grid">
+				{#each filtered() as interview (interview.id)}
+					{@const isArchived = interview.status === 'archived'}
+					<a
+						href={resolveRoute('/interviews/[id]', { id: interview.id })}
+						class="card"
+						class:card--archived={isArchived}
+					>
+						<div class="card-header">
+							<h3 class="card-title">{interview.title || 'Sem título'}</h3>
+							<div class="card-header-right">
+								<StatusBadge status={interview.status} size="sm" />
+								<button
+									class="archive-btn"
+									class:archive-btn--active={isArchived}
+									title={isArchived ? 'Reativar' : 'Arquivar'}
+									onclick={(e) => toggleArchive(e, interview.id, interview.status)}
+								>
+									{#if isArchived}
+										<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+											<polyline points="1 4 1 10 7 10"/>
+											<path d="M3.51 15a9 9 0 1 0 .49-3.47"/>
+										</svg>
+										Reativar
+									{:else}
+										<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+											<polyline points="21 8 21 21 3 21 3 8"/>
+											<rect x="1" y="3" width="22" height="5"/>
+											<line x1="10" y1="12" x2="14" y2="12"/>
+										</svg>
+										Arquivar
+									{/if}
+								</button>
+							</div>
+						</div>
+
+						<div class="card-maturity">
+							<MaturityBar
+								maturity={interview.maturity}
+								domains={interview.state.domains}
+							/>
+						</div>
+
+						<div class="card-footer">
+							<time datetime={new Date(interview.created_at).toISOString()}>
+								{formatDate(interview.created_at)}
+							</time>
+						</div>
+					</a>
+				{/each}
+			</div>
+		{/if}
 	{/if}
 </div>
 
@@ -90,6 +180,39 @@
 		max-width: 960px;
 		margin: 0 auto;
 		padding: 2rem 1.5rem;
+	}
+
+	/* Filter bar */
+	.filter-bar {
+		display: flex;
+		gap: 0.375rem;
+		margin-bottom: 1.5rem;
+		background: var(--color-dark-surface, #1a1d27);
+		border: 1px solid var(--color-dark-border, rgba(255, 255, 255, 0.08));
+		border-radius: 8px;
+		padding: 0.25rem;
+		width: fit-content;
+	}
+
+	.filter-btn {
+		padding: 0.375rem 1rem;
+		border-radius: 6px;
+		border: none;
+		background: transparent;
+		color: var(--color-neutral-500, #6b7280);
+		font-size: 0.875rem;
+		font-weight: 500;
+		cursor: pointer;
+		transition: background 0.15s, color 0.15s;
+	}
+
+	.filter-btn:hover {
+		color: var(--color-neutral-300, #d1d5db);
+	}
+
+	.filter-btn.active {
+		background: var(--color-dark-sidebar, #2a2d3a);
+		color: var(--color-neutral-100, #f3f4f6);
 	}
 
 	/* Empty state */
@@ -118,6 +241,17 @@
 		margin: 0;
 	}
 
+	.empty-filter {
+		padding: 3rem 1rem;
+		text-align: center;
+		color: var(--color-neutral-500, #6b7280);
+		font-size: 0.875rem;
+	}
+
+	.empty-filter p {
+		margin: 0;
+	}
+
 	/* Grid */
 	.grid {
 		display: grid;
@@ -135,7 +269,7 @@
 		border: 1px solid var(--color-dark-border, rgba(255, 255, 255, 0.08));
 		border-radius: 12px;
 		text-decoration: none;
-		transition: border-color 0.2s, background-color 0.2s;
+		transition: border-color 0.2s, background-color 0.2s, opacity 0.2s;
 	}
 
 	.card:hover {
@@ -143,11 +277,28 @@
 		background-color: var(--color-dark-sidebar, #2a2d3a);
 	}
 
+	.card--archived {
+		opacity: 0.45;
+		filter: grayscale(0.6);
+	}
+
+	.card--archived:hover {
+		opacity: 0.65;
+		border-color: var(--color-neutral-600, #4b5563);
+	}
+
 	.card-header {
 		display: flex;
 		justify-content: space-between;
 		align-items: flex-start;
 		gap: 0.75rem;
+	}
+
+	.card-header-right {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		flex-shrink: 0;
 	}
 
 	.card-title {
@@ -158,6 +309,38 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
+	}
+
+	/* Archive button */
+	.archive-btn {
+		display: flex;
+		align-items: center;
+		gap: 0.3rem;
+		padding: 0.25rem 0.5rem;
+		border-radius: 5px;
+		border: 1px solid transparent;
+		background: transparent;
+		color: var(--color-neutral-500, #6b7280);
+		font-size: 0.7rem;
+		font-weight: 500;
+		cursor: pointer;
+		transition: background 0.15s, color 0.15s, border-color 0.15s;
+		white-space: nowrap;
+	}
+
+	.archive-btn:hover {
+		background: rgba(255, 255, 255, 0.06);
+		color: var(--color-neutral-300, #d1d5db);
+		border-color: var(--color-dark-border, rgba(255, 255, 255, 0.08));
+	}
+
+	.archive-btn--active {
+		color: var(--color-success, #10b981);
+	}
+
+	.archive-btn--active:hover {
+		color: var(--color-success, #10b981);
+		border-color: var(--color-success, #10b981);
 	}
 
 	.card-maturity {

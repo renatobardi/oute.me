@@ -39,7 +39,8 @@ export function createChatState(
 	initialMessages: InterviewMessage[],
 	initialMaturity: number,
 	initialDomains: Record<string, DomainState>,
-	initialDocuments: ChatDocument[]
+	initialDocuments: ChatDocument[],
+	initialTitle: string | null = null
 ) {
 	let messages = $state<ChatMessage[]>(
 		initialMessages.map((m) => ({
@@ -52,6 +53,8 @@ export function createChatState(
 	let isStreaming = $state(false);
 	let maturity = $state(initialMaturity);
 	let domains = $state(initialDomains);
+	let title = $state<string | null>(initialTitle);
+	let titleUserSet = $state(initialTitle !== null);
 	let currentStreamText = $state('');
 	let error = $state<string | null>(null);
 	let uploadError = $state<string | null>(null);
@@ -126,6 +129,10 @@ export function createChatState(
 						} else if (eventType === 'state_update') {
 							maturity = data.maturity;
 							domains = data.domains;
+						} else if (eventType === 'title_update') {
+							if (!titleUserSet) {
+								title = data.title as string;
+							}
 						} else if (eventType === 'done') {
 							messages = [
 								...messages,
@@ -186,6 +193,11 @@ export function createChatState(
 		}
 	}
 
+	function setTitle(newTitle: string) {
+		title = newTitle;
+		titleUserSet = true;
+	}
+
 	return {
 		get messages() {
 			return messages;
@@ -220,7 +232,11 @@ export function createChatState(
 		get totalTokensUsed() {
 			return totalTokensUsed;
 		},
+		get title() {
+			return title;
+		},
 		sendMessage,
 		uploadDocument,
+		setTitle,
 	};
 }
