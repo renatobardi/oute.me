@@ -70,7 +70,7 @@ def _make_task_done_callback(
                 step["status"] = "done"
                 break
         asyncio.run_coroutine_threadsafe(
-            backend.update_agent_steps(job_id, steps),  # type: ignore[arg-type]
+            backend.update_agent_steps(job_id, steps),
             loop,
         )
 
@@ -120,7 +120,7 @@ async def run_pipeline(
         pending_steps: list[dict[str, Any]] = [
             {"agent_key": k, "status": "pending"} for k in AGENT_KEYS
         ]
-        await backend.update_agent_steps(job_id, pending_steps)  # type: ignore[arg-type]
+        await backend.update_agent_steps(job_id, pending_steps)
 
         # Build real-time callback — updates each step as it completes during execution
         _steps_ref, task_done_cb = _make_task_done_callback(job_id, loop, backend)

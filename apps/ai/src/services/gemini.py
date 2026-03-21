@@ -6,7 +6,6 @@ from collections.abc import AsyncGenerator
 from google.api_core.exceptions import ResourceExhausted, ServiceUnavailable
 from vertexai.generative_models import Content, GenerationConfig, GenerativeModel, Part
 
-
 logger = logging.getLogger(__name__)
 
 # Vertex AI é inicializado uma vez em main.py via vertexai.init()

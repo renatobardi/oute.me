@@ -2,20 +2,22 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Coroutine
+from typing import Any
 
 from crewai.tools import BaseTool
 
 logger = logging.getLogger(__name__)
 
 
-def _run_async_in_sync[T](coro: object) -> T:
+def _run_async_in_sync[T](coro: Coroutine[Any, Any, T]) -> T:
     """Run an async coroutine from CrewAI's sync tool context.
 
     Since CrewAI tools run inside a ThreadPoolExecutor (separate thread
     from the FastAPI event loop), we can safely create a new event loop.
     """
     try:
-        return asyncio.run(coro)  # type: ignore[arg-type]
+        return asyncio.run(coro)
     except Exception:
         logger.exception("Failed to run async coroutine in sync context")
         raise
@@ -34,7 +36,7 @@ class VectorSearchTool(BaseTool):
         from src.services.vector_store import search_similar
 
         try:
-            results = _run_async_in_sync(search_similar(query, limit=5))
+            results: list[dict[str, Any]] = _run_async_in_sync(search_similar(query, limit=5))
         except Exception:
             logger.exception("Vector search failed for query: %s", query[:100])
             return json.dumps(
@@ -69,7 +71,7 @@ class WebSearchTool(BaseTool):
         from src.services.web_search import search_web
 
         try:
-            results = _run_async_in_sync(search_web(query))
+            results: list[dict[str, str]] = _run_async_in_sync(search_web(query))
         except Exception:
             logger.exception("Web search failed for query: %s", query[:100])
             return json.dumps(

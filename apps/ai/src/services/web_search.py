@@ -17,7 +17,7 @@ async def search_web(query: str, num_results: int = 5) -> list[dict[str, str]]:
         return []
 
     url = "https://www.googleapis.com/customsearch/v1"
-    params = {
+    params: dict[str, str | int] = {
         "key": settings.google_search_api_key,
         "cx": settings.google_search_cx,
         "q": query,
