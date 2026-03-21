@@ -106,24 +106,43 @@ design_architecture:
 
 estimate_costs:
   description: >
-    Com base na arquitetura proposta e métricas de projetos similares,
-    elabore 3 cenários de custos.
+    Elabore 3 cenários financeiros com base nos dados abaixo.
 
-    Arquitetura:
+    ## Arquitetura e Milestones
     {architecture}
+    → Extraia: número de milestones, duração total em semanas, complexidade
+      de cada milestone, número de integrações externas.
 
-    Projetos similares:
+    ## Projetos Similares e Benchmarks de Mercado
     {similar_projects}
+    → Extraia: custo médio, duração média, tamanho médio da equipe,
+      taxa horária média (avg_cost_per_hour).
 
-    Para cada cenário (conservador, moderado, otimista), defina:
-    - Total de horas estimadas
-    - Taxa horária sugerida
-    - Custo total
-    - Duração em semanas
-    - Tamanho da equipe
-    - Nível de confiança (0.0 a 1.0)
+    ## Método de Cálculo
+    Para cada cenário (conservador, moderado, otimista):
+    1. Calcule total_hours somando as horas por milestone. Cada milestone:
+       horas = duration_weeks × team_size × 40h × utilization (0.70-0.85).
+    2. Defina hourly_rate baseado na complexidade e benchmarks de mercado.
+    3. Calcule total_cost = total_hours × hourly_rate (exato).
+    4. Defina team_size considerando: conservador usa equipe menor,
+       otimista usa equipe maior e mais experiente.
+    5. Calcule duration_weeks = total_hours / (team_size × horas_semanais).
+    6. Defina confidence seguindo os ranges do seu perfil.
+
+    ## Diferenciação entre Cenários
+    - Conservador: assume riscos se materializando, equipe júnior-pleno,
+      mais tempo para revisões, buffer de contingência de 30-50%.
+    - Moderado: cenário mais provável, equipe pleno-sênior mista, buffer de 10-15%.
+    - Otimista: assume execução ideal, equipe sênior, sem impedimentos, buffer mínimo.
+
+    ## Regras
+    - Moeda: BRL (Real brasileiro).
+    - total_cost DEVE ser exatamente total_hours × hourly_rate.
+    - Confidence do conservador > moderado > otimista.
+    - Total_cost do conservador > moderado > otimista.
+    - Duration_weeks do conservador > moderado > otimista.
   expected_output: >
-    Um documento JSON com:
+    Um documento JSON com exatamente esta estrutura:
     {
       "scenarios": [
         {
@@ -132,12 +151,15 @@ estimate_costs:
           "total_hours": 0,
           "hourly_rate": 0.0,
           "total_cost": 0.0,
-          "duration_weeks": 0,
+          "duration_weeks": 0.0,
           "team_size": 0,
-          "confidence": 0.0
+          "confidence": 0.0,
+          "currency": "BRL",
+          "risk_buffer_percent": 0.0
         }
       ]
     }
+    Os 3 cenários DEVEM ser: conservador, moderado, otimista (nesta ordem).
   agent: cost_specialist
 
 review_and_summarize:
