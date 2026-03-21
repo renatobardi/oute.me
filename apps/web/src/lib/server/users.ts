@@ -18,7 +18,7 @@ export interface DbUser {
 	updated_at: string;
 }
 
-function isAdminEmail(email: string): boolean {
+export function isAdminEmail(email: string): boolean {
 	const adminEmails = (env.ADMIN_EMAILS ?? '')
 		.split(',')
 		.map((e) => e.trim().toLowerCase())
