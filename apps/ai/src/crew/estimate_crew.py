@@ -33,6 +33,7 @@ AGENT_KEYS: list[str] = [
 ]
 
 StepCallback = Callable[[AgentStep], None]
+type TaskDoneCallback = Callable[[str], None]  # called with agent_key
 
 
 def _load_yaml(filename: str) -> dict[str, object]:
@@ -61,6 +62,7 @@ def build_estimate_crew(
     documents_context: str,
     agent_instructions: dict[str, str] | None = None,
     agent_config: dict[str, dict[str, Any]] | None = None,
+    task_done_callback: TaskDoneCallback | None = None,
 ) -> EstimateCrew:
     agents_config = _load_yaml("agents.yaml")
     tasks_config = _load_yaml("tasks.yaml")
@@ -168,6 +170,19 @@ def build_estimate_crew(
 
     tasks_by_key = dict(zip(AGENT_KEYS, all_tasks, strict=True))
 
+    # Build a sequential-index callback for Crew.task_callback.
+    # CrewAI calls task_callback(TaskOutput) after each task in order.
+    _crew_task_callback = None
+    if task_done_callback is not None:
+        _task_index: list[int] = [0]
+        _agent_keys_snapshot = list(AGENT_KEYS)
+
+        def _crew_task_callback(task_output: Any) -> None:
+            idx = _task_index[0]
+            if idx < len(_agent_keys_snapshot):
+                task_done_callback(_agent_keys_snapshot[idx])
+            _task_index[0] += 1
+
     crew = Crew(
         agents=[
             architecture_interviewer,
@@ -180,6 +195,7 @@ def build_estimate_crew(
         tasks=all_tasks,
         process=Process.sequential,
         verbose=False,
+        task_callback=_crew_task_callback,
     )
 
     return EstimateCrew(crew=crew, tasks_by_key=tasks_by_key)
@@ -188,6 +204,7 @@ def build_estimate_crew(
 def run_and_collect(
     estimate_crew: EstimateCrew,
     on_step: StepCallback | None = None,
+    task_done_callback: TaskDoneCallback | None = None,
 ) -> dict[str, Any]:
     """Run the crew and collect per-agent outputs into an aggregated result.
 

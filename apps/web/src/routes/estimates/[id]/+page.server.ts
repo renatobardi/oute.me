@@ -1,6 +1,6 @@
 import { error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
-import { getEstimate, updateEstimateStatus } from '$lib/server/estimates';
+import { getEstimate, updateEstimateStatus, updateEstimateRun } from '$lib/server/estimates';
 import { getProjectByEstimate } from '$lib/server/projects';
 import { getJSON } from '$lib/server/ai-client';
 import type { AgentStep } from '$lib/types/estimate';
@@ -35,6 +35,12 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 					aiStatus.result ?? undefined,
 					aiStatus.agent_steps ?? []
 				);
+				if (['done', 'failed'].includes(aiStatus.status) && estimate.job_id) {
+					await updateEstimateRun(estimate.job_id, aiStatus.status, {
+						agentSteps: aiStatus.agent_steps ?? [],
+						errorMessage: aiStatus.status === 'failed' ? 'Pipeline failed' : undefined,
+					}).catch(() => null);
+				}
 				estimate.status = aiStatus.status;
 				if (aiStatus.result) {
 					estimate.result = aiStatus.result as unknown as typeof estimate.result;
