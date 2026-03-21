@@ -34,7 +34,7 @@ def _is_stale(updated_at: Any) -> bool:
     if updated_at.tzinfo is None:
         updated_at = updated_at.replace(tzinfo=UTC)
     age_s = (datetime.now(UTC) - updated_at).total_seconds()
-    return age_s > _STALE_JOB_TIMEOUT_S
+    return bool(age_s > _STALE_JOB_TIMEOUT_S)
 
 
 class RedisStateBackend:
@@ -44,12 +44,14 @@ class RedisStateBackend:
         self._redis = aioredis.from_url(redis_url, decode_responses=True)
 
     async def create_job(self, job_id: str, payload: dict[str, object]) -> None:
-        data = json.dumps({
-            "status": "pending",
-            "payload": payload,
-            "result": None,
-            "updated_at": datetime.now(UTC).isoformat(),
-        })
+        data = json.dumps(
+            {
+                "status": "pending",
+                "payload": payload,
+                "result": None,
+                "updated_at": datetime.now(UTC).isoformat(),
+            }
+        )
         await self._redis.setex(f"job:{job_id}", JOB_TTL_HOURS * 3600, data)
 
     async def get_job(self, job_id: str) -> dict[str, object] | None:
@@ -59,7 +61,7 @@ class RedisStateBackend:
         job: dict[str, Any] = json.loads(data)
         if job.get("status") == "running" and _is_stale(job.get("updated_at")):
             job["status"] = "failed"
-        return job  # type: ignore[return-value]
+        return job
 
     async def update_job(
         self, job_id: str, status: str, result: dict[str, object] | None = None
