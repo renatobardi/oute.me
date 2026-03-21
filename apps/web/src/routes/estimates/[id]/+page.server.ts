@@ -17,7 +17,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		throw error(401, 'Authentication required');
 	}
 
-	const estimate = await getEstimate(params.id, locals.user.uid);
+	const estimate = await getEstimate(params.id, locals.dbUser!.id);
 	if (!estimate) {
 		throw error(404, 'Estimate not found');
 	}

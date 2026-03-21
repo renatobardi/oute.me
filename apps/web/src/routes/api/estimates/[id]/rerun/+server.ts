@@ -6,8 +6,8 @@ import { postJSON } from '$lib/server/ai-client';
 import { getAllInstructions } from '$lib/server/agent-instructions';
 
 export const POST: RequestHandler = async ({ params, request, locals }) => {
-	const user = requireAuth(locals);
-	const estimate = await getEstimate(params.id, user.uid);
+	requireAuth(locals);
+	const estimate = await getEstimate(params.id, locals.dbUser!.id);
 
 	if (!estimate) {
 		return jsonError(404, 'Estimate not found');
@@ -19,7 +19,7 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
 
 	const body = await request.json().catch(() => ({})) as { from_agent?: string; llm_model?: string };
 
-	const interview = await getInterview(estimate.interview_id, user.uid);
+	const interview = await getInterview(estimate.interview_id, locals.dbUser!.id);
 	if (!interview) {
 		return jsonError(404, 'Interview not found');
 	}

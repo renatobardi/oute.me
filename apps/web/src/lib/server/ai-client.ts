@@ -46,6 +46,17 @@ export async function proxySSE(path: string, body: object): Promise<Response> {
 	return response;
 }
 
+async function throwAiError(response: Response): Promise<never> {
+	let detail = '';
+	try {
+		const body = await response.json();
+		detail = body?.detail || body?.message || body?.error || '';
+	} catch {
+		// ignore parse error
+	}
+	throw new Error(`AI service error ${response.status}${detail ? `: ${detail}` : ''}`);
+}
+
 export async function postJSON<T>(path: string, body: object): Promise<T> {
 	const url = `${getBaseUrl()}${path}`;
 	const authHeaders = await getAuthHeaders();
@@ -56,7 +67,7 @@ export async function postJSON<T>(path: string, body: object): Promise<T> {
 	});
 
 	if (!response.ok) {
-		throw new Error(`AI service error: ${response.status}`);
+		await throwAiError(response);
 	}
 
 	return response.json() as Promise<T>;
@@ -68,7 +79,7 @@ export async function getJSON<T>(path: string): Promise<T> {
 	const response = await fetch(url, { headers: authHeaders });
 
 	if (!response.ok) {
-		throw new Error(`AI service error: ${response.status}`);
+		await throwAiError(response);
 	}
 
 	return response.json() as Promise<T>;

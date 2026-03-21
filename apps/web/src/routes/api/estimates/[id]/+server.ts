@@ -12,8 +12,8 @@ interface AiStatusResponse {
 }
 
 export const GET: RequestHandler = async ({ params, locals }) => {
-	const user = requireAuth(locals);
-	const estimate = await getEstimate(params.id, user.uid);
+	requireAuth(locals);
+	const estimate = await getEstimate(params.id, locals.dbUser!.id);
 
 	if (!estimate) {
 		return jsonError(404, 'Estimate not found');
