@@ -31,29 +31,19 @@ export async function getOrCreateUser(
 	email: string,
 	displayName?: string
 ): Promise<DbUser> {
-	const [existing] = await sql<DbUser[]>`
-		SELECT * FROM public.users WHERE firebase_uid = ${firebaseUid}
-	`;
-	if (existing) return existing;
-
 	const adminFlag = isAdminEmail(email);
-	const [created] = await sql<DbUser[]>`
+
+	const [row] = await sql<DbUser[]>`
 		INSERT INTO public.users (firebase_uid, email, display_name, is_admin, active, onboarding_complete, email_verified)
 		VALUES (${firebaseUid}, ${email}, ${displayName ?? null}, ${adminFlag}, ${adminFlag}, ${adminFlag}, ${adminFlag})
-		ON CONFLICT (email) DO UPDATE SET
-			firebase_uid        = EXCLUDED.firebase_uid,
-			display_name        = EXCLUDED.display_name,
-			is_admin            = EXCLUDED.is_admin,
-			active              = EXCLUDED.active,
-			onboarding_complete = EXCLUDED.onboarding_complete,
-			email_verified      = EXCLUDED.email_verified,
-			full_name           = null,
-			company             = null,
-			role                = null,
+		ON CONFLICT (firebase_uid) DO UPDATE SET
+			email               = EXCLUDED.email,
+			display_name        = COALESCE(EXCLUDED.display_name, public.users.display_name),
+			is_admin            = ${adminFlag},
 			updated_at          = now()
 		RETURNING *
 	`;
-	return created;
+	return row;
 }
 
 export async function getUserByFirebaseUid(firebaseUid: string): Promise<DbUser | null> {
