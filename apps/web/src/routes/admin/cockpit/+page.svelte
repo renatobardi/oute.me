@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { auth } from '$lib/firebase';
 	import type { CockpitInterview, CockpitDetail } from '$lib/server/admin-cockpit';
+	import type { AgentStep } from '$lib/types/estimate';
+	import { AGENT_LABELS } from '$lib/types/estimate';
 
 	let { data } = $props();
 
@@ -13,6 +15,11 @@
 	let activeTab = $state<string | null>(null);
 	let loadingMoreMessages = $state(false);
 	let messagesOffset = $state(20);
+	let agentOutputKey = $state<string | null>(null);
+	let agentOutputData = $state<Record<string, unknown> | null>(null);
+	let loadingAgentOutput = $state(false);
+	let rerunning = $state(false);
+	let rerunMsg = $state('');
 
 	async function getToken() {
 		return (await auth.currentUser?.getIdToken(false)) ?? '';
@@ -124,6 +131,65 @@
 				return 'badge-error';
 			default:
 				return 'badge-neutral';
+		}
+	}
+
+	async function loadAgentOutput(interviewId: string, agentKey: string) {
+		if (agentOutputKey === agentKey) {
+			agentOutputKey = null;
+			agentOutputData = null;
+			return;
+		}
+		agentOutputKey = agentKey;
+		agentOutputData = null;
+		loadingAgentOutput = true;
+		try {
+			const token = await getToken();
+			const res = await fetch(
+				`/api/admin/cockpit/interviews/${interviewId}/pipeline?agent=${agentKey}`,
+				{ headers: token ? { Authorization: `Bearer ${token}` } : {} }
+			);
+			if (res.ok) agentOutputData = await res.json();
+		} finally {
+			loadingAgentOutput = false;
+		}
+	}
+
+	async function triggerRerun(interviewId: string) {
+		rerunning = true;
+		rerunMsg = '';
+		try {
+			const token = await getToken();
+			const res = await fetch(`/api/admin/cockpit/interviews/${interviewId}/pipeline`, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					...(token ? { Authorization: `Bearer ${token}` } : {}),
+				},
+				body: JSON.stringify({}),
+			});
+			if (res.ok) {
+				rerunMsg = 'Re-run iniciado!';
+				// Refresh the detail
+				await selectInterview(interviewId);
+			} else {
+				const err = await res.json().catch(() => ({ error: 'Erro desconhecido' }));
+				rerunMsg = `Erro: ${err.error ?? res.statusText}`;
+			}
+		} catch {
+			rerunMsg = 'Erro de conexão';
+		} finally {
+			rerunning = false;
+			setTimeout(() => (rerunMsg = ''), 4000);
+		}
+	}
+
+	function stepStatusClass(status: string) {
+		switch (status) {
+			case 'done': return 'step-done';
+			case 'running': return 'step-running';
+			case 'failed': return 'step-failed';
+			default: return 'step-pending';
 		}
 	}
 
@@ -293,6 +359,14 @@
 									>{detail.estimate.status}</span
 								>
 							</div>
+						</button>
+						<button
+							class="tab-card"
+							class:tab-active={activeTab === 'pipeline'}
+							onclick={() => { toggleTab('pipeline'); agentOutputKey = null; agentOutputData = null; }}
+						>
+							<div class="tab-label">Pipeline</div>
+							<div class="tab-value">{detail.estimate.agent_steps?.length ?? 0} passos</div>
 						</button>
 					{/if}
 
@@ -486,6 +560,86 @@
 								<span class="info-row-value">{fmtDate(detail.estimate.created_at)}</span>
 							</div>
 						</div>
+					</div>
+
+				{:else if activeTab === 'pipeline' && detail.estimate}
+					{@const steps = (detail.estimate.agent_steps ?? []) as AgentStep[]}
+					<div class="tab-content">
+						<div class="pipeline-header">
+							<div class="section-title">Pipeline de Agentes</div>
+							<div class="pipeline-actions">
+								{#if rerunMsg}
+									<span class="pipeline-msg">{rerunMsg}</span>
+								{/if}
+								<button
+									class="btn-rerun"
+									onclick={() => triggerRerun(iv.id)}
+									disabled={rerunning || ['pending','running'].includes(detail.estimate.status)}
+								>
+									{rerunning ? 'Iniciando…' : 'Re-run Pipeline'}
+								</button>
+							</div>
+						</div>
+
+						{#if steps.length === 0}
+							<div class="empty-tab">Nenhum dado de agente disponível. Execute ou re-run o pipeline.</div>
+						{:else}
+							<div class="pipeline-steps">
+								{#each steps as step (step.agent_key)}
+									<div class="pipeline-step {stepStatusClass(step.status)}">
+										<div
+											class="step-header"
+											role="button"
+											tabindex="0"
+											onclick={() => loadAgentOutput(iv.id, step.agent_key)}
+											onkeydown={(e) => e.key === 'Enter' && loadAgentOutput(iv.id, step.agent_key)}
+										>
+											<div class="step-left">
+												<span class="step-dot"></span>
+												<span class="step-name">{AGENT_LABELS[step.agent_key] ?? step.agent_key}</span>
+												<span class="step-key muted">{step.agent_key}</span>
+											</div>
+											<div class="step-right">
+												{#if step.duration_s}
+													<span class="step-duration">{step.duration_s.toFixed(1)}s</span>
+												{/if}
+												<span class="badge {step.status === 'done' ? 'badge-success' : step.status === 'failed' ? 'badge-error' : step.status === 'running' ? 'badge-info' : 'badge-neutral'}">{step.status}</span>
+											</div>
+										</div>
+										{#if step.error}
+											<div class="step-error">{step.error}</div>
+										{/if}
+										{#if agentOutputKey === step.agent_key}
+											<div class="step-output">
+												{#if loadingAgentOutput}
+													<span class="muted">Carregando output…</span>
+												{:else if agentOutputData}
+													<pre class="output-json">{JSON.stringify(agentOutputData, null, 2)}</pre>
+												{:else}
+													<span class="muted">Output não disponível</span>
+												{/if}
+											</div>
+										{/if}
+									</div>
+								{/each}
+							</div>
+						{/if}
+
+						{#if detail.estimateRuns.length > 0}
+							<div class="section-title" style="margin-top:1.5rem">Histórico de Runs</div>
+							<div class="runs-list">
+								{#each detail.estimateRuns as run (run.id)}
+									<div class="run-row">
+										<span class="badge {statusBadgeClass(run.status)}">{run.status}</span>
+										<span class="muted">{run.llm_model ?? '—'}</span>
+										{#if run.total_duration_s}
+											<span class="muted">{run.total_duration_s.toFixed(1)}s</span>
+										{/if}
+										<span class="muted">{fmtDate(run.created_at)}</span>
+									</div>
+								{/each}
+							</div>
+						{/if}
 					</div>
 
 				{:else if activeTab === 'projeto-gerado' && detail.project}
@@ -1088,5 +1242,154 @@
 
 	.muted {
 		color: var(--color-neutral-500, #6b7280);
+	}
+
+	/* ── Pipeline tab ── */
+
+	.pipeline-header {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		margin-bottom: 1rem;
+	}
+
+	.pipeline-actions {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+	}
+
+	.pipeline-msg {
+		font-size: 0.8125rem;
+		color: var(--color-success, #10b981);
+	}
+
+	.btn-rerun {
+		padding: 0.35rem 0.9rem;
+		background: var(--color-primary-600, #4f46e5);
+		border: none;
+		border-radius: 6px;
+		color: #fff;
+		font-size: 0.8125rem;
+		font-weight: 600;
+		cursor: pointer;
+	}
+
+	.btn-rerun:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+
+	.pipeline-steps {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+	}
+
+	.pipeline-step {
+		border: 1px solid rgba(255, 255, 255, 0.07);
+		border-radius: 8px;
+		overflow: hidden;
+	}
+
+	.step-done { border-left: 3px solid var(--color-success, #10b981); }
+	.step-failed { border-left: 3px solid var(--color-error, #ef4444); }
+	.step-running { border-left: 3px solid var(--color-primary-500, #6366f1); }
+	.step-pending { border-left: 3px solid rgba(255,255,255,0.12); }
+
+	.step-header {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		padding: 0.6rem 0.75rem;
+		cursor: pointer;
+		background: rgba(255, 255, 255, 0.02);
+	}
+
+	.step-header:hover {
+		background: rgba(255, 255, 255, 0.05);
+	}
+
+	.step-left {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+	}
+
+	.step-dot {
+		width: 8px;
+		height: 8px;
+		border-radius: 50%;
+		background: currentColor;
+	}
+
+	.step-done .step-dot { color: var(--color-success, #10b981); }
+	.step-failed .step-dot { color: var(--color-error, #ef4444); }
+	.step-running .step-dot { color: var(--color-primary-500, #6366f1); }
+	.step-pending .step-dot { color: rgba(255,255,255,0.25); }
+
+	.step-name {
+		font-size: 0.8125rem;
+		font-weight: 600;
+		color: #f9fafb;
+	}
+
+	.step-key {
+		font-family: monospace;
+		font-size: 0.7rem;
+	}
+
+	.step-right {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+	}
+
+	.step-duration {
+		font-size: 0.75rem;
+		font-family: monospace;
+		color: var(--color-neutral-400, #9ca3af);
+	}
+
+	.step-error {
+		padding: 0.4rem 0.75rem;
+		font-size: 0.75rem;
+		color: var(--color-error, #ef4444);
+		background: rgba(239, 68, 68, 0.08);
+		border-top: 1px solid rgba(239, 68, 68, 0.15);
+	}
+
+	.step-output {
+		padding: 0.75rem;
+		border-top: 1px solid rgba(255, 255, 255, 0.06);
+		background: var(--color-dark-bg, #0f1117);
+	}
+
+	.output-json {
+		font-family: 'SF Mono', 'Cascadia Code', monospace;
+		font-size: 0.75rem;
+		line-height: 1.5;
+		color: #d1d5db;
+		white-space: pre-wrap;
+		word-break: break-all;
+		max-height: 400px;
+		overflow-y: auto;
+		margin: 0;
+	}
+
+	.runs-list {
+		display: flex;
+		flex-direction: column;
+		gap: 0.4rem;
+	}
+
+	.run-row {
+		display: flex;
+		align-items: center;
+		gap: 0.6rem;
+		padding: 0.4rem 0.6rem;
+		background: rgba(255, 255, 255, 0.02);
+		border-radius: 6px;
+		font-size: 0.8125rem;
 	}
 </style>

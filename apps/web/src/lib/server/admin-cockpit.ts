@@ -1,6 +1,6 @@
 import sql from './db';
 import type { Interview, InterviewMessage, InterviewDocument } from '$lib/types/interview';
-import type { Estimate } from '$lib/types/estimate';
+import type { Estimate, EstimateRun } from '$lib/types/estimate';
 import type { Project } from '$lib/types/project';
 
 export interface CockpitInterview {
@@ -34,6 +34,7 @@ export interface CockpitDetail {
 	messageTotal: number;
 	documents: InterviewDocument[];
 	estimate: Estimate | null;
+	estimateRuns: EstimateRun[];
 	knowledgeVectors: KnowledgeVector[];
 	project: Project | null;
 }
@@ -69,7 +70,7 @@ export async function getAllInterviewsForAdmin(): Promise<CockpitInterview[]> {
 }
 
 export async function getCockpitInterviewDetail(interviewId: string): Promise<CockpitDetail | null> {
-	const [interviewRows, messageRows, messageCountRows, documentRows, estimateRows, vectorRows] =
+	const [interviewRows, messageRows, messageCountRows, documentRows, estimateRows, vectorRows, estimateRunRows] =
 		await Promise.all([
 			sql<(Interview & { user_name: string | null; user_email: string })[]>`
 				SELECT i.*, u.display_name AS user_name, u.email AS user_email
@@ -104,6 +105,13 @@ export async function getCockpitInterviewDetail(interviewId: string): Promise<Co
 				WHERE source_id = ${interviewId}::uuid
 				ORDER BY created_at ASC
 			`,
+			sql<EstimateRun[]>`
+				SELECT er.* FROM public.estimate_runs er
+				JOIN public.estimates e ON e.id = er.estimate_id
+				WHERE e.interview_id = ${interviewId}
+				ORDER BY er.created_at DESC
+				LIMIT 10
+			`,
 		]);
 
 	const interview = interviewRows[0];
@@ -129,6 +137,7 @@ export async function getCockpitInterviewDetail(interviewId: string): Promise<Co
 		messageTotal: parseInt(messageCountRows[0]?.count ?? '0', 10),
 		documents: documentRows,
 		estimate,
+		estimateRuns: estimateRunRows,
 		knowledgeVectors: vectorRows,
 		project,
 	};

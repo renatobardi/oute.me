@@ -2,35 +2,63 @@
 	import { goto, invalidateAll } from '$app/navigation';
 	import { Button, StatusBadge, MetricDisplay, ProgressBar } from '@oute/ui';
 	import '@oute/ui/theme.css';
-	import type { EstimateResult } from '$lib/types/estimate';
+	import { auth } from '$lib/firebase';
+	import type { EstimateResult, AgentStep } from '$lib/types/estimate';
+	import { AGENT_KEYS, AGENT_LABELS } from '$lib/types/estimate';
 
 	let { data } = $props();
 
 	let estimate = $derived(data.estimate);
 	let result = $derived(estimate.result as EstimateResult | null);
+	let agentSteps = $derived((estimate.agent_steps ?? []) as AgentStep[]);
 	let isApproving = $state(false);
+	let isRerunning = $state(false);
 	let projectName = $state('');
 	let selectedScenario = $state('moderado');
 	let pollTimer = $state<ReturnType<typeof setInterval> | null>(null);
+	let elapsedSeconds = $state(0);
+	let elapsedTimer = $state<ReturnType<typeof setInterval> | null>(null);
 
 	$effect(() => {
 		if (['pending', 'running'].includes(estimate.status)) {
 			pollTimer = setInterval(async () => {
 				await invalidateAll();
 			}, 5000);
+			elapsedTimer = setInterval(() => { elapsedSeconds += 1; }, 1000);
 		}
-
 		return () => {
 			if (pollTimer) clearInterval(pollTimer);
+			if (elapsedTimer) clearInterval(elapsedTimer);
 		};
 	});
 
 	$effect(() => {
-		if (!['pending', 'running'].includes(estimate.status) && pollTimer) {
-			clearInterval(pollTimer);
-			pollTimer = null;
+		if (!['pending', 'running'].includes(estimate.status)) {
+			if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+			if (elapsedTimer) { clearInterval(elapsedTimer); elapsedTimer = null; }
 		}
 	});
+
+	// Build stepper state from agentSteps (or defaults when pipeline is still running)
+	const stepperSteps = $derived(
+		AGENT_KEYS.map((key, i) => {
+			const found = agentSteps.find((s) => s.agent_key === key);
+			if (found) return found;
+			// Pipeline running but no step data yet — all pending
+			return {
+				agent_key: key,
+				status: 'pending',
+				started_at: null,
+				finished_at: null,
+				duration_s: null,
+				output_preview: null,
+				error: null,
+			} satisfies AgentStep;
+		})
+	);
+
+	const doneCount = $derived(stepperSteps.filter((s) => s.status === 'done').length);
+	const progressPct = $derived(Math.round((doneCount / AGENT_KEYS.length) * 100));
 
 	async function handleApprove() {
 		isApproving = true;
@@ -51,12 +79,37 @@
 		}
 	}
 
+	async function handleRerun() {
+		isRerunning = true;
+		elapsedSeconds = 0;
+		try {
+			const token = await auth.currentUser?.getIdToken(false);
+			const res = await fetch(`/api/estimates/${estimate.id}/rerun`, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					...(token ? { Authorization: `Bearer ${token}` } : {}),
+				},
+			});
+			if (!res.ok) throw new Error('Rerun failed');
+			await invalidateAll();
+		} catch {
+			isRerunning = false;
+		}
+	}
+
 	function formatCurrency(value: number): string {
 		return new Intl.NumberFormat('pt-BR', {
 			style: 'currency',
 			currency: 'BRL',
 			maximumFractionDigits: 0,
 		}).format(value);
+	}
+
+	function fmtDuration(s: number | null): string {
+		if (s === null) return '';
+		if (s < 60) return `${s.toFixed(0)}s`;
+		return `${Math.floor(s / 60)}m ${Math.round(s % 60)}s`;
 	}
 </script>
 
@@ -75,21 +128,71 @@
 
 	{#if ['pending', 'running'].includes(estimate.status)}
 		<div class="loading-state">
-			<div class="spinner"></div>
-			<h2>Gerando estimativa...</h2>
-			<p>Nossos agentes de IA estão analisando seu projeto. Isso pode levar alguns minutos.</p>
-			<div class="pipeline-steps">
-				<ProgressBar value={estimate.status === 'pending' ? 10 : 50} label="Progresso" variant="primary" />
+			<h2>Gerando estimativa…</h2>
+			<p>Nossos agentes de IA estão analisando seu projeto.</p>
+
+			<!-- Agent stepper -->
+			<div class="stepper">
+				{#each stepperSteps as step, i (step.agent_key)}
+					<div class="step" class:step-done={step.status === 'done'} class:step-failed={step.status === 'failed'} class:step-running={step.status === 'running'}>
+						<div class="step-icon">
+							{#if step.status === 'done'}✓
+							{:else if step.status === 'failed'}✗
+							{:else if step.status === 'running' || (step.status === 'pending' && i === doneCount)}
+								<span class="pulse-dot"></span>
+							{:else}
+								<span class="step-num">{i + 1}</span>
+							{/if}
+						</div>
+						<div class="step-info">
+							<span class="step-name">{AGENT_LABELS[step.agent_key] ?? step.agent_key}</span>
+							{#if step.status === 'done' && step.duration_s !== null}
+								<span class="step-duration">{fmtDuration(step.duration_s)}</span>
+							{:else if step.status === 'failed' && step.error}
+								<span class="step-error">{step.error.slice(0, 60)}</span>
+							{:else if (step.status === 'running' || (step.status === 'pending' && i === doneCount))}
+								<span class="step-running-label">{elapsedSeconds}s…</span>
+							{/if}
+						</div>
+					</div>
+					{#if i < AGENT_KEYS.length - 1}
+						<div class="step-connector" class:connector-done={i < doneCount}></div>
+					{/if}
+				{/each}
+			</div>
+
+			<div class="progress-wrap">
+				<ProgressBar value={progressPct} label={`${doneCount} de ${AGENT_KEYS.length} agentes`} variant="primary" />
 			</div>
 		</div>
+
 	{:else if estimate.status === 'failed'}
 		<div class="error-state">
 			<h2>Erro na estimativa</h2>
-			<p>Ocorreu um erro ao gerar a estimativa. Tente novamente.</p>
-			<Button onclick={() => goto(`/interviews/${estimate.interview_id}`)}>
-				Voltar à Entrevista
-			</Button>
+			<p>Ocorreu um erro ao gerar a estimativa.</p>
+
+			{#if agentSteps.length > 0}
+				<div class="fail-steps">
+					{#each agentSteps as step (step.agent_key)}
+						<div class="fail-step" class:fail-ok={step.status === 'done'} class:fail-err={step.status === 'failed'}>
+							<span>{step.status === 'done' ? '✓' : '✗'}</span>
+							<span>{AGENT_LABELS[step.agent_key] ?? step.agent_key}</span>
+							{#if step.error}<span class="fail-msg">{step.error.slice(0, 80)}</span>{/if}
+						</div>
+					{/each}
+				</div>
+			{/if}
+
+			<div class="error-actions">
+				<Button onclick={handleRerun} disabled={isRerunning}>
+					{isRerunning ? 'Iniciando…' : 'Tentar novamente'}
+				</Button>
+				<Button variant="ghost" onclick={() => goto(`/interviews/${estimate.interview_id}`)}>
+					Voltar à Entrevista
+				</Button>
+			</div>
 		</div>
+
 	{:else if result}
 		<div class="result-content">
 			<!-- Executive Summary -->
@@ -250,9 +353,7 @@
 		margin: 0 auto;
 	}
 
-	.page-header {
-		margin-bottom: 2rem;
-	}
+	.page-header { margin-bottom: 2rem; }
 
 	.back-btn {
 		background: none;
@@ -276,46 +377,188 @@
 		margin: 0;
 	}
 
-	.loading-state,
-	.error-state {
+	/* ── Loading state ── */
+	.loading-state, .error-state {
 		text-align: center;
-		padding: 4rem 2rem;
+		padding: 3rem 2rem;
 	}
 
-	.loading-state h2,
-	.error-state h2 {
+	.loading-state h2, .error-state h2 {
 		color: rgba(255, 255, 255, 0.9);
 		margin-bottom: 0.5rem;
 	}
 
-	.loading-state p,
-	.error-state p {
+	.loading-state p, .error-state p {
 		color: rgba(255, 255, 255, 0.5);
 		margin-bottom: 2rem;
 	}
 
-	.pipeline-steps {
+	/* ── Pipeline stepper ── */
+	.stepper {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		flex-wrap: wrap;
+		gap: 0;
+		margin: 0 auto 2rem;
+		max-width: 820px;
+	}
+
+	.step {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 0.4rem;
+		min-width: 100px;
+		max-width: 120px;
+	}
+
+	.step-icon {
+		width: 36px;
+		height: 36px;
+		border-radius: 50%;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		font-size: 0.9rem;
+		font-weight: 700;
+		border: 2px solid rgba(255, 255, 255, 0.15);
+		background: rgba(255, 255, 255, 0.05);
+		color: rgba(255, 255, 255, 0.4);
+		transition: all 0.3s;
+	}
+
+	.step-done .step-icon {
+		background: color-mix(in srgb, var(--color-success, #10b981) 20%, transparent);
+		border-color: var(--color-success, #10b981);
+		color: var(--color-success, #10b981);
+	}
+
+	.step-failed .step-icon {
+		background: color-mix(in srgb, var(--color-error, #ef4444) 20%, transparent);
+		border-color: var(--color-error, #ef4444);
+		color: var(--color-error, #ef4444);
+	}
+
+	.step-running .step-icon {
+		border-color: var(--color-primary-500, #6366f1);
+		animation: pulse-ring 1.5s ease-in-out infinite;
+	}
+
+	@keyframes pulse-ring {
+		0%, 100% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.4); }
+		50% { box-shadow: 0 0 0 6px rgba(99, 102, 241, 0); }
+	}
+
+	.pulse-dot {
+		width: 10px;
+		height: 10px;
+		border-radius: 50%;
+		background: var(--color-primary-500, #6366f1);
+		animation: pulse-dot 1s ease-in-out infinite;
+	}
+
+	@keyframes pulse-dot {
+		0%, 100% { opacity: 1; transform: scale(1); }
+		50% { opacity: 0.5; transform: scale(0.7); }
+	}
+
+	.step-num {
+		font-size: 0.8rem;
+		font-weight: 600;
+	}
+
+	.step-info {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 0.15rem;
+	}
+
+	.step-name {
+		font-size: 0.72rem;
+		color: rgba(255, 255, 255, 0.7);
+		text-align: center;
+		line-height: 1.3;
+	}
+
+	.step-done .step-name { color: rgba(255, 255, 255, 0.9); }
+
+	.step-duration {
+		font-size: 0.65rem;
+		color: var(--color-success, #10b981);
+	}
+
+	.step-running-label {
+		font-size: 0.65rem;
+		color: var(--color-primary-500, #6366f1);
+	}
+
+	.step-error {
+		font-size: 0.65rem;
+		color: var(--color-error, #ef4444);
+		max-width: 100px;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.step-connector {
+		flex: 1;
+		height: 2px;
+		min-width: 12px;
+		background: rgba(255, 255, 255, 0.1);
+		margin-bottom: 1.5rem;
+		transition: background 0.3s;
+	}
+
+	.connector-done {
+		background: var(--color-success, #10b981);
+	}
+
+	.progress-wrap {
 		max-width: 400px;
 		margin: 0 auto;
 	}
 
-	.spinner {
-		width: 48px;
-		height: 48px;
-		border: 3px solid rgba(255, 255, 255, 0.1);
-		border-top-color: var(--color-primary-500, #6366f1);
-		border-radius: 50%;
-		animation: spin 1s linear infinite;
+	/* ── Error state ── */
+	.fail-steps {
+		display: flex;
+		flex-direction: column;
+		gap: 0.4rem;
+		max-width: 400px;
 		margin: 0 auto 1.5rem;
+		text-align: left;
 	}
 
-	@keyframes spin {
-		to { transform: rotate(360deg); }
+	.fail-step {
+		display: flex;
+		align-items: baseline;
+		gap: 0.5rem;
+		font-size: 0.8125rem;
+		padding: 0.35rem 0.75rem;
+		border-radius: 6px;
+		background: rgba(255, 255, 255, 0.03);
 	}
 
-	.section {
-		margin-bottom: 2.5rem;
+	.fail-ok { color: var(--color-success, #10b981); }
+	.fail-err { color: var(--color-error, #ef4444); }
+
+	.fail-msg {
+		color: rgba(255, 255, 255, 0.4);
+		font-size: 0.75rem;
+		margin-left: auto;
 	}
+
+	.error-actions {
+		display: flex;
+		gap: 1rem;
+		justify-content: center;
+		margin-top: 1.5rem;
+	}
+
+	/* ── Result sections ── */
+	.section { margin-bottom: 2.5rem; }
 
 	.section h2 {
 		font-size: 1.25rem;
@@ -325,8 +568,7 @@
 		border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 	}
 
-	.summary-text,
-	.architecture-text {
+	.summary-text, .architecture-text {
 		line-height: 1.7;
 		color: rgba(255, 255, 255, 0.7);
 		white-space: pre-line;
@@ -424,9 +666,7 @@
 		padding-left: 1.25rem;
 	}
 
-	.deliverables li {
-		color: rgba(255, 255, 255, 0.6);
-	}
+	.deliverables li { color: rgba(255, 255, 255, 0.6); }
 
 	.tech-grid {
 		display: grid;
@@ -472,17 +712,9 @@
 		border-left: 3px solid;
 	}
 
-	.risk-high {
-		border-left-color: var(--color-error, #ef4444);
-	}
-
-	.risk-medium {
-		border-left-color: var(--color-warning, #f59e0b);
-	}
-
-	.risk-low {
-		border-left-color: var(--color-success, #10b981);
-	}
+	.risk-high { border-left-color: var(--color-error, #ef4444); }
+	.risk-medium { border-left-color: var(--color-warning, #f59e0b); }
+	.risk-low { border-left-color: var(--color-success, #10b981); }
 
 	.risk-header {
 		display: flex;
@@ -530,8 +762,7 @@
 		color: rgba(255, 255, 255, 0.6);
 	}
 
-	.form-field input,
-	.form-field select {
+	.form-field input, .form-field select {
 		background: var(--color-dark-surface, #1a1d27);
 		border: 1px solid rgba(255, 255, 255, 0.1);
 		border-radius: 8px;
@@ -542,8 +773,7 @@
 		outline: none;
 	}
 
-	.form-field input:focus,
-	.form-field select:focus {
+	.form-field input:focus, .form-field select:focus {
 		border-color: var(--color-primary-500, #6366f1);
 	}
 
