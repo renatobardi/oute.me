@@ -52,7 +52,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		}
 	}
 
-	const project = await getProjectByEstimate(estimate.id, locals.user.uid).catch(() => null);
+	const project = await getProjectByEstimate(estimate.id, locals.dbUser?.id ?? "").catch(() => null);
 
 	return { estimate, project: project ? { id: project.id, name: project.name } : null };
 };
