@@ -2,7 +2,7 @@ import type { Handle } from '@sveltejs/kit';
 import { sequence } from '@sveltejs/kit/hooks';
 import { verifyAuthToken } from '$lib/server/auth';
 import { rateLimit, securityHeaders } from '$lib/server/security';
-import { getOrCreateUser, setUserEmailVerified } from '$lib/server/users';
+import { getOrCreateUser, setUserEmailVerified, isAdminEmail } from '$lib/server/users';
 
 const cacheControl: Handle = async ({ event, resolve }) => {
 	const response = await resolve(event);
@@ -81,9 +81,9 @@ const gateUser: Handle = async ({ event, resolve }) => {
 
 	event.locals.dbUser = dbUser;
 
-	// Rotas de admin
+	// Rotas de admin — checa env diretamente além do DB, para não depender de estado desatualizado
 	if (pathname.startsWith('/admin') || pathname.startsWith('/api/admin/')) {
-		if (!dbUser.is_admin) {
+		if (!dbUser.is_admin && !isAdminEmail(dbUser.email)) {
 			return Response.redirect(new URL('/interviews', event.url).toString(), 302);
 		}
 		return resolve(event);
