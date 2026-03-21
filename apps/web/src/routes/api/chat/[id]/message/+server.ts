@@ -6,6 +6,7 @@ import {
 	getRecentMessages,
 	addMessage,
 	updateInterviewState,
+	updateInterviewTitle,
 	getDocuments,
 } from '$lib/server/interviews';
 import { proxySSE } from '$lib/server/ai-client';
@@ -78,6 +79,7 @@ export const POST: RequestHandler = async ({ locals, params, request }) => {
 		tone_instruction: toneInstruction,
 		is_resumption: isResumption,
 		llm_model: llmModel,
+		current_title: interview.title ?? null,
 	};
 
 	const aiResponse = await proxySSE('/chat/message', chatRequest);
@@ -132,6 +134,16 @@ export const POST: RequestHandler = async ({ locals, params, request }) => {
 									console.error(`[SSE] Failed to update interview state for ${params.id}:`, err);
 									controller.enqueue(sseErrorEvent('Failed to persist state update'));
 								});
+
+								// Apply AI-suggested title only if interview has no title yet
+								const suggestedTitle = data.suggested_title as string | undefined;
+								if (suggestedTitle && !interview.title) {
+									updateInterviewTitle(params.id, suggestedTitle).catch((err) => {
+										console.error(`[SSE] Failed to update interview title for ${params.id}:`, err);
+									});
+									const titleEvent = `event: title_update\ndata: ${JSON.stringify({ title: suggestedTitle })}\n\n`;
+									controller.enqueue(new TextEncoder().encode(titleEvent));
+								}
 							}
 
 							if (eventType === 'done' && data.full_response) {

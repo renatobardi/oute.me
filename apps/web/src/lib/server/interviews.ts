@@ -75,6 +75,17 @@ export async function updateInterviewState(
 	`;
 }
 
+export async function updateInterviewTitle(
+	interviewId: string,
+	title: string
+): Promise<void> {
+	await sql`
+		UPDATE public.interviews
+		SET title = ${title}
+		WHERE id = ${interviewId}
+	`;
+}
+
 export async function updateInterviewStatus(
 	interviewId: string,
 	status: string
