@@ -325,7 +325,7 @@
 						{/if}
 					</div>
 					<div class="estimate-panel-actions">
-						<a href="/estimates/{existingEstimate.id}" class="panel-link-btn" target="_blank">Abrir completo ↗</a>
+						<a href="/estimates/{existingEstimate.id}" class="panel-link-btn">Abrir completo →</a>
 						<button class="panel-close-btn" onclick={closeEstimatePanel} title="Fechar painel">✕</button>
 					</div>
 				</div>
