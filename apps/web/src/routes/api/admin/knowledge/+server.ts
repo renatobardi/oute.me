@@ -35,7 +35,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		type,
 		title,
 		content,
-		original_url: original_url ?? null,
+		original_url: original_url ?? undefined,
 		created_by: user.uid,
 	});
 

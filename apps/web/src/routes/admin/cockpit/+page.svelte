@@ -10,7 +10,7 @@
 	let selectedId = $state<string | null>(null);
 	let detail = $state<CockpitDetail | null>(null);
 	let loadingDetail = $state(false);
-	let showRawState = $state(false);
+	let activeTab = $state<string | null>(null);
 	let loadingMoreMessages = $state(false);
 	let messagesOffset = $state(20);
 
@@ -35,7 +35,7 @@
 		if (selectedId === id) return;
 		selectedId = id;
 		detail = null;
-		showRawState = false;
+		activeTab = null;
 		messagesOffset = 20;
 		loadingDetail = true;
 		try {
@@ -47,6 +47,10 @@
 		} finally {
 			loadingDetail = false;
 		}
+	}
+
+	function toggleTab(tab: string) {
+		activeTab = activeTab === tab ? null : tab;
 	}
 
 	async function loadMoreMessages() {
@@ -71,7 +75,28 @@
 		}
 	}
 
-	function fmtDate(iso: string) {
+	async function downloadDocument(docId: string) {
+		const token = await getToken();
+		const res = await fetch(`/api/admin/cockpit/documents/${docId}/download`, {
+			headers: token ? { Authorization: `Bearer ${token}` } : {},
+		});
+		if (!res.ok) {
+			alert('Arquivo não disponível para download.');
+			return;
+		}
+		const blob = await res.blob();
+		const cd = res.headers.get('Content-Disposition') ?? '';
+		const match = cd.match(/filename="?([^"]+)"?/);
+		const filename = match?.[1] ?? 'documento';
+		const url = URL.createObjectURL(blob);
+		const a = document.createElement('a');
+		a.href = url;
+		a.download = decodeURIComponent(filename);
+		a.click();
+		URL.revokeObjectURL(url);
+	}
+
+	function fmtDate(iso: string | Date) {
 		return new Date(iso).toLocaleString('pt-BR', {
 			day: '2-digit',
 			month: '2-digit',
@@ -100,6 +125,24 @@
 			default:
 				return 'badge-neutral';
 		}
+	}
+
+	function mimeLabel(mime: string) {
+		const map: Record<string, string> = {
+			'application/pdf': 'PDF',
+			'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'Word',
+			'application/msword': 'Word',
+			'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'Excel',
+			'application/vnd.ms-excel': 'Excel',
+			'text/csv': 'CSV',
+			'application/vnd.openxmlformats-officedocument.presentationml.presentation': 'PowerPoint',
+			'application/vnd.ms-powerpoint': 'PowerPoint',
+			'image/png': 'PNG',
+			'image/jpeg': 'JPEG',
+			'image/webp': 'WebP',
+			'image/gif': 'GIF',
+		};
+		return map[mime] ?? mime;
 	}
 
 	const statuses = $derived([...new Set(interviews.map((i) => i.status))].sort());
@@ -142,7 +185,7 @@
 							<span class="badge {statusBadgeClass(iv.status)}">{iv.status}</span>
 						</div>
 						<div class="item-meta">
-							<span>{iv.user_email}</span>
+							<span>{iv.user_name ?? iv.user_email}</span>
 							{#if iv.estimate_id}
 								<span class="badge badge-info" style="font-size:0.65rem">est</span>
 							{/if}
@@ -186,57 +229,88 @@
 						</div>
 					</div>
 					<div class="maturity-block">
-						<div
-							class="maturity-pct"
-							style="color:{maturityColor(iv.maturity ?? 0)}"
-						>
+						<div class="maturity-pct" style="color:{maturityColor(iv.maturity ?? 0)}">
 							{Math.round((iv.maturity ?? 0) * 100)}%
 						</div>
 						<div class="muted" style="font-size:0.75rem">maturidade</div>
 					</div>
 				</div>
 
-				<!-- Info grid -->
-				<div class="info-grid">
-					<div class="info-card">
-						<div class="info-label">Usuário</div>
-						<div class="info-value">{iv.user_id}</div>
-					</div>
-					<div class="info-card">
-						<div class="info-label">Tipo de Projeto</div>
-						<div class="info-value">{iv.state?.project_type ?? '—'}</div>
-					</div>
-					<div class="info-card">
-						<div class="info-label">Documentos</div>
-						<div class="info-value">{detail.documents.length}</div>
-					</div>
-					<div class="info-card">
-						<div class="info-label">Mensagens</div>
-						<div class="info-value">{detail.messageTotal}</div>
-					</div>
-					<div class="info-card">
-						<div class="info-label">Vetores</div>
-						<div class="info-value">{detail.knowledgeVectors.length}</div>
-					</div>
+				<!-- Tab cards -->
+				<div class="tab-grid">
+					<button
+						class="tab-card"
+						class:tab-active={activeTab === 'usuario'}
+						onclick={() => toggleTab('usuario')}
+					>
+						<div class="tab-label">Usuário</div>
+						<div class="tab-value">{detail.user_name ?? detail.user_email}</div>
+					</button>
+
+					<button
+						class="tab-card"
+						class:tab-active={activeTab === 'projeto'}
+						onclick={() => toggleTab('projeto')}
+					>
+						<div class="tab-label">Tipo de Projeto</div>
+						<div class="tab-value">{iv.state?.project_type ?? '—'}</div>
+					</button>
+
+					<button
+						class="tab-card"
+						class:tab-active={activeTab === 'documentos'}
+						onclick={() => toggleTab('documentos')}
+					>
+						<div class="tab-label">Documentos</div>
+						<div class="tab-value">{detail.documents.length}</div>
+					</button>
+
+					<button
+						class="tab-card"
+						class:tab-active={activeTab === 'mensagens'}
+						onclick={() => toggleTab('mensagens')}
+					>
+						<div class="tab-label">Mensagens</div>
+						<div class="tab-value">{detail.messageTotal}</div>
+					</button>
+
+					<button
+						class="tab-card"
+						class:tab-active={activeTab === 'vetores'}
+						onclick={() => toggleTab('vetores')}
+					>
+						<div class="tab-label">Vetores</div>
+						<div class="tab-value">{detail.knowledgeVectors.length}</div>
+					</button>
+
 					{#if detail.estimate}
-						<div class="info-card">
-							<div class="info-label">Estimativa</div>
-							<div class="info-value">
+						<button
+							class="tab-card"
+							class:tab-active={activeTab === 'estimativa'}
+							onclick={() => toggleTab('estimativa')}
+						>
+							<div class="tab-label">Estimativa</div>
+							<div class="tab-value">
 								<span class="badge {statusBadgeClass(detail.estimate.status)}"
 									>{detail.estimate.status}</span
 								>
 							</div>
-						</div>
+						</button>
 					{/if}
+
 					{#if detail.project}
-						<div class="info-card">
-							<div class="info-label">Projeto</div>
-							<div class="info-value">{detail.project.name ?? detail.project.id}</div>
-						</div>
+						<button
+							class="tab-card"
+							class:tab-active={activeTab === 'projeto-gerado'}
+							onclick={() => toggleTab('projeto-gerado')}
+						>
+							<div class="tab-label">Projeto</div>
+							<div class="tab-value">{detail.project.name ?? detail.project.id}</div>
+						</button>
 					{/if}
 				</div>
 
-				<!-- Domain maturity -->
+				<!-- Domains — always visible -->
 				{#if iv.state?.domains}
 					<div class="section">
 						<div class="section-title">Domínios</div>
@@ -263,61 +337,174 @@
 					</div>
 				{/if}
 
-				<!-- Documents -->
-				{#if detail.documents.length > 0}
-					<div class="section">
-						<div class="section-title">Documentos</div>
-						<div class="docs-list">
-							{#each detail.documents as doc}
-								<div class="doc-row">
-									<span class="doc-name">{doc.filename}</span>
-									<span class="muted" style="font-size:0.75rem">{doc.mime_type ?? ''}</span>
-									<span class="muted" style="font-size:0.75rem">{fmtDate(doc.created_at)}</span>
+				<!-- Tab content area -->
+				{#if activeTab === 'usuario'}
+					<div class="tab-content">
+						<div class="section-title">Usuário</div>
+						<div class="info-list">
+							<div class="info-row">
+								<span class="info-row-label">Nome</span>
+								<span class="info-row-value">{detail.user_name ?? '—'}</span>
+							</div>
+							<div class="info-row">
+								<span class="info-row-label">E-mail</span>
+								<span class="info-row-value">{detail.user_email}</span>
+							</div>
+							<div class="info-row">
+								<span class="info-row-label">ID</span>
+								<span class="info-row-value mono">{iv.user_id}</span>
+							</div>
+						</div>
+					</div>
+
+				{:else if activeTab === 'projeto'}
+					<div class="tab-content">
+						<div class="section-title">Detalhes do Projeto</div>
+						<div class="info-list">
+							<div class="info-row">
+								<span class="info-row-label">Tipo</span>
+								<span class="info-row-value">{iv.state?.project_type ?? '—'}</span>
+							</div>
+							<div class="info-row">
+								<span class="info-row-label">Setup confirmado</span>
+								<span class="info-row-value">{iv.state?.setup_confirmed ? 'Sim' : 'Não'}</span>
+							</div>
+							{#if iv.state?.conversation_summary}
+								<div class="info-row summary-row">
+									<span class="info-row-label">Resumo da conversa</span>
+									<span class="info-row-value">{iv.state.conversation_summary}</span>
+								</div>
+							{/if}
+						</div>
+					</div>
+
+				{:else if activeTab === 'documentos'}
+					<div class="tab-content">
+						<div class="section-title">Documentos ({detail.documents.length})</div>
+						{#if detail.documents.length === 0}
+							<div class="empty-tab">Nenhum documento enviado nesta entrevista.</div>
+						{:else}
+							<div class="docs-list">
+								{#each detail.documents as doc}
+									<div class="doc-row">
+										<div class="doc-info">
+											<span class="doc-name">{doc.filename}</span>
+											<span class="doc-meta">
+												<span class="mime-badge">{mimeLabel(doc.mime_type)}</span>
+												<span class="muted">{fmtDate(doc.created_at)}</span>
+												<span
+													class="status-dot"
+													class:dot-ok={doc.status === 'completed'}
+													class:dot-fail={doc.status === 'failed'}
+													class:dot-pending={doc.status === 'pending'}
+												>{doc.status}</span>
+											</span>
+										</div>
+										<button class="download-btn" onclick={() => downloadDocument(doc.id)}>
+											↓ Download
+										</button>
+									</div>
+								{/each}
+							</div>
+						{/if}
+					</div>
+
+				{:else if activeTab === 'mensagens'}
+					<div class="tab-content">
+						<div class="section-title">
+							Conversa
+							<span class="muted" style="font-weight:400;font-size:0.8rem">
+								({detail.messageTotal} mensagens)
+							</span>
+						</div>
+
+						{#if detail.messageTotal > detail.messages.length}
+							<button
+								class="load-more-btn"
+								disabled={loadingMoreMessages}
+								onclick={loadMoreMessages}
+							>
+								{loadingMoreMessages ? 'Carregando…' : '↑ Carregar mensagens anteriores'}
+							</button>
+						{/if}
+
+						<div class="messages">
+							{#each detail.messages as msg}
+								<div
+									class="msg"
+									class:msg-user={msg.role === 'user'}
+									class:msg-ai={msg.role !== 'user'}
+								>
+									<div class="msg-role">{msg.role === 'user' ? 'Usuário' : 'IA'}</div>
+									<div class="msg-text">{msg.content}</div>
+									<div class="msg-time muted">{fmtDate(msg.created_at)}</div>
 								</div>
 							{/each}
 						</div>
 					</div>
-				{/if}
 
-				<!-- Messages timeline -->
-				<div class="section">
-					<div class="section-title">
-						Conversa
-						<span class="muted" style="font-weight:400;font-size:0.8rem"
-							>({detail.messageTotal} mensagens)</span
-						>
-					</div>
-
-					{#if detail.messageTotal > detail.messages.length}
-						<button
-							class="load-more-btn"
-							disabled={loadingMoreMessages}
-							onclick={loadMoreMessages}
-						>
-							{loadingMoreMessages ? 'Carregando…' : `↑ Carregar mensagens anteriores`}
-						</button>
-					{/if}
-
-					<div class="messages">
-						{#each detail.messages as msg}
-							<div class="msg" class:msg-user={msg.role === 'user'} class:msg-ai={msg.role !== 'user'}>
-								<div class="msg-role">{msg.role === 'user' ? 'Usuário' : 'IA'}</div>
-								<div class="msg-text">{msg.content}</div>
-								<div class="msg-time muted">{fmtDate(msg.created_at)}</div>
+				{:else if activeTab === 'vetores'}
+					<div class="tab-content">
+						<div class="section-title">Vetores ({detail.knowledgeVectors.length})</div>
+						{#if detail.knowledgeVectors.length === 0}
+							<div class="empty-tab">
+								<div class="empty-icon">∅</div>
+								<div>Nenhum vetor gerado ainda.</div>
+								<div class="muted" style="font-size:0.8rem;margin-top:0.25rem">
+									Vetores são criados após a estimativa ser concluída com sucesso.
+								</div>
 							</div>
-						{/each}
+						{:else}
+							<div class="vectors-list">
+								{#each detail.knowledgeVectors as v}
+									<div class="vector-row">
+										<div class="vector-meta">
+											<span class="mime-badge">{v.source_type}</span>
+											<span class="muted">{fmtDate(v.created_at)}</span>
+										</div>
+										<div class="vector-content">{v.content.slice(0, 200)}{v.content.length > 200 ? '…' : ''}</div>
+									</div>
+								{/each}
+							</div>
+						{/if}
 					</div>
-				</div>
 
-				<!-- Raw state -->
-				<div class="section">
-					<button class="toggle-raw" onclick={() => (showRawState = !showRawState)}>
-						{showRawState ? '▾' : '▸'} State JSON
-					</button>
-					{#if showRawState}
-						<pre class="raw-json">{JSON.stringify(iv.state, null, 2)}</pre>
-					{/if}
-				</div>
+				{:else if activeTab === 'estimativa' && detail.estimate}
+					<div class="tab-content">
+						<div class="section-title">Estimativa</div>
+						<div class="info-list">
+							<div class="info-row">
+								<span class="info-row-label">ID</span>
+								<span class="info-row-value mono">{detail.estimate.id}</span>
+							</div>
+							<div class="info-row">
+								<span class="info-row-label">Status</span>
+								<span class="info-row-value">
+									<span class="badge {statusBadgeClass(detail.estimate.status)}">{detail.estimate.status}</span>
+								</span>
+							</div>
+							<div class="info-row">
+								<span class="info-row-label">Criada em</span>
+								<span class="info-row-value">{fmtDate(detail.estimate.created_at)}</span>
+							</div>
+						</div>
+					</div>
+
+				{:else if activeTab === 'projeto-gerado' && detail.project}
+					<div class="tab-content">
+						<div class="section-title">Projeto</div>
+						<div class="info-list">
+							<div class="info-row">
+								<span class="info-row-label">Nome</span>
+								<span class="info-row-value">{detail.project.name ?? '—'}</span>
+							</div>
+							<div class="info-row">
+								<span class="info-row-label">ID</span>
+								<span class="info-row-value mono">{detail.project.id}</span>
+							</div>
+						</div>
+					</div>
+				{/if}
 			{/if}
 		</div>
 	</div>
@@ -520,39 +707,57 @@
 		line-height: 1;
 	}
 
-	.info-grid {
+	/* ── Tab cards ──────────────────────────────────── */
+
+	.tab-grid {
 		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-		gap: 0.75rem;
-		margin-bottom: 1.5rem;
+		grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+		gap: 0.6rem;
+		margin-bottom: 1.25rem;
 	}
 
-	.info-card {
+	.tab-card {
 		background: rgba(255, 255, 255, 0.03);
-		border: 1px solid rgba(255, 255, 255, 0.06);
+		border: 1px solid rgba(255, 255, 255, 0.07);
 		border-radius: 8px;
-		padding: 0.75rem;
+		padding: 0.7rem 0.875rem;
+		cursor: pointer;
+		text-align: left;
+		color: inherit;
+		transition: background 0.15s, border-color 0.15s;
 	}
 
-	.info-label {
-		font-size: 0.7rem;
+	.tab-card:hover {
+		background: rgba(255, 255, 255, 0.06);
+		border-color: rgba(255, 255, 255, 0.12);
+	}
+
+	.tab-card.tab-active {
+		background: rgba(99, 102, 241, 0.12);
+		border-color: var(--color-primary-500, #6366f1);
+	}
+
+	.tab-label {
+		font-size: 0.68rem;
 		color: var(--color-neutral-500, #6b7280);
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
-		margin-bottom: 0.3rem;
+		margin-bottom: 0.25rem;
 	}
 
-	.info-value {
-		font-size: 0.875rem;
+	.tab-value {
+		font-size: 0.9375rem;
+		font-weight: 600;
 		color: #f9fafb;
-		font-weight: 500;
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
 
+	/* ── Domains ────────────────────────────────────── */
+
 	.section {
-		margin-bottom: 1.5rem;
+		margin-bottom: 1.25rem;
 	}
 
 	.section-title {
@@ -561,10 +766,9 @@
 		color: var(--color-neutral-400, #9ca3af);
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
-		margin-bottom: 0.75rem;
+		margin-bottom: 0.6rem;
 	}
 
-	/* domains */
 	.domains {
 		display: flex;
 		flex-direction: column;
@@ -611,32 +815,180 @@
 		font-size: 0.75rem;
 	}
 
-	/* docs */
+	/* ── Tab content ────────────────────────────────── */
+
+	.tab-content {
+		background: rgba(255, 255, 255, 0.02);
+		border: 1px solid rgba(255, 255, 255, 0.06);
+		border-radius: 8px;
+		padding: 1rem 1.125rem;
+		margin-top: 0.5rem;
+	}
+
+	.tab-content .section-title {
+		margin-bottom: 0.75rem;
+	}
+
+	/* Info list (single column) */
+	.info-list {
+		display: flex;
+		flex-direction: column;
+		gap: 0;
+	}
+
+	.info-row {
+		display: flex;
+		align-items: baseline;
+		gap: 1rem;
+		padding: 0.55rem 0;
+		border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+	}
+
+	.info-row:last-child {
+		border-bottom: none;
+	}
+
+	.info-row-label {
+		font-size: 0.75rem;
+		color: var(--color-neutral-500, #6b7280);
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+		min-width: 110px;
+		flex-shrink: 0;
+	}
+
+	.info-row-value {
+		font-size: 0.875rem;
+		color: #f9fafb;
+		word-break: break-all;
+	}
+
+	.summary-row {
+		align-items: flex-start;
+	}
+
+	.mono {
+		font-family: monospace;
+		font-size: 0.8rem;
+		color: #a5f3fc;
+	}
+
+	/* Docs */
 	.docs-list {
 		display: flex;
 		flex-direction: column;
-		gap: 0.4rem;
+		gap: 0.5rem;
 	}
 
 	.doc-row {
 		display: flex;
 		align-items: center;
+		justify-content: space-between;
 		gap: 0.75rem;
-		font-size: 0.8125rem;
-		color: #d1d5db;
 		background: rgba(255, 255, 255, 0.03);
+		border: 1px solid rgba(255, 255, 255, 0.06);
 		border-radius: 6px;
-		padding: 0.4rem 0.6rem;
+		padding: 0.6rem 0.75rem;
+	}
+
+	.doc-info {
+		display: flex;
+		flex-direction: column;
+		gap: 0.2rem;
+		min-width: 0;
 	}
 
 	.doc-name {
-		flex: 1;
+		font-size: 0.875rem;
+		color: #f9fafb;
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
 
-	/* messages */
+	.doc-meta {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		font-size: 0.72rem;
+	}
+
+	.mime-badge {
+		background: rgba(99, 102, 241, 0.15);
+		color: var(--color-primary-500, #6366f1);
+		padding: 0.1rem 0.4rem;
+		border-radius: 4px;
+		font-size: 0.7rem;
+		font-weight: 500;
+	}
+
+	.status-dot {
+		font-size: 0.7rem;
+	}
+
+	.dot-ok { color: var(--color-success, #10b981); }
+	.dot-fail { color: var(--color-error, #ef4444); }
+	.dot-pending { color: var(--color-warning, #f59e0b); }
+
+	.download-btn {
+		background: rgba(99, 102, 241, 0.12);
+		border: 1px solid rgba(99, 102, 241, 0.3);
+		border-radius: 6px;
+		color: var(--color-primary-500, #6366f1);
+		font-size: 0.8rem;
+		padding: 0.35rem 0.75rem;
+		cursor: pointer;
+		white-space: nowrap;
+		transition: background 0.15s;
+		flex-shrink: 0;
+	}
+
+	.download-btn:hover {
+		background: rgba(99, 102, 241, 0.22);
+	}
+
+	/* Empty tab state */
+	.empty-tab {
+		text-align: center;
+		padding: 2rem 1rem;
+		color: var(--color-neutral-500, #6b7280);
+		font-size: 0.875rem;
+	}
+
+	.empty-icon {
+		font-size: 2rem;
+		margin-bottom: 0.5rem;
+		opacity: 0.4;
+	}
+
+	/* Vectors */
+	.vectors-list {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+	}
+
+	.vector-row {
+		background: rgba(255, 255, 255, 0.03);
+		border: 1px solid rgba(255, 255, 255, 0.06);
+		border-radius: 6px;
+		padding: 0.6rem 0.75rem;
+	}
+
+	.vector-meta {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		margin-bottom: 0.3rem;
+	}
+
+	.vector-content {
+		font-size: 0.8rem;
+		color: #9ca3af;
+		line-height: 1.5;
+	}
+
+	/* Messages */
 	.load-more-btn {
 		width: 100%;
 		background: rgba(255, 255, 255, 0.04);
@@ -704,35 +1056,6 @@
 
 	.msg-time {
 		font-size: 0.65rem;
-	}
-
-	/* raw state */
-	.toggle-raw {
-		background: none;
-		border: none;
-		color: var(--color-neutral-500, #6b7280);
-		font-size: 0.8125rem;
-		cursor: pointer;
-		padding: 0;
-		margin-bottom: 0.5rem;
-	}
-
-	.toggle-raw:hover {
-		color: #d1d5db;
-	}
-
-	.raw-json {
-		background: rgba(0, 0, 0, 0.3);
-		border: 1px solid rgba(255, 255, 255, 0.06);
-		border-radius: 8px;
-		padding: 1rem;
-		font-size: 0.75rem;
-		color: #a5f3fc;
-		overflow-x: auto;
-		white-space: pre;
-		line-height: 1.5;
-		max-height: 400px;
-		overflow-y: auto;
 	}
 
 	/* badges */
