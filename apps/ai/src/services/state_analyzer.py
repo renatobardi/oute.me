@@ -7,6 +7,9 @@ from src.services.prompts import STATE_ANALYSIS_PROMPT
 
 logger = logging.getLogger(__name__)
 
+MAX_DELTA_PER_DOMAIN = 2
+MAX_TOTAL_DELTA_PER_TURN = 3
+
 
 async def analyze_and_update_state(
     current_state: InterviewState,
@@ -51,13 +54,59 @@ async def analyze_and_update_state(
 
     domains_update = analysis.get("domains_update", {})
     if isinstance(domains_update, dict):
+        # Sanity check: reject entire analysis if total delta is suspiciously high
+        raw_deltas = {
+            domain: int(delta.get("answered_delta", 0))
+            for domain, delta in domains_update.items()
+            if isinstance(delta, dict)
+        }
+        total_delta = sum(max(v, 0) for v in raw_deltas.values())
+        if total_delta > MAX_TOTAL_DELTA_PER_TURN:
+            logger.error(
+                "State analysis rejected: total answered_delta=%d exceeds limit=%d "
+                "(per_domain=%s) — keeping current state",
+                total_delta,
+                MAX_TOTAL_DELTA_PER_TURN,
+                raw_deltas,
+            )
+            return current_state, calculate_maturity(current_state)
+
         for domain, delta in domains_update.items():
             if domain in updated.domains and isinstance(delta, dict):
                 d = updated.domains[domain]
                 answered_delta = int(delta.get("answered_delta", 0))
+
+                # NEVER_DECREASE: clamp negatives to 0
+                if answered_delta < 0:
+                    logger.warning(
+                        "State analysis: negative answered_delta=%d for domain '%s' — clamped to 0",
+                        answered_delta,
+                        domain,
+                    )
+                    answered_delta = 0
+
+                # Per-domain cap
+                if answered_delta > MAX_DELTA_PER_DOMAIN:
+                    logger.warning(
+                        "State analysis: answered_delta=%d for domain '%s' "
+                        "exceeds MAX_DELTA_PER_DOMAIN=%d — clamped",
+                        answered_delta,
+                        domain,
+                        MAX_DELTA_PER_DOMAIN,
+                    )
+                    answered_delta = MAX_DELTA_PER_DOMAIN
+
                 d.answered = min(d.answered + answered_delta, d.total)
+
+                # vital_answered is one-way: once True, never revert
                 if delta.get("vital_answered"):
                     d.vital_answered = True
+                elif d.vital_answered:
+                    logger.warning(
+                        "State analysis: LLM returned vital_answered=False for domain '%s' "
+                        "that was already True — ignored",
+                        domain,
+                    )
 
     summary = analysis.get("conversation_summary")
     if isinstance(summary, str) and summary:
