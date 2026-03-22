@@ -8,6 +8,12 @@
 	let filter = $state<'all' | 'active' | 'archived'>('active');
 	let interviews = $state(data.interviews);
 
+	const counts = $derived(() => ({
+		active: interviews.filter(i => i.status === 'active').length,
+		archived: interviews.filter(i => i.status === 'archived').length,
+		all: interviews.length,
+	}));
+
 	const filtered = $derived(() => {
 		const base = filter === 'all'
 			? interviews
@@ -55,12 +61,28 @@
 		}
 	}
 
-	function formatDate(date: string | Date): string {
-		return new Date(date).toLocaleDateString('pt-BR', {
-			day: '2-digit',
-			month: 'short',
-			year: 'numeric',
-		});
+	function formatRelativeTime(date: string | Date): string {
+		const now = new Date();
+		const past = new Date(date);
+		const diffMs = now.getTime() - past.getTime();
+		const diffMinutes = Math.floor(diffMs / (1000 * 60));
+		const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+		const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+		if (diffMinutes < 1) return 'agora';
+		if (diffMinutes < 60) return `há ${diffMinutes} min`;
+		if (diffHours < 24) return `há ${diffHours}h`;
+		if (diffDays === 1) return 'ontem';
+		if (diffDays < 7) return `há ${diffDays} dias`;
+		if (diffDays < 30) return `há ${Math.floor(diffDays / 7)} sem`;
+		if (diffDays < 365) return `há ${Math.floor(diffDays / 30)} meses`;
+		return `há ${Math.floor(diffDays / 365)} ano${Math.floor(diffDays / 365) > 1 ? 's' : ''}`;
+	}
+
+	function maturityColor(maturity: number): string {
+		if (maturity >= 0.7) return 'var(--color-success, #10b981)';
+		if (maturity >= 0.4) return 'var(--color-warning, #f59e0b)';
+		return 'var(--color-error, #ef4444)';
 	}
 </script>
 
@@ -69,11 +91,15 @@
 </svelte:head>
 
 <div class="page">
-	<SectionHeader title="Minhas Entrevistas">
-		<Button onclick={createInterview} disabled={creating}>
-			{creating ? 'Criando...' : 'Nova Entrevista'}
-		</Button>
-	</SectionHeader>
+	{#if interviews.length > 0}
+		<SectionHeader title="Minhas Entrevistas">
+			<Button onclick={createInterview} disabled={creating}>
+				{creating ? 'Criando...' : 'Nova Entrevista'}
+			</Button>
+		</SectionHeader>
+	{:else}
+		<SectionHeader title="Minhas Entrevistas" />
+	{/if}
 
 	{#if interviews.length === 0}
 		<div class="empty">
@@ -98,6 +124,7 @@
 				onclick={() => filter = 'active'}
 			>
 				Ativos
+				<span class="filter-count">{counts().active}</span>
 			</button>
 			<button
 				class="filter-btn"
@@ -105,6 +132,7 @@
 				onclick={() => filter = 'all'}
 			>
 				Todos
+				<span class="filter-count">{counts().all}</span>
 			</button>
 			<button
 				class="filter-btn"
@@ -112,6 +140,7 @@
 				onclick={() => filter = 'archived'}
 			>
 				Arquivados
+				<span class="filter-count">{counts().archived}</span>
 			</button>
 		</div>
 
@@ -123,6 +152,7 @@
 			<div class="grid">
 				{#each filtered() as interview (interview.id)}
 					{@const isArchived = interview.status === 'archived'}
+					{@const maturityPct = Math.round(interview.maturity * 100)}
 					<a
 						href={resolveRoute('/interviews/[id]', { id: interview.id })}
 						class="card"
@@ -130,33 +160,36 @@
 					>
 						<div class="card-header">
 							<h3 class="card-title">{interview.title || 'Sem título'}</h3>
-							<div class="card-header-right">
-								<StatusBadge status={interview.status} size="sm" />
-								<button
-									class="archive-btn"
-									class:archive-btn--active={isArchived}
-									title={isArchived ? 'Reativar' : 'Arquivar'}
-									onclick={(e) => toggleArchive(e, interview.id, interview.status)}
-								>
-									{#if isArchived}
-										<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-											<polyline points="1 4 1 10 7 10"/>
-											<path d="M3.51 15a9 9 0 1 0 .49-3.47"/>
-										</svg>
-										Reativar
-									{:else}
-										<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-											<polyline points="21 8 21 21 3 21 3 8"/>
-											<rect x="1" y="3" width="22" height="5"/>
-											<line x1="10" y1="12" x2="14" y2="12"/>
-										</svg>
-										Arquivar
-									{/if}
-								</button>
-							</div>
+							<button
+								class="archive-btn"
+								class:archive-btn--active={isArchived}
+								title={isArchived ? 'Reativar' : 'Arquivar'}
+								onclick={(e) => toggleArchive(e, interview.id, interview.status)}
+							>
+								{#if isArchived}
+									<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+										<polyline points="1 4 1 10 7 10"/>
+										<path d="M3.51 15a9 9 0 1 0 .49-3.47"/>
+									</svg>
+									Reativar
+								{:else}
+									<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+										<polyline points="21 8 21 21 3 21 3 8"/>
+										<rect x="1" y="3" width="22" height="5"/>
+										<line x1="10" y1="12" x2="14" y2="12"/>
+									</svg>
+									Arquivar
+								{/if}
+							</button>
 						</div>
 
 						<div class="card-maturity">
+							<div class="maturity-label">
+								<span class="maturity-text">Maturidade</span>
+								<span class="maturity-pct" style="color: {maturityColor(interview.maturity)}">
+									{maturityPct}%
+								</span>
+							</div>
 							<MaturityBar
 								maturity={interview.maturity}
 								domains={interview.state.domains}
@@ -164,8 +197,12 @@
 						</div>
 
 						<div class="card-footer">
-							<time datetime={new Date(interview.created_at).toISOString()}>
-								{formatDate(interview.created_at)}
+							<StatusBadge status={interview.status} size="sm" />
+							<time
+								datetime={new Date(interview.updated_at).toISOString()}
+								title={new Date(interview.updated_at).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })}
+							>
+								atualizado {formatRelativeTime(interview.updated_at)}
 							</time>
 						</div>
 					</a>
@@ -195,7 +232,10 @@
 	}
 
 	.filter-btn {
-		padding: 0.375rem 1rem;
+		display: flex;
+		align-items: center;
+		gap: 0.375rem;
+		padding: 0.375rem 0.875rem;
 		border-radius: 6px;
 		border: none;
 		background: transparent;
@@ -213,6 +253,22 @@
 	.filter-btn.active {
 		background: var(--color-dark-sidebar, #2a2d3a);
 		color: var(--color-neutral-100, #f3f4f6);
+	}
+
+	.filter-count {
+		font-size: 0.7rem;
+		font-weight: 600;
+		background: var(--color-dark-bg, #0f1117);
+		color: var(--color-neutral-500, #6b7280);
+		border-radius: 999px;
+		padding: 0.1rem 0.45rem;
+		min-width: 1.25rem;
+		text-align: center;
+	}
+
+	.filter-btn.active .filter-count {
+		background: rgba(99, 102, 241, 0.15);
+		color: var(--color-primary-500, #6366f1);
 	}
 
 	/* Empty state */
@@ -269,12 +325,13 @@
 		border: 1px solid var(--color-dark-border, rgba(255, 255, 255, 0.08));
 		border-radius: 12px;
 		text-decoration: none;
-		transition: border-color 0.2s, background-color 0.2s, opacity 0.2s;
+		transition: border-color 0.2s, background-color 0.2s, box-shadow 0.2s, opacity 0.2s;
 	}
 
 	.card:hover {
 		border-color: var(--color-primary-500, #6366f1);
 		background-color: var(--color-dark-sidebar, #2a2d3a);
+		box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.15), 0 4px 16px rgba(99, 102, 241, 0.08);
 	}
 
 	.card--archived {
@@ -285,6 +342,7 @@
 	.card--archived:hover {
 		opacity: 0.65;
 		border-color: var(--color-neutral-600, #4b5563);
+		box-shadow: none;
 	}
 
 	.card-header {
@@ -292,13 +350,6 @@
 		justify-content: space-between;
 		align-items: flex-start;
 		gap: 0.75rem;
-	}
-
-	.card-header-right {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		flex-shrink: 0;
 	}
 
 	.card-title {
@@ -326,6 +377,7 @@
 		cursor: pointer;
 		transition: background 0.15s, color 0.15s, border-color 0.15s;
 		white-space: nowrap;
+		flex-shrink: 0;
 	}
 
 	.archive-btn:hover {
@@ -343,8 +395,33 @@
 		border-color: var(--color-success, #10b981);
 	}
 
+	/* Maturity section */
 	.card-maturity {
 		flex: 1;
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+	}
+
+	.maturity-label {
+		display: flex;
+		justify-content: space-between;
+		align-items: baseline;
+	}
+
+	.maturity-text {
+		font-size: 0.75rem;
+		font-weight: 500;
+		color: var(--color-neutral-500, #6b7280);
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+	}
+
+	.maturity-pct {
+		font-size: 1.25rem;
+		font-weight: 700;
+		line-height: 1;
+		transition: color 0.2s;
 	}
 
 	/* Override MaturityBar background inside card since card already has surface bg */
@@ -353,7 +430,11 @@
 		padding: 0;
 	}
 
+	/* Footer */
 	.card-footer {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
 		border-top: 1px solid var(--color-dark-border, rgba(255, 255, 255, 0.08));
 		padding-top: 0.75rem;
 	}
