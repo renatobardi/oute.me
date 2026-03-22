@@ -24,7 +24,7 @@ async def verify_cloud_tasks_token(
         return False
     token = authorization[7:]
     try:
-        claims = id_token.verify_oauth2_token(
+        claims = id_token.verify_oauth2_token(  # type: ignore[no-untyped-call]  # google-auth has no stubs
             token,
             google_requests.Request(),
             audience=expected_audience,
