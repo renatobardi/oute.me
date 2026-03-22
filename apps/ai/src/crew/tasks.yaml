@@ -32,22 +32,23 @@ consolidate_requirements:
 
 search_similar_projects:
   description: >
-    Com base nos requisitos consolidados, busque projetos similares na base
-    de conhecimento vetorial E na internet.
+    Os requisitos consolidados do projeto estão disponíveis no contexto acima
+    (output do agente anterior).
+
+    Com base nesses requisitos, busque projetos similares na base de
+    conhecimento vetorial E na internet.
 
     1. Use a ferramenta vector_search para buscar projetos anteriores na base interna.
+       Gere 2-3 queries diferentes cobrindo: tipo de projeto, tecnologias principais,
+       e escopo/complexidade.
     2. Use a ferramenta web_search para buscar na internet por:
        - Projetos de software similares e seus custos
        - Arquiteturas de referência para o tipo de projeto
        - Benchmarks de mercado para desenvolvimento de software
        - Artigos técnicos relevantes
 
-    Requisitos consolidados:
-    {consolidated_requirements}
-
-    Gere queries de busca eficientes para cada ferramenta. Combine os resultados
-    internos e externos, dando prioridade a dados internos quando disponíveis,
-    mas enriquecendo com benchmarks de mercado da web.
+    Combine os resultados internos e externos, dando prioridade a dados internos
+    quando disponíveis, mas enriquecendo com benchmarks de mercado da web.
   expected_output: >
     Um documento JSON com:
     {
@@ -68,20 +69,19 @@ search_similar_projects:
 
 design_architecture:
   description: >
-    Com base nos requisitos consolidados e projetos similares, proponha
-    uma arquitetura técnica e cronograma de implementação.
+    Os requisitos consolidados e os projetos similares estão disponíveis no
+    contexto acima (outputs dos agentes anteriores).
 
-    Requisitos:
-    {consolidated_requirements}
-
-    Projetos similares:
-    {similar_projects}
+    Com base nessas informações, proponha uma arquitetura técnica e
+    cronograma de implementação.
 
     Defina:
-    1. Visão geral da arquitetura
+    1. Visão geral da arquitetura (2-3 parágrafos)
     2. Milestones com duração, entregáveis e dependências
     3. Recomendações tecnológicas com justificativa
-    4. Riscos técnicos com mitigação
+    4. Riscos técnicos com probabilidade, impacto e mitigação
+
+    Use os projetos similares como referência para calibrar prazos e escopo.
   expected_output: >
     Um documento JSON com:
     {
@@ -108,15 +108,13 @@ estimate_costs:
   description: >
     Elabore 3 cenários financeiros com base nos dados abaixo.
 
-    ## Arquitetura e Milestones
-    {architecture}
-    → Extraia: número de milestones, duração total em semanas, complexidade
-      de cada milestone, número de integrações externas.
-
-    ## Projetos Similares e Benchmarks de Mercado
-    {similar_projects}
-    → Extraia: custo médio, duração média, tamanho médio da equipe,
-      taxa horária média (avg_cost_per_hour).
+    ## Dados de Entrada
+    A arquitetura, milestones e projetos similares estão disponíveis no
+    contexto acima (outputs dos agentes anteriores).
+    → Da arquitetura, extraia: número de milestones, duração total em semanas,
+      complexidade de cada milestone, número de integrações externas.
+    → Dos projetos similares, extraia: custo médio, duração média, tamanho
+      médio da equipe, taxa horária média (avg_cost_per_hour).
 
     ## Método de Cálculo
     Para cada cenário (conservador, moderado, otimista):
@@ -168,15 +166,9 @@ review_and_summarize:
     sumário executivo para stakeholders.
 
     ## Dados de Entrada
-
-    ### Requisitos Consolidados
-    {consolidated_requirements}
-
-    ### Arquitetura e Milestones
-    {architecture}
-
-    ### Cenários de Custo
-    {cost_scenarios}
+    Os requisitos consolidados, a arquitetura com milestones e os cenários
+    de custo estão disponíveis no contexto acima (outputs dos agentes
+    anteriores). Use-os como base para toda a validação abaixo.
 
     ## Checklist de Validação
 
