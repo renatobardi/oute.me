@@ -35,6 +35,7 @@ def _run_crew_sync(
     task_done_callback: Callable[[str], None] | None = None,
     from_agent: str | None = None,
     previous_outputs: dict[str, str] | None = None,
+    llm_model: str = "vertex_ai/gemini-2.5-flash-lite",
 ) -> dict[str, Any]:
     """Build and run the CrewAI pipeline, returning an aggregated result dict."""
     estimate_crew = build_estimate_crew(
@@ -46,6 +47,7 @@ def _run_crew_sync(
         task_done_callback=task_done_callback,
         from_agent=from_agent,
         previous_outputs=previous_outputs,
+        llm_model=llm_model,
     )
     return run_and_collect(estimate_crew)
 
@@ -136,6 +138,11 @@ async def run_pipeline(
         # Build real-time callback — updates each step as it completes during execution
         _steps_ref, task_done_cb = _make_task_done_callback(job_id, loop, backend)
 
+        # Ensure llm_model has the vertex_ai/ prefix required by CrewAI/LiteLLM
+        full_llm_model = (
+            llm_model if llm_model.startswith("vertex_ai/") else f"vertex_ai/{llm_model}"
+        )
+
         fn = functools.partial(
             _run_crew_sync,
             interview_state,
@@ -146,6 +153,7 @@ async def run_pipeline(
             task_done_cb,
             from_agent,
             previous_outputs,
+            full_llm_model,
         )
 
         heartbeat_task = asyncio.create_task(_heartbeat_loop(job_id, backend))
