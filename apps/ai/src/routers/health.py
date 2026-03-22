@@ -1,6 +1,6 @@
 import logging
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Header, HTTPException
 
 from src.config import settings
 
@@ -54,3 +54,21 @@ async def health_check() -> dict[str, str]:
         statuses["vertex_ai"] = "error"
 
     return statuses
+
+
+@router.post("/reindex")
+async def reindex(
+    x_cloudtasks_queuename: str | None = Header(default=None),
+) -> dict[str, str]:
+    """Dispara REINDEX CONCURRENTLY no índice IVFFlat de vetores.
+
+    Protegido pelo mesmo header que o endpoint /estimate/execute — só
+    aceita chamadas originadas do Cloud Tasks ou de scripts internos.
+    """
+    if not x_cloudtasks_queuename:
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    from src.services.maintenance import reindex_vectors
+
+    await reindex_vectors()
+    return {"status": "ok"}
