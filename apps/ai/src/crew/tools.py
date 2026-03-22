@@ -29,14 +29,18 @@ class VectorSearchTool(BaseTool):
         "Busca projetos e estimativas similares na base de conhecimento vetorial. "
         "Recebe uma query de texto e retorna os resultados mais relevantes."
     )
+    interview_id: str = ""
 
     def _run(self, query: str) -> str:
         import json
 
         from src.services.vector_store import search_similar
 
+        exclude_id = self.interview_id or None
         try:
-            results: list[dict[str, Any]] = _run_async_in_sync(search_similar(query, limit=5))
+            results: list[dict[str, Any]] = _run_async_in_sync(
+                search_similar(query, limit=5, exclude_source_id=exclude_id)
+            )
         except Exception:
             logger.exception("Vector search failed for query: %s", query[:100])
             return json.dumps(

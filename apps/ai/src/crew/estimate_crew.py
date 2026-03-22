@@ -76,6 +76,7 @@ def build_estimate_crew(
     from_agent: str | None = None,
     previous_outputs: dict[str, str] | None = None,
     llm_model: str = "vertex_ai/gemini-2.5-flash-lite",
+    interview_id: str = "",
 ) -> EstimateCrew:
     agents_config = _load_yaml("agents.yaml")
     tasks_config = _load_yaml("tasks.yaml")
@@ -103,7 +104,10 @@ def build_estimate_crew(
         )
 
     architecture_interviewer = _agent("architecture_interviewer")
-    rag_analyst = _agent("rag_analyst", tools=[VectorSearchTool(), WebSearchTool()])
+    rag_analyst = _agent(
+        "rag_analyst",
+        tools=[VectorSearchTool(interview_id=interview_id), WebSearchTool()],
+    )
     software_architect = _agent("software_architect")
     cost_specialist = _agent("cost_specialist")
     reviewer = _agent("reviewer")
