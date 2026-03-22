@@ -13,7 +13,7 @@ MUDANÇAS Phase 2 em relação ao original:
   4. Regras de conduta expandidas com anti-patterns comuns
 """
 
-from src.models.interview import InterviewState
+from src.models.interview import InterviewState, calculate_maturity
 from src.services.interview_initializer import get_uncovered_vital_domains
 
 
@@ -24,7 +24,7 @@ def build_system_prompt(
     user_name: str | None = None,
 ) -> str:
     domains_status = _format_domains(state)
-    maturity = _calculate_maturity_inline(state)
+    maturity = calculate_maturity(state)
     stage_guidance = _get_stage_guidance(state, maturity)
     vital_alert = _get_vital_alert(state)
 
@@ -222,32 +222,6 @@ def _format_domains(state: InterviewState) -> str:
         vital = "✓" if d.vital_answered else "✗"
         lines.append(f"- {label}: {d.answered}/{d.total} ({progress:.0f}%) | Vital: {vital}")
     return "\n".join(lines)
-
-
-def _calculate_maturity_inline(state: InterviewState) -> float:
-    """
-    Réplica local de calculate_maturity() para uso no prompt sem importar o modelo.
-    Mantém sincronizado com models/interview.py:calculate_maturity().
-    """
-    from src.models.interview import DOMAIN_WEIGHTS, VITAL_REQUIRED, DomainState
-
-    score = 0.0
-    for domain, weight in DOMAIN_WEIGHTS.items():
-        d = state.domains.get(domain)
-        if not d:
-            continue
-        progress = min(d.answered / d.total, 1.0) if d.total > 0 else 0.0
-        score += weight * progress
-
-    all_vital = all(
-        state.domains.get(domain, DomainState()).vital_answered
-        for domain, required in VITAL_REQUIRED.items()
-        if required
-    )
-    if not all_vital:
-        score *= 0.85
-
-    return round(score, 3)
 
 
 # ---------------------------------------------------------------------------

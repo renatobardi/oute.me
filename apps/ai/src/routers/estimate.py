@@ -64,19 +64,28 @@ async def execute_estimate(
     if not x_cloudtasks_queuename:
         raise HTTPException(status_code=403, detail="Forbidden")
 
+    # Cloud Tasks body contains only identifiers; full pipeline input is in the backend.
     payload = await request.json()
     job_id: str = payload["job_id"]
     interview_id: str = payload["interview_id"]
-    interview_state: dict[str, Any] = payload["interview_state"]
-    conversation_summary: str = payload["conversation_summary"]
-    documents_context: str = payload["documents_context"]
-    llm_model: str = payload.get("llm_model", "gemini-2.5-flash")
-    agent_instructions: dict[str, str] = payload.get("agent_instructions", {})
-    agent_config: dict[str, dict[str, Any]] = payload.get("agent_config", {})
-    from_agent: str | None = payload.get("from_agent")
-    previous_outputs: dict[str, str] | None = payload.get("previous_outputs")
 
     backend = create_state_backend()
+    job = await backend.get_job(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    pipeline_input: dict[str, Any] = (
+        job.get("result") or {}  # type: ignore[union-attr]
+    ).get("_pipeline_input", {})
+
+    interview_state: dict[str, Any] = pipeline_input.get("interview_state", {})
+    conversation_summary: str = pipeline_input.get("conversation_summary", "")
+    documents_context: str = pipeline_input.get("documents_context", "")
+    llm_model: str = pipeline_input.get("llm_model", "gemini-2.5-flash")
+    agent_instructions: dict[str, str] = pipeline_input.get("agent_instructions", {})
+    agent_config: dict[str, dict[str, Any]] = pipeline_input.get("agent_config", {})
+    from_agent: str | None = pipeline_input.get("from_agent")
+    previous_outputs: dict[str, str] | None = pipeline_input.get("previous_outputs")
 
     await run_pipeline(
         job_id=job_id,
