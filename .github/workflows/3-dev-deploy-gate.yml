@@ -1,0 +1,43 @@
+name: DEV Deploy Gate
+
+# Creates a commit status on the develop branch based on Deploy DEV result.
+# This status is used as a required check for PRs from develop → main,
+# ensuring that code cannot ship to production if the DEV deploy is broken.
+
+on:
+  workflow_run:
+    workflows: ["Deploy DEV"]
+    types: [completed]
+    branches: [develop]
+
+permissions:
+  statuses: write
+
+jobs:
+  report-status:
+    name: Report DEV Deploy Status
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set commit status
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          CONCLUSION="${{ github.event.workflow_run.conclusion }}"
+          SHA="${{ github.event.workflow_run.head_sha }}"
+
+          if [[ "$CONCLUSION" == "success" ]]; then
+            STATE="success"
+            DESC="DEV deploy completed successfully"
+          else
+            STATE="failure"
+            DESC="DEV deploy failed — fix before merging to main"
+          fi
+
+          gh api \
+            repos/${{ github.repository }}/statuses/$SHA \
+            -f state="$STATE" \
+            -f description="$DESC" \
+            -f context="dev-deploy-gate" \
+            -f target_url="${{ github.event.workflow_run.html_url }}"
+
+          echo "📊 Set status '$STATE' on $SHA (context: dev-deploy-gate)"
