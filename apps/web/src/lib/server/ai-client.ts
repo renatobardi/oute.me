@@ -1,4 +1,5 @@
 import { env } from '$env/dynamic/private';
+import { logger } from './logger';
 
 function getBaseUrl(): string {
 	return env.AI_SERVICE_URL || 'http://localhost:8000';
@@ -40,6 +41,7 @@ export async function proxySSE(path: string, body: object): Promise<Response> {
 	});
 
 	if (!response.ok) {
+		logger.error({ path, status: response.status }, 'AI proxy SSE request failed');
 		throw new Error(`AI service error: ${response.status}`);
 	}
 

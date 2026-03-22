@@ -1,5 +1,6 @@
 import type { RequestEvent } from '@sveltejs/kit';
 import { getAdminAuth } from './firebase-admin';
+import { logger } from './logger';
 import type { DecodedIdToken } from 'firebase-admin/auth';
 
 export interface AuthUser {
@@ -32,7 +33,8 @@ export async function verifyAuthToken(event: RequestEvent): Promise<AuthUser | n
 		try {
 			const decoded = await getAdminAuth().verifyIdToken(token);
 			return toAuthUser(decoded);
-		} catch {
+		} catch (err) {
+			logger.warn({ err }, 'Firebase token verification failed');
 			return null;
 		}
 	}
@@ -44,7 +46,8 @@ export async function verifyAuthToken(event: RequestEvent): Promise<AuthUser | n
 		// checkRevoked: true — invalida sessões revogadas via logout server-side
 		const decoded = await getAdminAuth().verifySessionCookie(sessionCookie, true);
 		return toAuthUser(decoded);
-	} catch {
+	} catch (err) {
+		logger.warn({ err }, 'Firebase session cookie verification failed');
 		return null;
 	}
 }

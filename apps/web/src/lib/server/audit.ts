@@ -10,6 +10,27 @@ interface AuditEvent {
 	userAgent?: string;
 }
 
+export type BusinessEvent =
+	| 'interview.created'
+	| 'interview.maturity_reached'
+	| 'interview.document_uploaded'
+	| 'estimate.triggered'
+	| 'estimate.completed'
+	| 'estimate.failed'
+	| 'estimate.approved'
+	| 'project.created'
+	| 'user.activated';
+
+export function logBusinessEvent(
+	eventType: BusinessEvent,
+	actorId: string,
+	resourceType: string,
+	resourceId: string,
+	details: Record<string, unknown> = {},
+): Promise<void> {
+	return logAuditEvent({ eventType, actorId, resourceType, resourceId, details });
+}
+
 export async function logAuditEvent(event: AuditEvent): Promise<void> {
 	try {
 		await sql`

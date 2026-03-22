@@ -1,3 +1,4 @@
+from pydantic import field_validator
 from pydantic_settings import BaseSettings
 
 
@@ -27,6 +28,22 @@ class Settings(BaseSettings):
     grok_api_key: str = ""
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
+
+    @field_validator("database_url")
+    @classmethod
+    def validate_database_url(cls, v: str) -> str:
+        if not v:
+            raise ValueError(
+                "DATABASE_URL é obrigatório. Exemplo: postgresql://user:pass@host:5432/oute_develop"
+            )
+        return v
+
+    @field_validator("gcp_project")
+    @classmethod
+    def validate_gcp_project(cls, v: str) -> str:
+        if not v:
+            raise ValueError("GCP_PROJECT é obrigatório para Vertex AI")
+        return v
 
 
 settings = Settings()
