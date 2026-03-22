@@ -209,6 +209,7 @@ class KnowledgeMetadata(BaseModel):
 
 # --- Common per-agent output models ---
 
+
 class ConsolidatedRequirements(BaseModel):
     functional_requirements: list[str] = []
     non_functional_requirements: list[str] = []
