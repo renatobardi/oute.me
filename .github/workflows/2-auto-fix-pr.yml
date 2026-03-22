@@ -1,0 +1,171 @@
+name: Auto-Fix PR
+
+# Triggers when PR Gate fails on feature/fix/refactor/chore/test/docs branches.
+# Uses Claude Code to analyze failure logs and attempt automated fixes.
+# Safety: runs once per failure (GITHUB_TOKEN commits don't re-trigger workflows).
+
+on:
+  workflow_run:
+    workflows: ["PR Gate"]
+    types: [completed]
+
+concurrency:
+  group: auto-fix-${{ github.event.workflow_run.head_branch }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: "24"
+  PYTHON_VERSION: "3.12"
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  auto-fix:
+    name: Claude Auto-Fix
+    runs-on: ubuntu-latest
+
+    # Only run when:
+    # 1. PR Gate failed
+    # 2. Branch is NOT develop or main (feature branches only)
+    # 3. The triggering event was a pull_request (not a push)
+    if: >
+      github.event.workflow_run.conclusion == 'failure' &&
+      github.event.workflow_run.head_branch != 'develop' &&
+      github.event.workflow_run.head_branch != 'main' &&
+      github.event.workflow_run.event == 'pull_request'
+
+    steps:
+      - name: Check if previous commit was auto-fix
+        id: check-loop
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Get the last commit message on the branch
+          LAST_MSG=$(gh api \
+            repos/${{ github.repository }}/commits/${{ github.event.workflow_run.head_sha }} \
+            --jq '.commit.message' 2>/dev/null || echo "")
+
+          # If the last commit was already an auto-fix, stop to prevent loops
+          if echo "$LAST_MSG" | grep -q "^ci(auto-fix):"; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "⚠️  Previous commit was auto-fix. Stopping to prevent loop."
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout branch
+        if: steps.check-loop.outputs.skip != 'true'
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.workflow_run.head_branch }}
+          # Use default GITHUB_TOKEN — commits made with it won't re-trigger workflows
+          persist-credentials: true
+
+      - name: Download failure logs
+        if: steps.check-loop.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Get logs from the failed workflow run
+          gh run view ${{ github.event.workflow_run.id }} --log-failed > /tmp/failure-logs.txt 2>&1 || true
+
+          # Truncate to last 500 lines to stay within context limits
+          tail -500 /tmp/failure-logs.txt > /tmp/failure-logs-truncated.txt
+
+          echo "📋 Failure logs downloaded ($(wc -l < /tmp/failure-logs-truncated.txt) lines)"
+
+      # Setup both runtimes so Claude can run lint/test commands
+      - name: Setup Node
+        if: steps.check-loop.outputs.skip != 'true'
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node version
+        if: steps.check-loop.outputs.skip != 'true'
+        uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Setup Python
+        if: steps.check-loop.outputs.skip != 'true'
+        uses: astral-sh/setup-uv@v6
+
+      - name: Setup Python version
+        if: steps.check-loop.outputs.skip != 'true'
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        if: steps.check-loop.outputs.skip != 'true'
+        run: |
+          pnpm install --frozen-lockfile
+          cp apps/web/.env.example apps/web/.env
+          cd apps/ai && uv sync --extra dev
+
+      - name: Run Claude Code auto-fix
+        if: steps.check-loop.outputs.skip != 'true'
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          # Install Claude Code CLI
+          npm install -g @anthropic-ai/claude-code
+
+          # Feed failure logs to Claude with strict instructions
+          cat /tmp/failure-logs-truncated.txt | claude -p \
+            --max-turns 10 \
+            --allowedTools "Read,Edit,Write,Bash(pnpm:*),Bash(uv:*),Bash(turbo:*),Bash(cd:*)" \
+            "You are fixing CI failures on a pull request for the oute.me project.
+
+          The failure logs from GitHub Actions are provided via stdin.
+
+          Instructions:
+          1. Analyze the failure logs to identify the root cause
+          2. Read the relevant source files to understand the context
+          3. Make the MINIMAL changes needed to fix the issue
+          4. After editing, run the specific failing check to verify your fix:
+             - Lint TS: pnpm run lint
+             - Type check TS: pnpm run check
+             - Build TS: pnpm run build
+             - Test TS: pnpm run test
+             - Lint Python: cd apps/ai && uv run ruff check src/ tests/
+             - Format Python: cd apps/ai && uv run ruff format --check src/ tests/
+             - Type check Python: cd apps/ai && uv run mypy src/
+             - Test Python: cd apps/ai && uv run pytest --tb=short
+          5. Do NOT modify CI/CD configuration files (.github/workflows/*)
+          6. Do NOT modify package.json, pyproject.toml, or lock files
+          7. Do NOT add new dependencies
+          8. Focus only on fixing the failing checks — do not refactor or improve other code
+
+          If you cannot fix the issue, explain why in your output and make no changes."
+
+      - name: Commit and push fixes
+        if: steps.check-loop.outputs.skip != 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          # Check if there are actual changes
+          if git diff --quiet && git diff --cached --quiet; then
+            echo "ℹ️  No changes made — Claude could not fix the issue automatically."
+            exit 0
+          fi
+
+          # Stage all changes
+          git add -A
+
+          # Create auto-fix commit
+          git commit -m "$(cat <<'EOF'
+          ci(auto-fix): fix CI failures detected in PR Gate
+
+          Automated fix applied by Claude Code.
+          Review this commit carefully before approving the PR.
+          EOF
+          )"
+
+          # Push — uses GITHUB_TOKEN, so this won't re-trigger workflows
+          git push
+
+          echo "✅ Auto-fix committed and pushed."
