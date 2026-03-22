@@ -36,6 +36,7 @@ def _run_crew_sync(
     from_agent: str | None = None,
     previous_outputs: dict[str, str] | None = None,
     llm_model: str = "vertex_ai/gemini-2.5-flash-lite",
+    interview_id: str = "",
 ) -> dict[str, Any]:
     """Build and run the CrewAI pipeline, returning an aggregated result dict."""
     estimate_crew = build_estimate_crew(
@@ -48,6 +49,7 @@ def _run_crew_sync(
         from_agent=from_agent,
         previous_outputs=previous_outputs,
         llm_model=llm_model,
+        interview_id=interview_id,
     )
     return run_and_collect(estimate_crew)
 
@@ -154,6 +156,7 @@ async def run_pipeline(
             from_agent,
             previous_outputs,
             full_llm_model,
+            interview_id,
         )
 
         heartbeat_task = asyncio.create_task(_heartbeat_loop(job_id, backend))

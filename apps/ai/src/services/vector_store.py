@@ -110,17 +110,21 @@ async def embed_interview_data(
     return vector_ids
 
 
-async def search_similar(query: str, limit: int = 5) -> list[dict[str, object]]:
+async def search_similar(
+    query: str, limit: int = 5, exclude_source_id: str | None = None
+) -> list[dict[str, object]]:
     embedding = await generate_embedding(query)
     pool = await get_pool()
     rows = await pool.fetch(
         """SELECT id, source_type, source_id, content, metadata,
                   1 - (embedding <=> $1::vector) AS similarity
            FROM ai.knowledge_vectors
+           WHERE ($3::uuid IS NULL OR source_id != $3::uuid)
            ORDER BY embedding <=> $1::vector
            LIMIT $2""",
         str(embedding),
         limit,
+        exclude_source_id,
     )
     return [
         {
