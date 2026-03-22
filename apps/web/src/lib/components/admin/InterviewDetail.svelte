@@ -2,7 +2,7 @@
 	import type { CockpitDetail } from '$lib/server/admin-cockpit';
 	import type { AgentStep } from '$lib/types/estimate';
 	import { scrollShadow } from '$lib/actions/scroll-shadow';
-	import { fmtDate, maturityColor, statusBadgeClass } from '$lib/utils/admin';
+	import { fmtDate, maturityColor } from '$lib/utils/admin';
 
 	import StatusBadge from '$lib/components/admin/StatusBadge.svelte';
 	import DomainProgress from '$lib/components/admin/DomainProgress.svelte';
@@ -36,7 +36,7 @@
 
 	// Reset tab when interview changes
 	$effect(() => {
-		selectedId; // track dependency
+		void selectedId; // track dependency
 		activeTab = null;
 		rerunMsg = '';
 	});
