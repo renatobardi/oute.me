@@ -34,8 +34,7 @@ class Settings(BaseSettings):
     def validate_database_url(cls, v: str) -> str:
         if not v:
             raise ValueError(
-                "DATABASE_URL é obrigatório. "
-                "Exemplo: postgresql://user:pass@host:5432/oute_develop"
+                "DATABASE_URL é obrigatório. Exemplo: postgresql://user:pass@host:5432/oute_develop"
             )
         return v
 
