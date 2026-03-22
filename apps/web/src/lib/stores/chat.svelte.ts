@@ -58,6 +58,7 @@ export function createChatState(
 	let titleUserSet = $state(initialTitle !== null);
 	let currentStreamText = $state('');
 	let error = $state<string | null>(null);
+	let persistenceWarning = $state<string | null>(null);
 	let uploadError = $state<string | null>(null);
 	let documents = $state<ChatDocument[]>(initialDocuments);
 
@@ -125,7 +126,17 @@ export function createChatState(
 						const data = JSON.parse(dataMatch[1]);
 
 						if (eventType === 'error') {
-							error = (data.message as string) ?? 'Erro ao processar resposta.';
+							const errData = data as Record<string, unknown>;
+							if (errData.type === 'persistence_warning') {
+								persistenceWarning =
+									(errData.message as string) ??
+									'Algumas alterações podem não ter sido salvas.';
+							} else {
+								error =
+									(errData.error as string) ??
+									(errData.message as string) ??
+									'Erro ao processar resposta.';
+							}
 						} else if (eventType === 'message_chunk') {
 							currentStreamText += data.text;
 						} else if (eventType === 'state_update') {
@@ -241,6 +252,12 @@ export function createChatState(
 		},
 		set error(value: string | null) {
 			error = value;
+		},
+		get persistenceWarning() {
+			return persistenceWarning;
+		},
+		set persistenceWarning(value: string | null) {
+			persistenceWarning = value;
 		},
 		get uploadError() {
 			return uploadError;

@@ -1,4 +1,4 @@
-import sql from './db';
+import sql, { withTransaction } from './db';
 import { createDefaultState } from '$lib/types/interview';
 import type { Interview, InterviewMessage, InterviewDocument, InterviewState } from '$lib/types/interview';
 
@@ -194,6 +194,33 @@ export async function getDocuments(interviewId: string): Promise<InterviewDocume
 		WHERE interview_id = ${interviewId}
 		ORDER BY created_at ASC
 	`;
+}
+
+export async function persistChatTurn(
+	interviewId: string,
+	content: string,
+	tokensUsed: number,
+	newState: InterviewState | null,
+	maturity: number | null
+): Promise<void> {
+	await withTransaction(async (tx) => {
+		await tx`
+			INSERT INTO public.interview_messages (interview_id, role, content, tokens_used)
+			VALUES (${interviewId}, 'assistant', ${content}, ${tokensUsed})
+		`;
+		if (newState) {
+			const validation = validateInterviewState(newState);
+			if (!validation.valid) {
+				throw new Error(`Invalid interview state: ${validation.errors.join('; ')}`);
+			}
+			await tx`
+				UPDATE public.interviews
+				SET state = ${tx.json(JSON.parse(JSON.stringify(newState)))},
+				    maturity = ${maturity ?? 0}
+				WHERE id = ${interviewId}
+			`;
+		}
+	});
 }
 
 export async function deleteDocument(

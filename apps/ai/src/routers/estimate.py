@@ -5,8 +5,10 @@ from typing import Any
 
 from fastapi import APIRouter, Header, HTTPException, Request
 
+from src.config import settings
 from src.crew.estimate_crew import AGENT_KEYS
 from src.models.estimate import AgentStep, EstimateRequest, EstimateStatusResponse
+from src.services.cloud_tasks_auth import verify_cloud_tasks_token
 from src.services.estimate_runner import run_pipeline, start_estimate
 from src.services.state import create_state_backend
 
@@ -61,8 +63,17 @@ async def execute_estimate(
     x_cloudtasks_queuename: str | None = Header(default=None),
 ) -> dict[str, str]:
     """Endpoint exclusivo para Cloud Tasks. Executa o pipeline CrewAI de forma síncrona."""
-    if not x_cloudtasks_queuename:
-        raise HTTPException(status_code=403, detail="Forbidden")
+    authorization = request.headers.get("authorization", "")
+    if settings.environment == "production":
+        if not x_cloudtasks_queuename:
+            raise HTTPException(status_code=403, detail="Forbidden")
+        if not await verify_cloud_tasks_token(
+            authorization, expected_audience=settings.ai_service_url
+        ):
+            raise HTTPException(status_code=401, detail="Invalid OIDC token")
+    else:
+        if not x_cloudtasks_queuename:
+            logger.warning("Dev mode: /execute chamado sem header Cloud Tasks")
 
     # Cloud Tasks body contains only identifiers; full pipeline input is in the backend.
     payload = await request.json()

@@ -30,4 +30,13 @@ function createConnection() {
 
 const sql = createConnection();
 
+// postgres.TransactionSql extends Omit<Sql,...> which loses the call signature.
+// We type the callback param as `typeof sql` so callers can use tagged templates,
+// then cast to satisfy sql.begin's narrower expected type.
+export async function withTransaction<T>(
+	fn: (tx: typeof sql) => Promise<T>
+): Promise<T> {
+	return sql.begin(fn as unknown as (tx: postgres.TransactionSql) => Promise<T>) as unknown as Promise<T>;
+}
+
 export default sql;

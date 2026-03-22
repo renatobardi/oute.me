@@ -365,6 +365,13 @@
 			</div>
 		{/if}
 
+		{#if chat.persistenceWarning}
+			<div class="alert alert-warning">
+				<span>{chat.persistenceWarning}</span>
+				<button class="alert-dismiss" onclick={() => (chat.persistenceWarning = null)}>&#xd7;</button>
+			</div>
+		{/if}
+
 		<div class="messages" bind:this={chatContainer} use:scrollShadow>
 			{#if chat.messages.length === 0 && !chat.isStreaming}
 				<div class="empty-chat">
@@ -742,6 +749,12 @@
 		background: color-mix(in srgb, var(--color-error, #ef4444) 15%, var(--color-dark-bg, #0f1117));
 		color: var(--color-error, #ef4444);
 		border-bottom: 1px solid color-mix(in srgb, var(--color-error, #ef4444) 25%, transparent);
+	}
+
+	.alert-warning {
+		background: color-mix(in srgb, var(--color-warning, #f59e0b) 15%, var(--color-dark-bg, #0f1117));
+		color: var(--color-warning, #f59e0b);
+		border-bottom: 1px solid color-mix(in srgb, var(--color-warning, #f59e0b) 25%, transparent);
 	}
 
 	.alert-dismiss {

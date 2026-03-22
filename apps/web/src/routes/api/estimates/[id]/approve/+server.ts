@@ -1,7 +1,7 @@
 import { error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { requireAuth, jsonOk, jsonError } from '$lib/server/api-utils';
-import { logAuditEvent } from '$lib/server/audit';
+import { logBusinessEvent } from '$lib/server/audit';
 import { getEstimate, approveEstimate } from '$lib/server/estimates';
 import { createProjectFromEstimate } from '$lib/server/projects';
 import type { EstimateResult } from '$lib/types/estimate';
@@ -49,14 +49,10 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
 		scenario
 	);
 
-	await logAuditEvent({
-		eventType: 'estimate.approved',
-		actorId: user.uid,
-		resourceType: 'estimate',
-		resourceId: estimate.id,
-		details: { project_id: project.id, scenario, project_name: projectName },
-		ipAddress: request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? undefined,
-		userAgent: request.headers.get('user-agent') ?? undefined,
+	void logBusinessEvent('estimate.approved', user.uid, 'estimate', estimate.id, {
+		project_id: project.id,
+		scenario,
+		project_name: projectName,
 	});
 
 	return jsonOk({
