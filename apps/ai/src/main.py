@@ -15,7 +15,7 @@ from src.middleware import (
     RequestLoggingMiddleware,
     SecurityHeadersMiddleware,
 )
-from src.routers import chat, estimate, health, knowledge
+from src.routers import admin, chat, estimate, health, knowledge
 from src.services.database import close_pool, get_pool
 
 
@@ -132,6 +132,7 @@ app.include_router(health.router, prefix="/health", tags=["health"])
 app.include_router(chat.router, prefix="/chat", tags=["chat"])
 app.include_router(estimate.router, prefix="/estimate", tags=["estimate"])
 app.include_router(knowledge.router, prefix="/knowledge", tags=["knowledge"])
+app.include_router(admin.router, prefix="/admin", tags=["admin"])
 
 
 @app.get("/")

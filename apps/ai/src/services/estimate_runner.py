@@ -56,8 +56,25 @@ def _run_crew_sync(
     return run_and_collect(estimate_crew)
 
 
+async def _publish_pipeline_event(event: dict[str, Any]) -> None:
+    """Publica evento no canal Redis admin:pipeline_events (best-effort)."""
+    from src.config import settings
+
+    if not settings.redis_url:
+        return
+    try:
+        import redis.asyncio as aioredis
+
+        r = aioredis.from_url(settings.redis_url, decode_responses=True)
+        await r.publish("admin:pipeline_events", json.dumps(event, default=str))
+        await r.aclose()
+    except Exception:
+        logger.debug("Failed to publish pipeline event (Redis unavailable)")
+
+
 def _make_task_done_callback(
     job_id: str,
+    interview_id: str,
     loop: asyncio.AbstractEventLoop,
     backend: StateBackend,
 ) -> tuple[list[dict[str, Any]], Callable[[str], None]]:
@@ -70,12 +87,30 @@ def _make_task_done_callback(
     steps: list[dict[str, Any]] = [{"agent_key": k, "status": "pending"} for k in AGENT_KEYS]
 
     def on_task_done(agent_key: str) -> None:
+        import datetime
+
+        duration_s: float | None = None
         for step in steps:
             if step["agent_key"] == agent_key:
                 step["status"] = "done"
+                duration_s = step.get("duration_s")
                 break
         asyncio.run_coroutine_threadsafe(
             backend.update_agent_steps(job_id, steps),
+            loop,
+        )
+        asyncio.run_coroutine_threadsafe(
+            _publish_pipeline_event(
+                {
+                    "type": "agent_step_complete",
+                    "job_id": job_id,
+                    "interview_id": interview_id,
+                    "agent_key": agent_key,
+                    "status": "done",
+                    "duration_s": duration_s,
+                    "timestamp": datetime.datetime.utcnow().isoformat(),
+                }
+            ),
             loop,
         )
 
@@ -112,6 +147,8 @@ async def run_pipeline(
     Pode ser chamado diretamente pelo endpoint Cloud Tasks (/estimate/execute)
     ou como background asyncio task (fallback em dev sem Cloud Tasks).
     """
+    import datetime
+
     start_time = time.monotonic()
     existing = await backend.get_job(job_id)
     if existing and existing.get("status") in ("running", "done"):
@@ -121,6 +158,14 @@ async def run_pipeline(
         return
     try:
         await backend.update_job(job_id, "running")
+        await _publish_pipeline_event(
+            {
+                "type": "pipeline_started",
+                "job_id": job_id,
+                "interview_id": interview_id,
+                "timestamp": datetime.datetime.utcnow().isoformat(),
+            }
+        )
 
         # Embed interview data for RAG search before pipeline runs
         try:
@@ -146,7 +191,7 @@ async def run_pipeline(
         await backend.update_agent_steps(job_id, pending_steps)
 
         # Build real-time callback — updates each step as it completes during execution
-        _steps_ref, task_done_cb = _make_task_done_callback(job_id, loop, backend)
+        _steps_ref, task_done_cb = _make_task_done_callback(job_id, interview_id, loop, backend)
 
         # Ensure llm_model has the vertex_ai/ prefix required by CrewAI/LiteLLM
         full_llm_model = (
@@ -265,6 +310,15 @@ async def run_pipeline(
 
         await backend.update_job(job_id, "done", result)
         duration_s = time.monotonic() - start_time
+        await _publish_pipeline_event(
+            {
+                "type": "pipeline_done",
+                "job_id": job_id,
+                "interview_id": interview_id,
+                "duration_s": round(duration_s, 1),
+                "timestamp": datetime.datetime.utcnow().isoformat(),
+            }
+        )
         logger.info(
             "Estimate job %s completed in %.1fs (model: %s)",
             job_id,
@@ -286,6 +340,15 @@ async def run_pipeline(
             elif "timed out" in msg:
                 error_msg = "Pipeline excedeu tempo limite"
         await backend.update_job(job_id, "failed", {"error": error_msg})
+        await _publish_pipeline_event(
+            {
+                "type": "pipeline_failed",
+                "job_id": job_id,
+                "interview_id": interview_id,
+                "error": error_msg,
+                "timestamp": datetime.datetime.utcnow().isoformat(),
+            }
+        )
         await emit_metric("llm/pipeline_duration", duration_s, {"status": "failed"})
         await emit_metric("llm/pipeline_error", 1.0, {})
 

@@ -31,6 +31,21 @@ async function getAuthHeaders(): Promise<Record<string, string>> {
 	return {};
 }
 
+export async function proxySSEGet(path: string): Promise<Response> {
+	const url = `${getBaseUrl()}${path}`;
+	const authHeaders = await getAuthHeaders();
+	const response = await fetch(url, {
+		headers: { Accept: 'text/event-stream', ...authHeaders },
+	});
+
+	if (!response.ok) {
+		logger.error({ path, status: response.status }, 'AI proxy SSE GET request failed');
+		throw new Error(`AI service error: ${response.status}`);
+	}
+
+	return response;
+}
+
 export async function proxySSE(path: string, body: object): Promise<Response> {
 	const url = `${getBaseUrl()}${path}`;
 	const authHeaders = await getAuthHeaders();
