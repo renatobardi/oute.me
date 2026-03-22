@@ -16,6 +16,12 @@ from src.crew.tools import VectorSearchTool, WebSearchTool
 from src.models.estimate import (
     AGENT_OUTPUT_MODELS,
     AgentStep,
+    ArchitectureDesign,
+    ConsolidatedRequirements,
+    CostEstimate,
+    KnowledgePrep,
+    ReviewResult,
+    SimilarProjectsResult,
     assemble_estimate_result,
     parse_agent_output,
 )
@@ -56,6 +62,8 @@ class EstimateCrew:
 
     crew: Crew
     tasks_by_key: dict[str, Task] = field(default_factory=dict)
+    llm_model: str = "vertex_ai/gemini-2.5-flash-lite"
+    agent_durations: dict[str, float] = field(default_factory=dict)
 
 
 def build_estimate_crew(
@@ -67,13 +75,14 @@ def build_estimate_crew(
     task_done_callback: TaskDoneCallback | None = None,
     from_agent: str | None = None,
     previous_outputs: dict[str, str] | None = None,
+    llm_model: str = "vertex_ai/gemini-2.5-flash-lite",
 ) -> EstimateCrew:
     agents_config = _load_yaml("agents.yaml")
     tasks_config = _load_yaml("tasks.yaml")
     instructions = agent_instructions or {}
     config = agent_config or {}
 
-    default_llm = "vertex_ai/gemini-2.5-flash-lite"
+    default_llm = llm_model
     agent_timeout_s = 90  # per-agent hard limit
 
     # --- Agents ---
@@ -111,54 +120,46 @@ def build_estimate_crew(
             documents_context=documents_context or "Nenhum documento fornecido.",
         ),
         expected_output=str(tasks_config["consolidate_requirements"]["expected_output"]),  # type: ignore[index]
+        output_pydantic=ConsolidatedRequirements,
         agent=architecture_interviewer,
     )
 
     task_search = Task(
-        description=str(tasks_config["search_similar_projects"]["description"]).format(  # type: ignore[index]
-            consolidated_requirements="{consolidated_requirements}",
-        ),
+        description=str(tasks_config["search_similar_projects"]["description"]),  # type: ignore[index]
         expected_output=str(tasks_config["search_similar_projects"]["expected_output"]),  # type: ignore[index]
+        output_pydantic=SimilarProjectsResult,
         agent=rag_analyst,
         context=[task_consolidate],
     )
 
     task_architecture = Task(
-        description=str(tasks_config["design_architecture"]["description"]).format(  # type: ignore[index]
-            consolidated_requirements="{consolidated_requirements}",
-            similar_projects="{similar_projects}",
-        ),
+        description=str(tasks_config["design_architecture"]["description"]),  # type: ignore[index]
         expected_output=str(tasks_config["design_architecture"]["expected_output"]),  # type: ignore[index]
+        output_pydantic=ArchitectureDesign,
         agent=software_architect,
         context=[task_consolidate, task_search],
     )
 
     task_costs = Task(
-        description=str(tasks_config["estimate_costs"]["description"]).format(  # type: ignore[index]
-            architecture="{architecture}",
-            similar_projects="{similar_projects}",
-        ),
+        description=str(tasks_config["estimate_costs"]["description"]),  # type: ignore[index]
         expected_output=str(tasks_config["estimate_costs"]["expected_output"]),  # type: ignore[index]
+        output_pydantic=CostEstimate,
         agent=cost_specialist,
         context=[task_architecture, task_search],
     )
 
     task_review = Task(
-        description=str(tasks_config["review_and_summarize"]["description"]).format(  # type: ignore[index]
-            consolidated_requirements="{consolidated_requirements}",
-            architecture="{architecture}",
-            cost_scenarios="{cost_scenarios}",
-        ),
+        description=str(tasks_config["review_and_summarize"]["description"]),  # type: ignore[index]
         expected_output=str(tasks_config["review_and_summarize"]["expected_output"]),  # type: ignore[index]
+        output_pydantic=ReviewResult,
         agent=reviewer,
         context=[task_consolidate, task_architecture, task_costs],
     )
 
     task_knowledge = Task(
-        description=str(tasks_config["prepare_knowledge"]["description"]).format(  # type: ignore[index]
-            full_estimate="{full_estimate}",
-        ),
+        description=str(tasks_config["prepare_knowledge"]["description"]),  # type: ignore[index]
         expected_output=str(tasks_config["prepare_knowledge"]["expected_output"]),  # type: ignore[index]
+        output_pydantic=KnowledgePrep,
         agent=knowledge_manager,
         context=[task_consolidate, task_architecture, task_costs, task_review],
     )
@@ -189,16 +190,22 @@ def build_estimate_crew(
 
     # Build a sequential-index callback for Crew.task_callback.
     # CrewAI calls task_callback(TaskOutput) after each task in order.
-    _crew_task_callback = None
-    if task_done_callback is not None:
-        _task_index: list[int] = [0]
-        _agent_keys_snapshot = list(AGENT_KEYS)
+    # We also record per-agent durations by tracking timestamps between callbacks.
+    _agent_durations: dict[str, float] = {}
+    _task_index: list[int] = [0]
+    _agent_keys_snapshot = list(AGENT_KEYS)
+    _last_timestamp: list[float] = [time.monotonic()]
 
-        def _crew_task_callback(task_output: Any) -> None:
-            idx = _task_index[0]
-            if idx < len(_agent_keys_snapshot):
-                task_done_callback(_agent_keys_snapshot[idx])
-            _task_index[0] += 1
+    def _crew_task_callback(task_output: Any) -> None:
+        now = time.monotonic()
+        idx = _task_index[0]
+        if idx < len(_agent_keys_snapshot):
+            key = _agent_keys_snapshot[idx]
+            _agent_durations[key] = round(now - _last_timestamp[0], 2)
+            _last_timestamp[0] = now
+            if task_done_callback is not None:
+                task_done_callback(key)
+        _task_index[0] += 1
 
     crew = Crew(
         agents=[
@@ -215,7 +222,12 @@ def build_estimate_crew(
         task_callback=_crew_task_callback,
     )
 
-    return EstimateCrew(crew=crew, tasks_by_key=tasks_by_key)
+    return EstimateCrew(
+        crew=crew,
+        tasks_by_key=tasks_by_key,
+        llm_model=default_llm,
+        agent_durations=_agent_durations,
+    )
 
 
 def run_and_collect(
@@ -261,8 +273,8 @@ def run_and_collect(
     # Collect per-agent outputs with retry on parse failure
     agent_outputs: dict[str, BaseModel | None] = {}
     agent_raw_outputs: dict[str, str] = {}
-    # Distribute total_duration evenly across agents as best-effort timing
-    per_agent_duration = round(total_duration / len(AGENT_KEYS), 2)
+    # Use real per-agent durations from task_callback; fallback to uniform division
+    fallback_duration = round(total_duration / len(AGENT_KEYS), 2)
 
     import re
 
@@ -305,7 +317,7 @@ def run_and_collect(
                 if model_cls:
                     schema_str = json.dumps(model_cls.model_json_schema(), indent=2)
                     resp = litellm.completion(
-                        model="vertex_ai/gemini-2.5-flash-lite",
+                        model=estimate_crew.llm_model,
                         messages=[
                             {
                                 "role": "user",
@@ -335,10 +347,11 @@ def run_and_collect(
         agent_outputs[key] = parsed
 
         # Build step record with timing — replace the pending placeholder in-place
+        agent_duration = estimate_crew.agent_durations.get(key, fallback_duration)
         step = AgentStep(
             agent_key=key,
             status="done" if parsed is not None else "failed",
-            duration_s=per_agent_duration,
+            duration_s=agent_duration,
             output_preview=raw[:500] if raw else None,
             error=None if parsed is not None else f"Parse failed (raw_length={len(raw)})",
         )
@@ -353,7 +366,7 @@ def run_and_collect(
                 "agent": key,
                 "event": "step_done",
                 "status": step.status,
-                "duration_s": per_agent_duration,
+                "duration_s": agent_duration,
                 "output_length": len(raw),
             },
         )

@@ -438,5 +438,3 @@ def test_knowledge_prep_text_strip() -> None:
 
     prep = KnowledgePrep(knowledge_text="  texto com espaços  \n")
     assert prep.knowledge_text == "texto com espaços"
-
-
