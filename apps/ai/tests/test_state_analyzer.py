@@ -10,7 +10,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from src.models.interview import DomainState, InterviewState
-from src.services.state_analyzer import MAX_DELTA_PER_DOMAIN, MAX_TOTAL_DELTA_PER_TURN
+from src.services.state_analyzer import MAX_DELTA_PER_DOMAIN
 
 
 def _make_state(**domain_overrides: dict) -> InterviewState:
@@ -53,7 +53,8 @@ async def test_per_domain_delta_clamped_to_max():
 
         updated, _ = await analyze_and_update_state(state, "msg", "resp")
 
-    assert updated.domains["scope"].answered == state.domains["scope"].answered + MAX_DELTA_PER_DOMAIN
+    expected = state.domains["scope"].answered + MAX_DELTA_PER_DOMAIN
+    assert updated.domains["scope"].answered == expected
 
 
 @pytest.mark.asyncio
