@@ -1,7 +1,9 @@
 <script lang="ts">
 	import { page } from '$app/stores';
+	import ServiceHealth from '$lib/components/admin/ServiceHealth.svelte';
 
 	const tabs = [
+		{ label: 'Dashboard', href: '/admin/dashboard' },
 		{ label: 'Cockpit', href: '/admin/cockpit' },
 		{ label: 'Usuários', href: '/admin/usuarios' },
 		{ label: 'Base de Conhecimento', href: '/admin/knowledge' },
@@ -13,15 +15,20 @@
 
 <div class="admin-shell">
 	<nav class="tab-nav">
-		{#each tabs as tab (tab.href)}
-			<a
-				href={tab.href}
-				class="tab"
-				class:active={$page.url.pathname.startsWith(tab.href)}
-			>
-				{tab.label}
-			</a>
-		{/each}
+		<div class="tabs">
+			{#each tabs as tab (tab.href)}
+				<a
+					href={tab.href}
+					class="tab"
+					class:active={$page.url.pathname.startsWith(tab.href)}
+				>
+					{tab.label}
+				</a>
+			{/each}
+		</div>
+		<div class="nav-right">
+			<ServiceHealth />
+		</div>
 	</nav>
 
 	<div class="admin-content">
@@ -37,10 +44,16 @@
 
 	.tab-nav {
 		display: flex;
-		gap: 0;
+		justify-content: space-between;
+		align-items: center;
 		border-bottom: 1px solid var(--color-dark-border, rgba(255, 255, 255, 0.08));
 		padding: 0 1.5rem;
 		background: var(--color-dark-surface, #1a1d27);
+	}
+
+	.tabs {
+		display: flex;
+		gap: 0;
 	}
 
 	.tab {
@@ -64,6 +77,11 @@
 	.tab.active {
 		color: var(--color-primary-400, #818cf8);
 		border-bottom-color: var(--color-primary-500, #6366f1);
+	}
+
+	.nav-right {
+		display: flex;
+		align-items: center;
 	}
 
 	.admin-content {
