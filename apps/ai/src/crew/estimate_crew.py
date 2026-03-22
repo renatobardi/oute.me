@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -276,8 +277,6 @@ def run_and_collect(
     # Use real per-agent durations from task_callback; fallback to uniform division
     fallback_duration = round(total_duration / len(AGENT_KEYS), 2)
 
-    import re
-
     for i, key in enumerate(AGENT_KEYS):
         task = tasks_by_key[key]
         raw = ""
@@ -298,9 +297,7 @@ def run_and_collect(
             if json_match:
                 try:
                     retry_data = json.loads(json_match.group(0))
-                    model_cls = __import__(
-                        "src.models.estimate", fromlist=["AGENT_OUTPUT_MODELS"]
-                    ).AGENT_OUTPUT_MODELS.get(key)
+                    model_cls = AGENT_OUTPUT_MODELS.get(key)
                     if model_cls:
                         parsed = model_cls.model_validate(retry_data)
                 except Exception:
