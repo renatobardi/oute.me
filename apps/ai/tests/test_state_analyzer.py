@@ -16,16 +16,14 @@ from src.services.state_analyzer import MAX_DELTA_PER_DOMAIN
 def _make_state(**domain_overrides: dict) -> InterviewState:
     """Build a minimal InterviewState with all 5 domains."""
     defaults = {
-        "scope":        {"answered": 2, "total": 8, "vital_answered": False},
-        "timeline":     {"answered": 1, "total": 5, "vital_answered": False},
-        "budget":       {"answered": 1, "total": 4, "vital_answered": False},
+        "scope": {"answered": 2, "total": 8, "vital_answered": False},
+        "timeline": {"answered": 1, "total": 5, "vital_answered": False},
+        "budget": {"answered": 1, "total": 4, "vital_answered": False},
         "integrations": {"answered": 0, "total": 6, "vital_answered": False},
-        "tech_stack":   {"answered": 1, "total": 5, "vital_answered": False},
+        "tech_stack": {"answered": 1, "total": 5, "vital_answered": False},
     }
     defaults.update(domain_overrides)
-    return InterviewState(
-        domains={k: DomainState(**v) for k, v in defaults.items()}
-    )
+    return InterviewState(domains={k: DomainState(**v) for k, v in defaults.items()})
 
 
 def _analysis_response(**domain_deltas: dict) -> dict:
