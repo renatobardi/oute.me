@@ -5,26 +5,17 @@ import {
 	getInterview,
 	getRecentMessages,
 	addMessage,
-	updateInterviewState,
 	updateInterviewTitle,
 	getDocuments,
+	persistChatTurn,
 } from '$lib/server/interviews';
 import { proxySSE } from '$lib/server/ai-client';
+import { logBusinessEvent } from '$lib/server/audit';
+import { logger } from '$lib/server/logger';
+import { checkRateLimit } from '$lib/server/rate-limit';
 import type { InterviewState } from '$lib/types/interview';
 
 const SSE_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
-
-const rateLimitMap = new Map<string, number>();
-
-function checkRateLimit(userId: string): boolean {
-	const now = Date.now();
-	const lastTime = rateLimitMap.get(userId);
-	if (lastTime && now - lastTime < 2000) {
-		return false;
-	}
-	rateLimitMap.set(userId, now);
-	return true;
-}
 
 function sseErrorEvent(message: string): Uint8Array {
 	const event = `event: error\ndata: ${JSON.stringify({ error: message })}\n\n`;
@@ -35,8 +26,12 @@ export const POST: RequestHandler = async ({ locals, params, request }) => {
 	requireAuth(locals);
 	const user = locals.dbUser!;
 
-	if (!checkRateLimit(user.id)) {
-		throw error(429, 'Too many messages. Please wait before sending another.');
+	const allowed = await checkRateLimit(`chat:${user.id}`);
+	if (!allowed) {
+		return new Response(
+			JSON.stringify({ error: 'Aguarde antes de enviar outra mensagem' }),
+			{ status: 429, headers: { 'Content-Type': 'application/json' } }
+		);
 	}
 
 	const interview = await getInterview(params.id, user.id);
@@ -96,11 +91,16 @@ export const POST: RequestHandler = async ({ locals, params, request }) => {
 		async start(controller) {
 			let buffer = '';
 			let fullResponse = '';
+			let tokensUsed = 0;
+			let lastState: InterviewState | null = null;
+			let lastMaturity = 0;
+			const oldMaturity = interview.maturity;
+			let maturityThresholdCrossed = false;
 			let timeoutId: ReturnType<typeof setTimeout> | undefined;
 
 			try {
 				timeoutId = setTimeout(() => {
-					console.error(`[SSE] Stream timeout after ${SSE_TIMEOUT_MS}ms for interview ${params.id}`);
+					logger.error({ interviewId: params.id }, 'SSE stream timeout');
 					controller.enqueue(sseErrorEvent('Stream timeout'));
 					reader.cancel();
 					controller.close();
@@ -129,18 +129,17 @@ export const POST: RequestHandler = async ({ locals, params, request }) => {
 							const data = JSON.parse(dataMatch[1]);
 
 							if (eventType === 'state_update' && data.state) {
-								const state = data.state as InterviewState;
-								const maturity = data.maturity as number;
-								updateInterviewState(params.id, state, maturity).catch((err) => {
-									console.error(`[SSE] Failed to update interview state for ${params.id}:`, err);
-									controller.enqueue(sseErrorEvent('Failed to persist state update'));
-								});
+								lastState = data.state as InterviewState;
+								lastMaturity = data.maturity as number;
+								if (lastMaturity >= 0.70 && oldMaturity < 0.70) {
+									maturityThresholdCrossed = true;
+								}
 
 								// Apply AI-suggested title only if interview has no title yet
 								const suggestedTitle = data.suggested_title as string | undefined;
 								if (suggestedTitle && !interview.title) {
 									updateInterviewTitle(params.id, suggestedTitle).catch((err) => {
-										console.error(`[SSE] Failed to update interview title for ${params.id}:`, err);
+										logger.warn({ err, interviewId: params.id }, 'Failed to update interview title');
 									});
 									const titleEvent = `event: title_update\ndata: ${JSON.stringify({ title: suggestedTitle })}\n\n`;
 									controller.enqueue(new TextEncoder().encode(titleEvent));
@@ -149,13 +148,7 @@ export const POST: RequestHandler = async ({ locals, params, request }) => {
 
 							if (eventType === 'done' && data.full_response) {
 								fullResponse = data.full_response as string;
-								const tokensUsed = (data.tokens_used as number) || 0;
-								addMessage(params.id, 'assistant', fullResponse, tokensUsed).catch(
-									(err) => {
-										console.error(`[SSE] Failed to save assistant message for ${params.id}:`, err);
-										controller.enqueue(sseErrorEvent('Failed to persist assistant message'));
-									}
-								);
+								tokensUsed = (data.tokens_used as number) || 0;
 							}
 						} catch {
 							// parsing error, continue streaming
@@ -165,6 +158,33 @@ export const POST: RequestHandler = async ({ locals, params, request }) => {
 
 				if (buffer.trim()) {
 					controller.enqueue(new TextEncoder().encode(buffer + '\n\n'));
+				}
+
+				if (fullResponse) {
+					try {
+						await persistChatTurn(params.id, fullResponse, tokensUsed, lastState, lastMaturity);
+					} catch (err) {
+						logger.error({ err, interviewId: params.id }, 'Persistence transaction failed');
+						controller.enqueue(
+							new TextEncoder().encode(
+								`event: error\ndata: ${JSON.stringify({
+									type: 'persistence_warning',
+									message: 'Algumas alterações podem não ter sido salvas. Tente novamente.',
+									details: [(err as Error)?.message ?? 'Unknown error'],
+								})}\n\n`
+							)
+						);
+					}
+				}
+
+				if (maturityThresholdCrossed) {
+					void logBusinessEvent(
+						'interview.maturity_reached',
+						user.id,
+						'interview',
+						params.id,
+						{ maturity: lastMaturity }
+					);
 				}
 			} finally {
 				if (timeoutId) clearTimeout(timeoutId);

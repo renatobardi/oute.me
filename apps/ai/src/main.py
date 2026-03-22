@@ -16,7 +16,7 @@ from src.middleware import (
     SecurityHeadersMiddleware,
 )
 from src.routers import chat, estimate, health, knowledge
-from src.services.database import close_pool
+from src.services.database import close_pool, get_pool
 
 
 def _configure_logging() -> None:
@@ -79,6 +79,15 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
+    # Validar conectividade com o banco no startup
+    try:
+        pool = await get_pool()
+        await pool.fetchval("SELECT 1")
+        logger.info("Database connectivity OK")
+    except Exception as e:
+        logger.error("Database connectivity FAILED: %s", e)
+        # Não abortar — permite health check retornar status degradado
+
     # Inicializa Vertex AI com ADC (Application Default Credentials)
     vertexai.init(project=settings.gcp_project, location=settings.gcp_location)
 
