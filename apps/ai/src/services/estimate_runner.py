@@ -22,7 +22,9 @@ from src.services.vector_store import (
 
 logger = logging.getLogger(__name__)
 
-_executor = ThreadPoolExecutor(max_workers=2)
+# 4 workers: cada pipeline usa ~1.5Gi peak, Cloud Run ai tem 2Gi.
+# Na prática, raramente >2 concorrentes, mas permite burst.
+_executor = ThreadPoolExecutor(max_workers=4)
 _background_tasks: set[asyncio.Task[None]] = set()
 
 
@@ -111,6 +113,12 @@ async def run_pipeline(
     ou como background asyncio task (fallback em dev sem Cloud Tasks).
     """
     start_time = time.monotonic()
+    existing = await backend.get_job(job_id)
+    if existing and existing.get("status") in ("running", "done"):
+        logger.warning(
+            "Job %s already %s — skipping duplicate execution", job_id, existing["status"]
+        )
+        return
     try:
         await backend.update_job(job_id, "running")
 
@@ -129,7 +137,7 @@ async def run_pipeline(
         except Exception:
             logger.exception("Failed to embed interview data for job %s (continuing)", job_id)
 
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
 
         # Publish all-pending steps immediately so the frontend can show the stepper
         pending_steps: list[dict[str, Any]] = [
@@ -267,10 +275,17 @@ async def run_pipeline(
             "llm/pipeline_duration", duration_s, {"status": "done", "llm_model": llm_model}
         )
 
-    except Exception:
+    except Exception as exc:
         duration_s = time.monotonic() - start_time
         logger.exception("Estimate job %s failed after %.1fs", job_id, duration_s)
-        await backend.update_job(job_id, "failed", {"error": "Pipeline execution failed"})
+        error_msg = "Pipeline execution failed"
+        if isinstance(exc, RuntimeError):
+            msg = str(exc)
+            if "Circuit breaker" in msg:
+                error_msg = "Serviço de IA temporariamente indisponível"
+            elif "timed out" in msg:
+                error_msg = "Pipeline excedeu tempo limite"
+        await backend.update_job(job_id, "failed", {"error": error_msg})
         await emit_metric("llm/pipeline_duration", duration_s, {"status": "failed"})
         await emit_metric("llm/pipeline_error", 1.0, {})
 
@@ -278,6 +293,7 @@ async def run_pipeline(
 async def _dispatch_cloud_tasks(
     job_id: str,
     interview_id: str,
+    backend: StateBackend,
     interview_state: dict[str, object],
     conversation_summary: str,
     documents_context: str,
@@ -291,14 +307,9 @@ async def _dispatch_cloud_tasks(
 
     from src.config import settings
 
-    client = tasks_v2.CloudTasksAsyncClient()
-    queue_path = client.queue_path(
-        settings.gcp_project, settings.gcp_location, settings.cloud_tasks_queue
-    )
-
-    payload: dict[str, Any] = {
-        "job_id": job_id,
-        "interview_id": interview_id,
+    # Store full pipeline input in the state backend so the Cloud Tasks handler
+    # can retrieve it. This keeps the Cloud Tasks body well under the 100KB limit.
+    pipeline_input: dict[str, Any] = {
         "interview_state": interview_state,
         "conversation_summary": conversation_summary,
         "documents_context": documents_context,
@@ -307,16 +318,26 @@ async def _dispatch_cloud_tasks(
         "agent_config": agent_config or {},
     }
     if from_agent:
-        payload["from_agent"] = from_agent
+        pipeline_input["from_agent"] = from_agent
     if previous_outputs:
-        payload["previous_outputs"] = previous_outputs
+        pipeline_input["previous_outputs"] = previous_outputs
+
+    await backend.update_job(job_id, "pending", {"_pipeline_input": pipeline_input})
+
+    # Slim body — only identifiers needed to look up the full payload
+    slim_body = {"job_id": job_id, "interview_id": interview_id}
+
+    client = tasks_v2.CloudTasksAsyncClient()
+    queue_path = client.queue_path(
+        settings.gcp_project, settings.gcp_location, settings.cloud_tasks_queue
+    )
 
     task = tasks_v2.Task(
         http_request=tasks_v2.HttpRequest(
             http_method=tasks_v2.HttpMethod.POST,
             url=f"{settings.ai_service_url}/estimate/execute",
             headers={"Content-Type": "application/json"},
-            body=json.dumps(payload).encode(),
+            body=json.dumps(slim_body).encode(),
             oidc_token=tasks_v2.OidcToken(
                 service_account_email=f"oute-ai@{settings.gcp_project}.iam.gserviceaccount.com",
             ),
@@ -324,7 +345,7 @@ async def _dispatch_cloud_tasks(
     )
 
     await client.create_task(request={"parent": queue_path, "task": task})
-    logger.info("Cloud Tasks task criada para job %s", job_id)
+    logger.info("Cloud Tasks task criada para job %s (payload slim)", job_id)
 
 
 async def start_estimate(
@@ -356,6 +377,7 @@ async def start_estimate(
         await _dispatch_cloud_tasks(
             job_id,
             interview_id,
+            backend,
             interview_state,
             conversation_summary,
             documents_context,

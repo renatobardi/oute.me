@@ -38,10 +38,45 @@ def _is_stale(updated_at: Any) -> bool:
 
 
 class RedisStateBackend:
+    _LUA_UPDATE_JOB = """
+local key = KEYS[1]
+local data = redis.call('GET', key)
+if not data then return nil end
+local job = cjson.decode(data)
+job['status'] = ARGV[1]
+job['updated_at'] = ARGV[2]
+if ARGV[3] ~= '' then
+  job['result'] = cjson.decode(ARGV[3])
+end
+local ttl = redis.call('TTL', key)
+if ttl > 0 then
+  redis.call('SETEX', key, ttl, cjson.encode(job))
+end
+return 'OK'
+"""
+
+    _LUA_UPDATE_AGENT_STEPS = """
+local key = KEYS[1]
+local data = redis.call('GET', key)
+if not data then return nil end
+local job = cjson.decode(data)
+local result = job['result'] or {}
+result['_agent_steps'] = cjson.decode(ARGV[1])
+job['result'] = result
+job['updated_at'] = ARGV[2]
+local ttl = redis.call('TTL', key)
+if ttl > 0 then
+  redis.call('SETEX', key, ttl, cjson.encode(job))
+end
+return 'OK'
+"""
+
     def __init__(self, redis_url: str) -> None:
         import redis.asyncio as aioredis
 
         self._redis = aioredis.from_url(redis_url, decode_responses=True)
+        self._script_update_job = self._redis.register_script(self._LUA_UPDATE_JOB)
+        self._script_update_agent_steps = self._redis.register_script(self._LUA_UPDATE_AGENT_STEPS)
 
     async def create_job(self, job_id: str, payload: dict[str, object]) -> None:
         data = json.dumps(
@@ -66,26 +101,17 @@ class RedisStateBackend:
     async def update_job(
         self, job_id: str, status: str, result: dict[str, object] | None = None
     ) -> None:
-        raw = await self._redis.get(f"job:{job_id}")
-        if raw is None:
-            return
-        job: dict[str, Any] = json.loads(raw)
-        job["status"] = status
-        job["updated_at"] = datetime.now(UTC).isoformat()
-        if result is not None:
-            job["result"] = result
-        await self._redis.setex(f"job:{job_id}", JOB_TTL_HOURS * 3600, json.dumps(job))
+        result_arg = json.dumps(result) if result is not None else ""
+        await self._script_update_job(
+            keys=[f"job:{job_id}"],
+            args=[status, datetime.now(UTC).isoformat(), result_arg],
+        )
 
     async def update_agent_steps(self, job_id: str, steps: list[dict[str, object]]) -> None:
-        data_raw = await self._redis.get(f"job:{job_id}")
-        if data_raw is None:
-            return
-        job: dict[str, Any] = json.loads(data_raw)
-        result = job.get("result") or {}
-        result["_agent_steps"] = steps
-        job["result"] = result
-        job["updated_at"] = datetime.now(UTC).isoformat()
-        await self._redis.setex(f"job:{job_id}", JOB_TTL_HOURS * 3600, json.dumps(job))
+        await self._script_update_agent_steps(
+            keys=[f"job:{job_id}"],
+            args=[json.dumps(steps), datetime.now(UTC).isoformat()],
+        )
 
 
 class PostgresStateBackend:

@@ -1,5 +1,7 @@
+import asyncio
 import json
 import logging
+import os
 
 from src.models.interview import InterviewState, calculate_maturity
 from src.services.gemini import analyze_json
@@ -9,6 +11,77 @@ logger = logging.getLogger(__name__)
 
 MAX_DELTA_PER_DOMAIN = 2
 MAX_TOTAL_DELTA_PER_TURN = 3
+
+# Feature toggle — set STATE_DUAL_PASS=false to disable without redeploy
+DUAL_PASS_ENABLED = os.getenv("STATE_DUAL_PASS", "true").lower() == "true"
+
+
+async def _run_analysis_pass(prompt: str, temperature: float) -> dict[str, object] | None:
+    """Run one analysis pass. Returns the parsed dict or None on failure."""
+    try:
+        return await analyze_json(prompt, temperature=temperature)
+    except Exception:
+        logger.warning("State analysis pass (temperature=%.1f) failed", temperature, exc_info=True)
+        return None
+
+
+def _merge_passes(
+    pass1: dict[str, object],
+    pass2: dict[str, object],
+) -> dict[str, object]:
+    """Merge two analysis passes conservatively.
+
+    - answered_delta: take the minimum (conservative — avoid over-crediting)
+    - vital_answered: True only if both passes agree
+    - conversation_summary / open_questions / last_questions_asked: use pass 1
+      (temperature=0.0 is deterministic, preferred for text fields)
+    """
+    merged: dict[str, object] = dict(pass1)
+
+    _raw_du1 = pass1.get("domains_update")
+    du1: dict[str, object] = _raw_du1 if isinstance(_raw_du1, dict) else {}
+    _raw_du2 = pass2.get("domains_update")
+    du2: dict[str, object] = _raw_du2 if isinstance(_raw_du2, dict) else {}
+
+    merged_domains: dict[str, object] = {}
+    all_domains: set[str] = set(du1.keys()) | set(du2.keys())
+    for domain in all_domains:
+        _raw_d1 = du1.get(domain)
+        d1: dict[str, object] = _raw_d1 if isinstance(_raw_d1, dict) else {}
+        _raw_d2 = du2.get(domain)
+        d2: dict[str, object] = _raw_d2 if isinstance(_raw_d2, dict) else {}
+
+        _d1_delta = d1.get("answered_delta", 0)
+        delta1 = int(_d1_delta) if isinstance(_d1_delta, (int, float)) else 0
+        _d2_delta = d2.get("answered_delta", 0)
+        delta2 = int(_d2_delta) if isinstance(_d2_delta, (int, float)) else 0
+        final_delta = min(delta1, delta2)
+
+        vital1 = bool(d1.get("vital_answered", False))
+        vital2 = bool(d2.get("vital_answered", False))
+        final_vital = vital1 and vital2
+
+        if delta1 != delta2 or vital1 != vital2:
+            logger.info(
+                "dual_pass_divergence",
+                extra={
+                    "domain": domain,
+                    "pass1_delta": delta1,
+                    "pass2_delta": delta2,
+                    "accepted_delta": final_delta,
+                    "pass1_vital": vital1,
+                    "pass2_vital": vital2,
+                    "accepted_vital": final_vital,
+                },
+            )
+
+        merged_domains[domain] = {
+            "answered_delta": final_delta,
+            "vital_answered": final_vital,
+        }
+
+    merged["domains_update"] = merged_domains
+    return merged
 
 
 async def analyze_and_update_state(
@@ -30,7 +103,22 @@ async def analyze_and_update_state(
     )
 
     try:
-        analysis = await analyze_json(prompt)
+        if DUAL_PASS_ENABLED:
+            # Run two passes in parallel: temp=0.0 (deterministic) and 0.3 (slight variation)
+            result1, result2 = await asyncio.gather(
+                _run_analysis_pass(prompt, temperature=0.0),
+                _run_analysis_pass(prompt, temperature=0.3),
+            )
+            if result1 is not None and result2 is not None:
+                analysis = _merge_passes(result1, result2)
+            elif result1 is not None:
+                analysis = result1
+            elif result2 is not None:
+                analysis = result2
+            else:
+                raise RuntimeError("Both dual-pass analysis attempts failed")
+        else:
+            analysis = await analyze_json(prompt)
     except Exception:
         logger.warning(
             "State analysis failed for interview — keeping current state. Prompt length: %d chars",

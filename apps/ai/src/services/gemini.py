@@ -72,10 +72,13 @@ async def stream_chat(
         raise last_exc
 
 
-async def analyze_json(prompt: str, max_seconds: float = 30.0) -> dict[str, object]:
-    generation_config = GenerationConfig(
-        response_mime_type="application/json",
-    )
+async def analyze_json(
+    prompt: str, max_seconds: float = 30.0, temperature: float | None = None
+) -> dict[str, object]:
+    config_kwargs: dict[str, object] = {"response_mime_type": "application/json"}
+    if temperature is not None:
+        config_kwargs["temperature"] = temperature
+    generation_config = GenerationConfig(**config_kwargs)  # type: ignore[arg-type]
 
     last_exc: Exception | None = None
     for i, model_name in enumerate(CHAT_MODELS):

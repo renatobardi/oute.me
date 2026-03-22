@@ -41,6 +41,22 @@ AGENT_KEYS: list[str] = [
     "knowledge_manager",
 ]
 
+# Default LLM per agent — heavier models for math-heavy / validation agents.
+# Can be overridden per-execution via agent_config[key]["llm_model"].
+DEFAULT_AGENT_MODELS: dict[str, str] = {
+    "architecture_interviewer": "vertex_ai/gemini-2.5-flash-lite",
+    "rag_analyst": "vertex_ai/gemini-2.5-flash-lite",
+    "software_architect": "vertex_ai/gemini-2.5-flash",
+    "cost_specialist": "vertex_ai/gemini-2.5-flash",
+    "reviewer": "vertex_ai/gemini-2.5-flash",
+    "knowledge_manager": "vertex_ai/gemini-2.5-flash-lite",
+}
+
+# Default temperature overrides — reviewer uses 0.0 for mathematical consistency.
+DEFAULT_AGENT_TEMPS: dict[str, float] = {
+    "reviewer": 0.0,
+}
+
 type TaskDoneCallback = Callable[[str], None]  # called with agent_key
 
 
@@ -90,13 +106,15 @@ def build_estimate_crew(
     def _agent(key: str, **extra: Any) -> Agent:
         cfg = agents_config[key]
         agent_cfg = config.get(key, {})
-        temperature = agent_cfg.get("temperature", 0.7)
+        agent_model = agent_cfg.get("llm_model") or DEFAULT_AGENT_MODELS.get(key, default_llm)
+        temperature = agent_cfg.get("temperature", DEFAULT_AGENT_TEMPS.get(key, 0.7))
         max_tokens = agent_cfg.get("max_tokens", 4096)
+        logger.debug("Agent %s → model=%s temperature=%s", key, agent_model, temperature)
         return Agent(
             role=cfg["role"],  # type: ignore[index]
             goal=cfg["goal"],  # type: ignore[index]
             backstory=_enrich_backstory(str(cfg["backstory"]), instructions.get(key, "")),  # type: ignore[index]
-            llm=default_llm,
+            llm=agent_model,
             llm_config={"temperature": temperature, "max_tokens": max_tokens},
             max_execution_time=agent_timeout_s,
             verbose=False,
@@ -278,11 +296,25 @@ def run_and_collect(
     # Use real per-agent durations from task_callback; fallback to uniform division
     fallback_duration = round(total_duration / len(AGENT_KEYS), 2)
 
+    _circuit_breaker_threshold = 2
+    _consecutive_empty = 0
+
     for i, key in enumerate(AGENT_KEYS):
         task = tasks_by_key[key]
         raw = ""
         if hasattr(task, "output") and task.output is not None:
             raw = task.output.raw if hasattr(task.output, "raw") else str(task.output)
+
+        # Circuit breaker: consecutive empty outputs signal Vertex AI degradation
+        if not raw:
+            _consecutive_empty += 1
+            if _consecutive_empty >= _circuit_breaker_threshold:
+                raise RuntimeError(
+                    f"Circuit breaker: {_consecutive_empty} agentes consecutivos falharam. "
+                    "Vertex AI pode estar indisponível."
+                )
+        else:
+            _consecutive_empty = 0
 
         agent_raw_outputs[key] = raw
         parsed = parse_agent_output(key, raw)
@@ -315,7 +347,7 @@ def run_and_collect(
                 if model_cls:
                     schema_str = json.dumps(model_cls.model_json_schema(), indent=2)
                     resp = litellm.completion(
-                        model=estimate_crew.llm_model,
+                        model="vertex_ai/gemini-2.5-flash",
                         messages=[
                             {
                                 "role": "user",

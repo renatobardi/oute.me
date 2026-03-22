@@ -94,7 +94,7 @@ async def process_message(
             system_prompt, history, request.user_message, llm_model=request.llm_model
         ):
             full_response += chunk
-            tokens_used += len(chunk.split())
+            tokens_used += max(1, len(chunk) // 4)  # ~4 chars per token heuristic
             yield _sse_event(
                 "message_chunk",
                 {
