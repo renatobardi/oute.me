@@ -41,7 +41,6 @@ AGENT_KEYS: list[str] = [
     "knowledge_manager",
 ]
 
-StepCallback = Callable[[AgentStep], None]
 type TaskDoneCallback = Callable[[str], None]  # called with agent_key
 
 
@@ -233,8 +232,6 @@ def build_estimate_crew(
 
 def run_and_collect(
     estimate_crew: EstimateCrew,
-    on_step: StepCallback | None = None,
-    task_done_callback: TaskDoneCallback | None = None,
 ) -> dict[str, Any]:
     """Run the crew and collect per-agent outputs into an aggregated result.
 
@@ -353,9 +350,6 @@ def run_and_collect(
             error=None if parsed is not None else f"Parse failed (raw_length={len(raw)})",
         )
         steps[i] = step  # replace pending placeholder
-
-        if on_step:
-            on_step(step)
 
         logger.info(
             "agent_step_done",
