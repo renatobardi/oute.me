@@ -74,9 +74,9 @@ async def execute_estimate(
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found")
 
-    pipeline_input: dict[str, Any] = (
-        job.get("result") or {}  # type: ignore[union-attr]
-    ).get("_pipeline_input", {})
+    _raw_result = job.get("result")
+    _result_dict: dict[str, Any] = _raw_result if isinstance(_raw_result, dict) else {}
+    pipeline_input: dict[str, Any] = _result_dict.get("_pipeline_input") or {}
 
     interview_state: dict[str, Any] = pipeline_input.get("interview_state", {})
     conversation_summary: str = pipeline_input.get("conversation_summary", "")

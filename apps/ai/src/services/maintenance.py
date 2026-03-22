@@ -16,7 +16,5 @@ async def reindex_vectors() -> None:
 
     pool = await get_pool()
     logger.info("Starting REINDEX CONCURRENTLY for knowledge_vectors_embedding_idx")
-    await pool.execute(
-        "REINDEX INDEX CONCURRENTLY ai.knowledge_vectors_embedding_idx"
-    )
+    await pool.execute("REINDEX INDEX CONCURRENTLY ai.knowledge_vectors_embedding_idx")
     logger.info("REINDEX completed")

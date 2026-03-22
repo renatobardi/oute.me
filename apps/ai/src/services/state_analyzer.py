@@ -38,21 +38,27 @@ def _merge_passes(
     """
     merged: dict[str, object] = dict(pass1)
 
-    du1 = pass1.get("domains_update") if isinstance(pass1.get("domains_update"), dict) else {}
-    du2 = pass2.get("domains_update") if isinstance(pass2.get("domains_update"), dict) else {}
+    _raw_du1 = pass1.get("domains_update")
+    du1: dict[str, object] = _raw_du1 if isinstance(_raw_du1, dict) else {}
+    _raw_du2 = pass2.get("domains_update")
+    du2: dict[str, object] = _raw_du2 if isinstance(_raw_du2, dict) else {}
 
     merged_domains: dict[str, object] = {}
-    all_domains = set(du1) | set(du2)  # type: ignore[arg-type]
+    all_domains: set[str] = set(du1.keys()) | set(du2.keys())
     for domain in all_domains:
-        d1 = du1.get(domain) if isinstance(du1.get(domain), dict) else {}  # type: ignore[union-attr]
-        d2 = du2.get(domain) if isinstance(du2.get(domain), dict) else {}  # type: ignore[union-attr]
+        _raw_d1 = du1.get(domain)
+        d1: dict[str, object] = _raw_d1 if isinstance(_raw_d1, dict) else {}
+        _raw_d2 = du2.get(domain)
+        d2: dict[str, object] = _raw_d2 if isinstance(_raw_d2, dict) else {}
 
-        delta1 = int(d1.get("answered_delta", 0))  # type: ignore[union-attr]
-        delta2 = int(d2.get("answered_delta", 0))  # type: ignore[union-attr]
+        _d1_delta = d1.get("answered_delta", 0)
+        delta1 = int(_d1_delta) if isinstance(_d1_delta, (int, float)) else 0
+        _d2_delta = d2.get("answered_delta", 0)
+        delta2 = int(_d2_delta) if isinstance(_d2_delta, (int, float)) else 0
         final_delta = min(delta1, delta2)
 
-        vital1 = bool(d1.get("vital_answered", False))  # type: ignore[union-attr]
-        vital2 = bool(d2.get("vital_answered", False))  # type: ignore[union-attr]
+        vital1 = bool(d1.get("vital_answered", False))
+        vital2 = bool(d2.get("vital_answered", False))
         final_vital = vital1 and vital2
 
         if delta1 != delta2 or vital1 != vital2:
