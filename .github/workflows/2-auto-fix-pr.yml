@@ -115,6 +115,7 @@ jobs:
 
           # Feed failure logs to Claude with strict instructions
           cat /tmp/failure-logs-truncated.txt | claude -p \
+            --model haiku \
             --max-turns 10 \
             --allowedTools "Read,Edit,Write,Bash(pnpm:*),Bash(uv:*),Bash(turbo:*),Bash(cd:*)" \
             "You are fixing CI failures on a pull request for the oute.me project.
