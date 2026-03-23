@@ -20,10 +20,10 @@ export const GET: RequestHandler = async ({ locals }) => {
 		const stream = new ReadableStream({
 			start(controller) {
 				const enc = new TextEncoder();
-				controller.enqueue(enc.encode(': keepalive\n\n'));
+				controller.enqueue(enc.encode('event: keepalive\ndata: \n\n'));
 				const timer = setInterval(() => {
 					try {
-						controller.enqueue(enc.encode(': keepalive\n\n'));
+						controller.enqueue(enc.encode('event: keepalive\ndata: \n\n'));
 					} catch {
 						clearInterval(timer);
 					}

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from collections.abc import AsyncGenerator
@@ -14,6 +15,7 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 _CHANNEL = "admin:pipeline_events"
+_KEEPALIVE_INTERVAL_S = 30
 
 
 @router.get("/pipeline-events")
@@ -31,8 +33,6 @@ async def pipeline_events(request: Request) -> EventSourceResponse:
                 if await request.is_disconnected():
                     break
                 yield {"event": "keepalive", "data": ""}
-                import asyncio
-
                 await asyncio.sleep(15)
             return
 
@@ -44,10 +44,18 @@ async def pipeline_events(request: Request) -> EventSourceResponse:
         logger.info("Admin SSE: subscribed to %s", _CHANNEL)
 
         try:
-            async for message in pubsub.listen():
+            while True:
                 if await request.is_disconnected():
                     break
-                if message.get("type") != "message":
+                try:
+                    message = await asyncio.wait_for(
+                        pubsub.get_message(ignore_subscribe_messages=True),
+                        timeout=_KEEPALIVE_INTERVAL_S,
+                    )
+                except TimeoutError:
+                    yield {"event": "keepalive", "data": ""}
+                    continue
+                if message is None:
                     continue
                 try:
                     data = message["data"]
