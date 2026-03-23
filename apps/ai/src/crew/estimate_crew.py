@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -12,6 +13,7 @@ from typing import Any
 import litellm
 import yaml
 from crewai import Agent, Crew, Process, Task
+from litellm.integrations.custom_logger import CustomLogger
 
 from src.crew.tools import VectorSearchTool, WebSearchTool
 from src.models.estimate import (
@@ -58,6 +60,69 @@ DEFAULT_AGENT_TEMPS: dict[str, float] = {
 }
 
 type TaskDoneCallback = Callable[[str], None]  # called with agent_key
+
+# ---------------------------------------------------------------------------
+# Thread-local LiteLLM token tracker
+# One instance per OS thread — safe for concurrent pipeline runs in the
+# ThreadPoolExecutor. Each run sets/reads its own slot via threading.local().
+# ---------------------------------------------------------------------------
+_tls = threading.local()
+
+
+class _TokenTrackerLogger(CustomLogger):
+    """LiteLLM custom logger — accumulates input/output tokens per agent per thread."""
+
+    def log_success_event(
+        self,
+        kwargs: Any,
+        response_obj: Any,
+        start_time: Any,
+        end_time: Any,
+        **_: Any,
+    ) -> None:
+        agent_key: str = getattr(_tls, "current_agent", "")
+        if not agent_key:
+            return
+        usage = getattr(response_obj, "usage", None)
+        if usage is None:
+            return
+        store: dict[str, dict[str, int]] = getattr(_tls, "token_store", {})
+        if agent_key not in store:
+            store[agent_key] = {"input": 0, "output": 0}
+        store[agent_key]["input"] += getattr(usage, "prompt_tokens", 0) or 0
+        store[agent_key]["output"] += getattr(usage, "completion_tokens", 0) or 0
+        _tls.token_store = store
+
+    # LiteLLM also calls async variant — provide a no-op to avoid AttributeError
+    async def async_log_success_event(self, *_: Any, **__: Any) -> None:
+        pass
+
+
+_TOKEN_LOGGER = _TokenTrackerLogger()
+
+# Register once at module load; the tracker is thread-local so it is safe for
+# concurrent pipelines. We only add it if not already present.
+_callbacks: list[CustomLogger] = litellm.callbacks  # type: ignore[assignment]
+if _TOKEN_LOGGER not in _callbacks:
+    _callbacks.append(_TOKEN_LOGGER)
+
+
+def _init_token_tracking(first_agent_key: str) -> None:
+    """Call at the start of each pipeline run (in the worker thread)."""
+    _tls.current_agent = first_agent_key
+    _tls.token_store = {}
+
+
+def _advance_token_agent(next_agent_key: str) -> None:
+    """Move the tracker to the next agent after a task callback fires."""
+    _tls.current_agent = next_agent_key
+
+
+def _read_agent_tokens(agent_key: str) -> tuple[int, int]:
+    """Return (input_tokens, output_tokens) accumulated for agent_key."""
+    store: dict[str, dict[str, int]] = getattr(_tls, "token_store", {})
+    entry = store.get(agent_key, {})
+    return entry.get("input", 0), entry.get("output", 0)
 
 
 def _load_yaml(filename: str) -> dict[str, object]:
@@ -227,6 +292,10 @@ def build_estimate_crew(
             _last_timestamp[0] = now
             if task_done_callback is not None:
                 task_done_callback(key)
+            # Advance token tracker to the next agent
+            next_idx = idx + 1
+            if next_idx < len(_agent_keys_snapshot):
+                _advance_token_agent(_agent_keys_snapshot[next_idx])
         _task_index[0] += 1
 
     crew = Crew(
@@ -273,6 +342,9 @@ def run_and_collect(
 
     # Initialize steps list (one per agent, indexed by AGENT_KEYS order)
     steps: list[AgentStep] = [AgentStep(agent_key=key, status="pending") for key in AGENT_KEYS]
+
+    # Initialise per-thread token tracking (first agent pre-set)
+    _init_token_tracking(AGENT_KEYS[0])
 
     # Run the full crew
     t0 = time.monotonic()
@@ -376,14 +448,19 @@ def run_and_collect(
 
         agent_outputs[key] = parsed
 
-        # Build step record with timing — replace the pending placeholder in-place
+        # Build step record with timing and token usage
         agent_duration = estimate_crew.agent_durations.get(key, fallback_duration)
+        input_tok, output_tok = _read_agent_tokens(key)
+        agent_llm = DEFAULT_AGENT_MODELS.get(key, estimate_crew.llm_model)
         step = AgentStep(
             agent_key=key,
             status="done" if parsed is not None else "failed",
             duration_s=agent_duration,
             output_preview=raw[:500] if raw else None,
             error=None if parsed is not None else f"Parse failed (raw_length={len(raw)})",
+            llm_model=agent_llm,
+            input_tokens=input_tok or None,
+            output_tokens=output_tok or None,
         )
         steps[i] = step  # replace pending placeholder
 

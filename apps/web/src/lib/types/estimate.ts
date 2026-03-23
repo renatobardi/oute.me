@@ -53,6 +53,9 @@ export interface AgentStep {
 	duration_s: number | null;
 	output_preview: string | null;
 	error: string | null;
+	llm_model: string | null;
+	input_tokens: number | null;
+	output_tokens: number | null;
 }
 
 export const AGENT_LABELS: Record<string, string> = {
