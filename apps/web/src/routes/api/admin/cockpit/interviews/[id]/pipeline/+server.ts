@@ -1,5 +1,6 @@
 import type { RequestHandler } from './$types';
-import { requireAuth, jsonOk, jsonError } from '$lib/server/api-utils';
+import { error } from '@sveltejs/kit';
+import { jsonOk, jsonError } from '$lib/server/api-utils';
 import { createEstimateRun } from '$lib/server/estimates';
 import { getDocuments } from '$lib/server/interviews';
 import { getJSON, postJSON } from '$lib/server/ai-client';
@@ -9,8 +10,8 @@ import type { Interview } from '$lib/types/interview';
 
 // GET — fetch agent output for a specific agent key
 export const GET: RequestHandler = async ({ params, url, locals }) => {
-	requireAuth(locals);
-	if (!locals.dbUser?.is_admin) return jsonError(403, 'Admin access required');
+	if (!locals.user) throw error(401, 'Unauthorized');
+	if (!locals.dbUser?.is_admin) throw error(403, 'Forbidden');
 
 	const agentKey = url.searchParams.get('agent');
 
@@ -45,8 +46,8 @@ export const GET: RequestHandler = async ({ params, url, locals }) => {
 
 // POST — trigger a rerun from admin context (bypasses user ownership)
 export const POST: RequestHandler = async ({ params, request, locals }) => {
-	requireAuth(locals);
-	if (!locals.dbUser?.is_admin) return jsonError(403, 'Admin access required');
+	if (!locals.user) throw error(401, 'Unauthorized');
+	if (!locals.dbUser?.is_admin) throw error(403, 'Forbidden');
 
 	const body = await request.json().catch(() => ({})) as { llm_model?: string; from_agent?: string };
 

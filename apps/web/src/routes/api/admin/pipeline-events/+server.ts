@@ -1,11 +1,10 @@
 import type { RequestHandler } from './$types';
-import { requireAuth } from '$lib/server/api-utils';
+import { error } from '@sveltejs/kit';
 import { proxySSEGet } from '$lib/server/ai-client';
-import { json } from '@sveltejs/kit';
 
 export const GET: RequestHandler = async ({ locals }) => {
-	requireAuth(locals);
-	if (!locals.dbUser?.is_admin) return json({ error: 'Admin access required' }, { status: 403 });
+	if (!locals.user) throw error(401, 'Unauthorized');
+	if (!locals.dbUser?.is_admin) throw error(403, 'Forbidden');
 
 	try {
 		const upstream = await proxySSEGet('/admin/pipeline-events');

@@ -1,10 +1,11 @@
 import type { RequestHandler } from './$types';
-import { requireAuth, jsonOk, jsonError } from '$lib/server/api-utils';
+import { error } from '@sveltejs/kit';
+import { jsonOk, jsonError } from '$lib/server/api-utils';
 import { updateKnowledgeEntry, deleteKnowledgeEntry } from '$lib/server/admin-knowledge';
 
 export const PATCH: RequestHandler = async ({ params, request, locals }) => {
-	requireAuth(locals);
-	if (!locals.dbUser?.is_admin) return jsonError(403, 'Admin access required');
+	if (!locals.user) throw error(401, 'Unauthorized');
+	if (!locals.dbUser?.is_admin) throw error(403, 'Forbidden');
 
 	const body = await request.json();
 	const { title, content, original_url } = body as {
@@ -24,8 +25,8 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 };
 
 export const DELETE: RequestHandler = async ({ params, locals }) => {
-	requireAuth(locals);
-	if (!locals.dbUser?.is_admin) return jsonError(403, 'Admin access required');
+	if (!locals.user) throw error(401, 'Unauthorized');
+	if (!locals.dbUser?.is_admin) throw error(403, 'Forbidden');
 
 	await deleteKnowledgeEntry(params.id);
 	return jsonOk({ deleted: true });

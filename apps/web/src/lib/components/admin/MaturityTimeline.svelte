@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { SvelteSet } from 'svelte/reactivity';
 	import type { MaturitySnapshot } from '$lib/server/maturity-snapshots';
 
 	let { snapshots }: { snapshots: MaturitySnapshot[] } = $props();
@@ -30,8 +29,8 @@
 	const INNER_H = H - PAD_T - PAD_B;
 
 	// All domain keys present across all snapshots
-	const domainKeys = $derived((): string[] => {
-		const keys = new SvelteSet<string>();
+	const domainKeys = $derived.by((): string[] => {
+		const keys = new Set<string>();
 		for (const snap of snapshots) {
 			for (const k of Object.keys(snap.domains ?? {})) keys.add(k);
 		}
@@ -66,9 +65,9 @@
 
 	// Markers: vital domain first reached
 	interface Marker { x: number; y: number; label: string; color: string }
-	const markers = $derived((): Marker[] => {
+	const markers = $derived.by((): Marker[] => {
 		const result: Marker[] = [];
-		const vitalReached = new SvelteSet<string>();
+		const vitalReached = new Set<string>();
 		snapshots.forEach((snap, i) => {
 			for (const [key, dom] of Object.entries(snap.domains ?? {})) {
 				if (dom.vital_answered && !vitalReached.has(key)) {
@@ -119,7 +118,7 @@
 			{/each}
 
 			<!-- Domain secondary lines -->
-			{#each domainKeys() as key (key)}
+			{#each domainKeys as key (key)}
 				<path
 					d={domainPath(key)}
 					fill="none"
@@ -145,7 +144,7 @@
 			{/each}
 
 			<!-- Vital domain markers -->
-			{#each markers() as m, mi (mi)}
+			{#each markers as m, mi (mi)}
 				<circle cx={m.x} cy={m.y} r="6" fill={m.color} opacity="0.25" />
 				<circle cx={m.x} cy={m.y} r="3" fill={m.color} />
 			{/each}
@@ -166,7 +165,7 @@
 				<span class="leg-line" style="background: white;"></span>
 				<span>Maturidade total</span>
 			</div>
-			{#each domainKeys() as key (key)}
+			{#each domainKeys as key (key)}
 				<div class="legend-item">
 					<span class="leg-line leg-dashed" style="background: {DOMAIN_COLORS[key] ?? '#6b7280'};"></span>
 					<span>{DOMAIN_LABELS[key] ?? key}</span>

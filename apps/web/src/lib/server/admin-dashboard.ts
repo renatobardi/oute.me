@@ -207,7 +207,7 @@ export async function getActivePipelines(): Promise<ActivePipeline[]> {
 		FROM public.estimates e
 		JOIN public.interviews i ON i.id = e.interview_id
 		JOIN public.users u ON u.id = i.user_id
-		WHERE e.status IN ('estimating', 'running', 'pending')
+		WHERE e.status IN ('pending_approval', 'estimating', 'running')
 		ORDER BY e.created_at DESC
 		LIMIT 20
 	`;
