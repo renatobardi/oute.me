@@ -70,7 +70,7 @@
 		URL.revokeObjectURL(url);
 	}
 
-	async function loadMoreMessages(offset: number) {
+	async function loadMoreMessages(offset: number): Promise<InterviewMessage[]> {
 		if (!selectedId) return [];
 		const token = await getToken();
 		const data = await loadInterviewMessages(selectedId, offset, 20, token);
