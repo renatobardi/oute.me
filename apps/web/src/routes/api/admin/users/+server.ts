@@ -1,12 +1,11 @@
-import { json } from '@sveltejs/kit';
+import { error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { getAllUsers } from '$lib/server/users';
 
 export const GET: RequestHandler = async ({ locals }) => {
-	if (!locals.dbUser?.is_admin) {
-		return json({ error: 'Forbidden' }, { status: 403 });
-	}
+	if (!locals.user) throw error(401, 'Unauthorized');
+	if (!locals.dbUser?.is_admin) throw error(403, 'Forbidden');
 
 	const users = await getAllUsers();
-	return json({ users });
+	return Response.json({ users });
 };

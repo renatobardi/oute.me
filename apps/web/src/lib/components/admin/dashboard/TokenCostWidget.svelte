@@ -47,7 +47,7 @@
 	const H = 44;
 	const PAD = 4;
 
-	const sparkPath = $derived(() => {
+	const sparkPath = $derived.by(() => {
 		const trend = stats.daily_trend;
 		if (trend.length < 2) return '';
 		const maxVal = Math.max(...trend.map((d) => d.tokens), 1);
@@ -123,16 +123,16 @@
 	{#if stats.daily_trend.length >= 2}
 		<div class="sparkline-wrap">
 			<svg viewBox="0 0 {W} {H}" width={W} height={H} class="sparkline">
-				{#if sparkPath()}
+				{#if sparkPath}
 					<defs>
 						<linearGradient id="spark-fill-tcw" x1="0" x2="0" y1="0" y2="1">
 							<stop offset="0%" stop-color="#818cf8" stop-opacity="0.2" />
 							<stop offset="100%" stop-color="#818cf8" stop-opacity="0" />
 						</linearGradient>
 					</defs>
-					{@const area = sparkPath() + ` L${(W - PAD).toFixed(1)},${H - PAD} L${PAD},${H - PAD} Z`}
+					{@const area = sparkPath + ` L${(W - PAD).toFixed(1)},${H - PAD} L${PAD},${H - PAD} Z`}
 					<path d={area} fill="url(#spark-fill-tcw)" />
-					<path d={sparkPath()} fill="none" stroke="#818cf8" stroke-width="1.5" stroke-linejoin="round" />
+					<path d={sparkPath} fill="none" stroke="#818cf8" stroke-width="1.5" stroke-linejoin="round" />
 				{/if}
 			</svg>
 			<div class="sparkline-labels">
