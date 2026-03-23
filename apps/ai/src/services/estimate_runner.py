@@ -95,8 +95,9 @@ def _make_task_done_callback(
                 step["status"] = "done"
                 duration_s = step.get("duration_s")
                 break
+        snapshot = [dict(s) for s in steps]  # defensive copy before crossing thread boundary
         asyncio.run_coroutine_threadsafe(
-            backend.update_agent_steps(job_id, steps),
+            backend.update_agent_steps(job_id, snapshot),
             loop,
         )
         asyncio.run_coroutine_threadsafe(

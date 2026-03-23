@@ -33,6 +33,9 @@
 			const ev = JSON.parse(e.data);
 			if (ev.interview_id) refreshPipelines();
 		});
+		es.addEventListener('error', () => {
+			es.close();
+		});
 		return () => es.close();
 	});
 

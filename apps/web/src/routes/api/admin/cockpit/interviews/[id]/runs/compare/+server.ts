@@ -45,8 +45,9 @@ export const GET: RequestHandler = async ({ locals, url, params }) => {
 
 	if (runs.length < 2) throw error(404, 'Uma ou mais runs não encontradas');
 
-	const runA = runs.find((r) => r.id === runAId)!;
-	const runB = runs.find((r) => r.id === runBId)!;
+	const runA = runs.find((r) => r.id === runAId);
+	const runB = runs.find((r) => r.id === runBId);
+	if (!runA || !runB) throw error(404, 'Uma ou ambas as runs não encontradas');
 
 	const agentOutputsA = (runA.agent_outputs ?? {}) as Record<string, Record<string, unknown>>;
 	const agentOutputsB = (runB.agent_outputs ?? {}) as Record<string, Record<string, unknown>>;
