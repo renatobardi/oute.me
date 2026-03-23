@@ -12,8 +12,8 @@
 		loadmore: (offset: number) => Promise<InterviewMessage[]>;
 	} = $props();
 
-	let messages = $state<InterviewMessage[]>([...initialMessages]);
-	let offset = $state(initialMessages.length);
+	let messages = $state<InterviewMessage[]>([...(initialMessages ?? [])]);
+	let offset = $state(initialMessages?.length ?? 0);
 	let loading = $state(false);
 
 	$effect(() => {
