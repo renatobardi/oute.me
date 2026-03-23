@@ -1,5 +1,6 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
+import { validateUuid } from '$lib/server/api-utils';
 import sql from '$lib/server/db';
 import type { EstimateRun, AgentStep } from '$lib/types/estimate';
 
@@ -32,6 +33,9 @@ export const GET: RequestHandler = async ({ locals, url, params }) => {
 
 	if (!runAId || !runBId) throw error(400, 'Parâmetros a e b obrigatórios');
 	if (runAId === runBId) throw error(400, 'Runs devem ser diferentes');
+	validateUuid(params.id);
+	validateUuid(runAId);
+	validateUuid(runBId);
 
 	const interviewId = params.id;
 

@@ -25,7 +25,8 @@ export async function getAuditEvents(
 	actorId: string | null,
 	resourceType: string | null,
 	period: AuditPeriod = 30,
-	limit = 200
+	limit = 100,
+	offset = 0
 ): Promise<AuditEvent[]> {
 	return sql<AuditEvent[]>`
 		SELECT
@@ -45,7 +46,25 @@ export async function getAuditEvents(
 		  AND  (${resourceType} IS NULL OR e.resource_type = ${resourceType})
 		ORDER  BY e.created_at DESC
 		LIMIT  ${limit}
+		OFFSET ${offset}
 	`;
+}
+
+export async function countAuditEvents(
+	eventType: string | null,
+	actorId: string | null,
+	resourceType: string | null,
+	period: AuditPeriod = 30
+): Promise<number> {
+	const [row] = await sql<{ count: string }[]>`
+		SELECT COUNT(*)::text AS count
+		FROM   audit.event_log e
+		WHERE  e.created_at > NOW() - (${period} || ' days')::interval
+		  AND  (${eventType} IS NULL OR e.event_type = ${eventType})
+		  AND  (${actorId}   IS NULL OR e.actor_id::text = ${actorId})
+		  AND  (${resourceType} IS NULL OR e.resource_type = ${resourceType})
+	`;
+	return parseInt(row?.count ?? '0', 10);
 }
 
 export function groupIntoSessions(events: AuditEvent[]): AuditSession[] {

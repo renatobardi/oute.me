@@ -15,7 +15,8 @@ export const GET: RequestHandler = async ({ locals, url }) => {
 
 	const status = (url.searchParams.get('status') ?? 'all') as PipelineStatus;
 	const llmModel = url.searchParams.get('model') || null;
-	const period = (parseInt(url.searchParams.get('period') ?? '30', 10) || 30) as PipelinePeriod;
+	const rawPeriod = Number(url.searchParams.get('period'));
+	const period: PipelinePeriod = ([7, 30, 90] as const).includes(rawPeriod as PipelinePeriod) ? (rawPeriod as PipelinePeriod) : 30;
 
 	const [rows, heatmap, trend, models] = await Promise.all([
 		getPipelineRows(status, llmModel, period),

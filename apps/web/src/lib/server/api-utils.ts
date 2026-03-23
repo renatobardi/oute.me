@@ -15,3 +15,9 @@ export function jsonOk<T>(data: T, status: number = 200): Response {
 export function jsonError(status: number, message: string): Response {
 	return json({ error: message }, { status });
 }
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export function validateUuid(id: string | null | undefined): void {
+	if (!id || !UUID_RE.test(id)) throw error(400, 'Invalid ID format');
+}
