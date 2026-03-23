@@ -5,6 +5,7 @@
 	import ConversionFunnel from '$lib/components/admin/dashboard/ConversionFunnel.svelte';
 	import ActivePipelines from '$lib/components/admin/dashboard/ActivePipelines.svelte';
 	import AlertsPanel from '$lib/components/admin/dashboard/AlertsPanel.svelte';
+	import TokenCostWidget from '$lib/components/admin/dashboard/TokenCostWidget.svelte';
 
 	let { data } = $props();
 
@@ -121,7 +122,7 @@
 		/>
 	</div>
 
-	<!-- Funil -->
+	<!-- Funil + Tokens -->
 	<div class="row">
 		<div class="col-wide">
 			<ConversionFunnel
@@ -135,8 +136,15 @@
 		</div>
 	</div>
 
-	<!-- Pipelines ativos -->
-	<ActivePipelines {pipelines} />
+	<!-- Tokens + Pipelines ativos -->
+	<div class="row">
+		<div class="col-narrow">
+			<TokenCostWidget stats={data.tokenStats} />
+		</div>
+		<div class="col-wide">
+			<ActivePipelines {pipelines} />
+		</div>
+	</div>
 </div>
 
 <style>
@@ -161,6 +169,9 @@
 		gap: 1rem;
 		align-items: start;
 	}
+
+	.col-wide { min-width: 0; }
+	.col-narrow { min-width: 0; }
 
 	@media (max-width: 1100px) {
 		.kpi-grid { grid-template-columns: repeat(2, 1fr); }

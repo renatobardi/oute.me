@@ -11,6 +11,7 @@ import {
 } from '$lib/server/interviews';
 import { proxySSE } from '$lib/server/ai-client';
 import { logBusinessEvent } from '$lib/server/audit';
+import { saveMaturitySnapshot } from '$lib/server/maturity-snapshots';
 import { logger } from '$lib/server/logger';
 import { checkRateLimit } from '$lib/server/rate-limit';
 import type { InterviewState } from '$lib/types/interview';
@@ -96,6 +97,7 @@ export const POST: RequestHandler = async ({ locals, params, request }) => {
 			let lastMaturity = 0;
 			const oldMaturity = interview.maturity;
 			let maturityThresholdCrossed = false;
+			const turnNumber = recentMessages.filter((m) => m.role === 'user').length;
 			let timeoutId: ReturnType<typeof setTimeout> | undefined;
 
 			try {
@@ -134,6 +136,7 @@ export const POST: RequestHandler = async ({ locals, params, request }) => {
 								if (lastMaturity >= 0.70 && oldMaturity < 0.70) {
 									maturityThresholdCrossed = true;
 								}
+								void saveMaturitySnapshot(params.id, turnNumber, lastMaturity, lastState);
 
 								// Apply AI-suggested title only if interview has no title yet
 								const suggestedTitle = data.suggested_title as string | undefined;

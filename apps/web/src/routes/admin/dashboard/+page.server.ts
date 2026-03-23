@@ -5,18 +5,20 @@ import {
 	getConversionFunnel,
 	getActivePipelines,
 	getAdminAlerts,
+	getTokenStats,
 } from '$lib/server/admin-dashboard';
 
 export const load: PageServerLoad = async ({ locals }) => {
 	if (!locals.user) throw redirect(302, '/login');
 	if (!locals.dbUser?.is_admin) throw redirect(302, '/interviews');
 
-	const [metrics, funnel, pipelines, alerts] = await Promise.all([
+	const [metrics, funnel, pipelines, alerts, tokenStats] = await Promise.all([
 		getAdminDashboardMetrics(),
 		getConversionFunnel(30),
 		getActivePipelines(),
 		getAdminAlerts(),
+		getTokenStats(30),
 	]);
 
-	return { metrics, funnel, pipelines, alerts };
+	return { metrics, funnel, pipelines, alerts, tokenStats };
 };
