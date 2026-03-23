@@ -18,7 +18,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	// Extract text from document via FastAPI
 	let extracted: { extracted_text: string; status: string };
 	try {
-		extracted = await postFile('/chat/process-document', file, file.name, 90_000);
+		extracted = await postFile('/chat/process-document', file, file.name, 300_000);
 	} catch (err) {
 		const msg = err instanceof Error ? err.message : 'Unknown error';
 		return jsonError(502, `Falha ao processar documento: ${msg}`);

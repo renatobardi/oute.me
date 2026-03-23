@@ -121,6 +121,11 @@
 						saveError = 'Selecione um arquivo antes de salvar.';
 						return;
 					}
+					const MAX_SIZE = 50 * 1024 * 1024;
+					if (file.size > MAX_SIZE) {
+						saveError = `Arquivo muito grande (${(file.size / 1024 / 1024).toFixed(1)} MB). Limite: 50 MB.`;
+						return;
+					}
 					const formData = new FormData();
 					formData.append('file', file);
 					formData.append('title', fTitle);
