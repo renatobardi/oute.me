@@ -2,6 +2,7 @@ import sql from './db';
 import type { Interview, InterviewMessage, InterviewDocument } from '$lib/types/interview';
 import type { Estimate, EstimateRun } from '$lib/types/estimate';
 import type { Project } from '$lib/types/project';
+import { getMaturitySnapshots, type MaturitySnapshot } from './maturity-snapshots';
 
 export interface CockpitInterview {
 	id: string;
@@ -37,6 +38,7 @@ export interface CockpitDetail {
 	estimateRuns: EstimateRun[];
 	knowledgeVectors: KnowledgeVector[];
 	project: Project | null;
+	maturitySnapshots: MaturitySnapshot[];
 }
 
 export async function getAllInterviewsForAdmin(): Promise<CockpitInterview[]> {
@@ -70,7 +72,7 @@ export async function getAllInterviewsForAdmin(): Promise<CockpitInterview[]> {
 }
 
 export async function getCockpitInterviewDetail(interviewId: string): Promise<CockpitDetail | null> {
-	const [interviewRows, messageRows, messageCountRows, documentRows, estimateRows, vectorRows, estimateRunRows] =
+	const [interviewRows, messageRows, messageCountRows, documentRows, estimateRows, vectorRows, estimateRunRows, maturitySnapshots] =
 		await Promise.all([
 			sql<(Interview & { user_name: string | null; user_email: string })[]>`
 				SELECT i.*, u.display_name AS user_name, u.email AS user_email
@@ -112,6 +114,7 @@ export async function getCockpitInterviewDetail(interviewId: string): Promise<Co
 				ORDER BY er.created_at DESC
 				LIMIT 10
 			`,
+			getMaturitySnapshots(interviewId),
 		]);
 
 	const interview = interviewRows[0];
@@ -140,6 +143,7 @@ export async function getCockpitInterviewDetail(interviewId: string): Promise<Co
 		estimateRuns: estimateRunRows,
 		knowledgeVectors: vectorRows,
 		project,
+		maturitySnapshots,
 	};
 }
 

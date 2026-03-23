@@ -15,6 +15,7 @@
 	import EstimateTab from '$lib/components/admin/tabs/EstimateTab.svelte';
 	import PipelineTab from '$lib/components/admin/tabs/PipelineTab.svelte';
 	import ProjectGeneratedTab from '$lib/components/admin/tabs/ProjectGeneratedTab.svelte';
+	import MaturityTimeline from '$lib/components/admin/MaturityTimeline.svelte';
 
 	let {
 		detail,
@@ -329,6 +330,14 @@
 		align-items: center;
 		gap: 0.75rem;
 		flex-wrap: wrap;
+	}
+
+	.timeline-section {
+		margin-top: 0.875rem;
+		padding: 0.875rem;
+		background: rgba(255, 255, 255, 0.02);
+		border: 1px solid rgba(255, 255, 255, 0.06);
+		border-radius: 8px;
 	}
 
 	.maturity-block {

@@ -311,3 +311,67 @@ export async function getAdminAlerts(): Promise<AdminAlert[]> {
 
 	return alerts.sort((a, b) => new Date(b.occurred_at).getTime() - new Date(a.occurred_at).getTime());
 }
+
+export interface TokenStats {
+	period: number;
+	total_tokens: number;
+	avg_tokens_per_interview: number;
+	daily_trend: { day: string; tokens: number }[];
+	top_interviews: { interview_id: string; title: string | null; user_email: string; tokens: number }[];
+}
+
+export async function getTokenStats(period: PeriodDays = 30): Promise<TokenStats> {
+	const interval = `${period} days`;
+
+	const [summaryRows, trendRows, topRows] = await Promise.all([
+		sql<{ total_tokens: string; distinct_interviews: string }[]>`
+			SELECT
+				COALESCE(SUM(m.tokens_used), 0)::text AS total_tokens,
+				COUNT(DISTINCT m.interview_id)::text AS distinct_interviews
+			FROM public.interview_messages m
+			WHERE m.created_at >= NOW() - ${interval}::interval
+			  AND m.tokens_used > 0
+		`,
+		sql<{ day: string; tokens: string }[]>`
+			SELECT
+				DATE_TRUNC('day', m.created_at)::date::text AS day,
+				SUM(m.tokens_used)::text AS tokens
+			FROM public.interview_messages m
+			WHERE m.created_at >= NOW() - ${interval}::interval
+			  AND m.tokens_used > 0
+			GROUP BY 1
+			ORDER BY 1 ASC
+		`,
+		sql<{ interview_id: string; title: string | null; user_email: string; tokens: string }[]>`
+			SELECT
+				i.id AS interview_id,
+				i.title,
+				u.email AS user_email,
+				SUM(m.tokens_used)::text AS tokens
+			FROM public.interview_messages m
+			JOIN public.interviews i ON i.id = m.interview_id
+			JOIN public.users u ON u.id = i.user_id
+			WHERE m.created_at >= NOW() - ${interval}::interval
+			  AND m.tokens_used > 0
+			GROUP BY i.id, i.title, u.email
+			ORDER BY SUM(m.tokens_used) DESC
+			LIMIT 5
+		`,
+	]);
+
+	const totalTokens = parseInt(summaryRows[0]?.total_tokens ?? '0');
+	const distinctInterviews = parseInt(summaryRows[0]?.distinct_interviews ?? '0');
+
+	return {
+		period,
+		total_tokens: totalTokens,
+		avg_tokens_per_interview: distinctInterviews > 0 ? Math.round(totalTokens / distinctInterviews) : 0,
+		daily_trend: trendRows.map((r) => ({ day: r.day, tokens: parseInt(r.tokens) })),
+		top_interviews: topRows.map((r) => ({
+			interview_id: r.interview_id,
+			title: r.title,
+			user_email: r.user_email,
+			tokens: parseInt(r.tokens),
+		})),
+	};
+}
