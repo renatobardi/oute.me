@@ -46,6 +46,9 @@
 					duration_s: null,
 					output_preview: null,
 					error: null,
+					llm_model: null,
+					input_tokens: null,
+					output_tokens: null,
 				}));
 	});
 
