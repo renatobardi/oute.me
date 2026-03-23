@@ -40,7 +40,7 @@
 {#if runs.length > 0}
 	<div class="history-header">
 		<div class="section-title">Histórico de Runs</div>
-		{#if runs.length >= 2}
+		{#if oncompare && runs.length >= 2}
 			<div class="compare-hint">
 				{#if canCompare}
 					<button class="btn-compare" onclick={handleCompare}>
