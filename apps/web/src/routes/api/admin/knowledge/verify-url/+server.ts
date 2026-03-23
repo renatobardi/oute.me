@@ -1,9 +1,10 @@
 import type { RequestHandler } from './$types';
-import { requireAuth, jsonOk, jsonError } from '$lib/server/api-utils';
+import { error } from '@sveltejs/kit';
+import { jsonOk, jsonError } from '$lib/server/api-utils';
 
 export const POST: RequestHandler = async ({ request, locals }) => {
-	requireAuth(locals);
-	if (!locals.dbUser?.is_admin) return jsonError(403, 'Admin access required');
+	if (!locals.user) throw error(401, 'Unauthorized');
+	if (!locals.dbUser?.is_admin) throw error(403, 'Forbidden');
 
 	const { url } = (await request.json()) as { url: string };
 	if (!url) return jsonError(400, 'url is required');
