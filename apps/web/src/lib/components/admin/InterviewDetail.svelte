@@ -15,8 +15,7 @@
 	import EstimateTab from '$lib/components/admin/tabs/EstimateTab.svelte';
 	import PipelineTab from '$lib/components/admin/tabs/PipelineTab.svelte';
 	import ProjectGeneratedTab from '$lib/components/admin/tabs/ProjectGeneratedTab.svelte';
-	import MaturityTimeline from '$lib/components/admin/MaturityTimeline.svelte';
-
+	
 	let {
 		detail,
 		loadingDetail,

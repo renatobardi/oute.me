@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 import logging
+from collections.abc import AsyncGenerator
+from typing import Any
 
 from fastapi import APIRouter, Request
 from sse_starlette.sse import EventSourceResponse
@@ -22,7 +24,7 @@ async def pipeline_events(request: Request) -> EventSourceResponse:
     disponível, mantém a conexão aberta com keepalives.
     """
 
-    async def event_generator():  # type: ignore[return]
+    async def event_generator() -> AsyncGenerator[dict[str, Any], None]:
         if not settings.redis_url:
             logger.debug("Redis não configurado — SSE admin em modo keepalive")
             while True:
