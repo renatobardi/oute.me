@@ -3,6 +3,8 @@
 	import { AGENT_KEYS } from '$lib/types/estimate';
 	import PipelineStepper from '$lib/components/admin/pipeline/PipelineStepper.svelte';
 	import RunHistoryList from '$lib/components/admin/pipeline/RunHistoryList.svelte';
+	import AgentStepCard from '$lib/components/admin/pipeline/AgentStepCard.svelte';
+	import RunComparison from '$lib/components/admin/pipeline/RunComparison.svelte';
 
 	let {
 		interviewId,
@@ -27,6 +29,10 @@
 	let agentOutputKey = $state<string | null>(null);
 	let agentOutputData = $state<Record<string, unknown> | null>(null);
 	let loadingAgentOutput = $state(false);
+
+	let compareRunA = $state<string | null>(null);
+	let compareRunB = $state<string | null>(null);
+	const showComparison = $derived(!!compareRunA && !!compareRunB);
 
 	const displaySteps = $derived((): AgentStep[] => {
 		const steps = (estimate.agent_steps ?? []) as AgentStep[];
@@ -98,14 +104,26 @@
 			{#if loadingAgentOutput}
 				<span class="muted">Carregando output…</span>
 			{:else if agentOutputData}
-				<pre class="output-json">{JSON.stringify(agentOutputData, null, 2)}</pre>
+				<AgentStepCard agentKey={agentOutputKey} output={agentOutputData} />
 			{:else}
 				<span class="muted">Output não disponível</span>
 			{/if}
 		</div>
 	{/if}
 
-	<RunHistoryList runs={estimateRuns} />
+	<RunHistoryList
+		runs={estimateRuns}
+		oncompare={(a, b) => { compareRunA = a; compareRunB = b; }}
+	/>
+
+	{#if showComparison}
+		<RunComparison
+			{interviewId}
+			runAId={compareRunA!}
+			runBId={compareRunB!}
+			onclose={() => { compareRunA = null; compareRunB = null; }}
+		/>
+	{/if}
 </div>
 
 <style>
@@ -170,18 +188,6 @@
 		background: var(--color-dark-bg, #0f1117);
 		border-radius: 6px;
 		margin-bottom: 0.75rem;
-	}
-
-	.output-json {
-		font-family: 'SF Mono', 'Cascadia Code', monospace;
-		font-size: 0.75rem;
-		line-height: 1.5;
-		color: #d1d5db;
-		white-space: pre-wrap;
-		word-break: break-all;
-		max-height: 400px;
-		overflow-y: auto;
-		margin: 0;
 	}
 
 	.muted {
