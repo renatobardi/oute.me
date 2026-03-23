@@ -3,6 +3,12 @@
 	import type { AgentStep } from '$lib/types/estimate';
 	import { scrollShadow } from '$lib/actions/scroll-shadow';
 	import { fmtDate, maturityColor } from '$lib/utils/admin';
+	import {
+		downloadAdminDocument,
+		loadInterviewMessages,
+		fetchAgentOutputApi,
+		triggerPipelineRun,
+	} from '$lib/utils/adminApi';
 
 	import StatusBadge from '$lib/components/admin/StatusBadge.svelte';
 	import DomainProgress from '$lib/components/admin/DomainProgress.svelte';
@@ -47,9 +53,7 @@
 
 	async function downloadDocument(docId: string) {
 		const token = await getToken();
-		const res = await fetch(`/api/admin/cockpit/documents/${docId}/download`, {
-			headers: token ? { Authorization: `Bearer ${token}` } : {},
-		});
+		const res = await downloadAdminDocument(docId, token);
 		if (!res.ok) {
 			alert('Arquivo não disponível para download.');
 			return;
@@ -69,23 +73,13 @@
 	async function loadMoreMessages(offset: number) {
 		if (!selectedId) return [];
 		const token = await getToken();
-		const res = await fetch(
-			`/api/admin/cockpit/interviews/${selectedId}/messages?offset=${offset}&limit=20`,
-			{ headers: token ? { Authorization: `Bearer ${token}` } : {} }
-		);
-		if (!res.ok) return [];
-		const data = await res.json();
+		const data = await loadInterviewMessages(selectedId, offset, 20, token);
 		return data.messages ?? [];
 	}
 
 	async function fetchAgentOutput(interviewId: string, agentKey: string) {
 		const token = await getToken();
-		const res = await fetch(
-			`/api/admin/cockpit/interviews/${interviewId}/pipeline?agent=${agentKey}`,
-			{ headers: token ? { Authorization: `Bearer ${token}` } : {} }
-		);
-		if (!res.ok) return null;
-		return await res.json();
+		return fetchAgentOutputApi(interviewId, agentKey, token);
 	}
 
 	function openRerunModal() {
@@ -101,22 +95,8 @@
 		rerunMsg = '';
 		try {
 			const token = await getToken();
-			const body: Record<string, string> = { llm_model: params.llm_model };
-			if (params.from_agent) body.from_agent = params.from_agent;
-			const res = await fetch(`/api/admin/cockpit/interviews/${selectedId}/pipeline`, {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json',
-					...(token ? { Authorization: `Bearer ${token}` } : {}),
-				},
-				body: JSON.stringify(body),
-			});
-			if (res.ok) {
-				rerunMsg = 'Re-run iniciado!';
-			} else {
-				const err = await res.json().catch(() => ({ error: 'Erro desconhecido' }));
-				rerunMsg = `Erro: ${err.error ?? res.statusText}`;
-			}
+			const result = await triggerPipelineRun(selectedId!, params, token);
+			rerunMsg = result.ok ? 'Re-run iniciado!' : `Erro: ${result.error}`;
 		} catch {
 			rerunMsg = 'Erro de conexão';
 		} finally {
@@ -276,8 +256,8 @@
 				{rerunning}
 				{rerunMsg}
 				{fetchAgentOutput}
-				onopenrerunmodal={openRerunModal}
-				ontriggerrerun={triggerDirectRun}
+				onOpenRerunModal={openRerunModal}
+				onTriggerRerun={triggerDirectRun}
 			/>
 
 		{:else if activeTab === 'projeto-gerado' && detail.project}

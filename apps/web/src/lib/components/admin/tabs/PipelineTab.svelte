@@ -13,8 +13,8 @@
 		rerunning,
 		rerunMsg,
 		fetchAgentOutput,
-		onopenrerunmodal,
-		ontriggerrerun,
+		onOpenRerunModal,
+		onTriggerRerun,
 	}: {
 		interviewId: string;
 		estimate: Estimate;
@@ -22,8 +22,8 @@
 		rerunning: boolean;
 		rerunMsg: string;
 		fetchAgentOutput: (interviewId: string, agentKey: string) => Promise<Record<string, unknown> | null>;
-		onopenrerunmodal: () => void;
-		ontriggerrerun: () => void;
+		onOpenRerunModal: () => void;
+		onTriggerRerun: () => void;
 	} = $props();
 
 	let agentOutputKey = $state<string | null>(null);
@@ -33,6 +33,8 @@
 	let compareRunA = $state<string | null>(null);
 	let compareRunB = $state<string | null>(null);
 	const showComparison = $derived(!!compareRunA && !!compareRunB);
+
+	const hasRealSteps = $derived((estimate.agent_steps ?? []).length > 0);
 
 	const displaySteps = $derived((): AgentStep[] => {
 		const steps = (estimate.agent_steps ?? []) as AgentStep[];
@@ -79,7 +81,7 @@
 			{#if estimate.status === 'pending_approval'}
 				<button
 					class="btn-rerun btn-start"
-					onclick={ontriggerrerun}
+					onclick={onTriggerRerun}
 					disabled={rerunning}
 				>
 					{rerunning ? 'Iniciando…' : 'Iniciar Pipeline'}
@@ -87,7 +89,7 @@
 			{:else}
 				<button
 					class="btn-rerun"
-					onclick={onopenrerunmodal}
+					onclick={onOpenRerunModal}
 					disabled={rerunning || ['pending', 'running'].includes(estimate.status)}
 				>
 					{rerunning ? 'Iniciando…' : 'Re-run Pipeline'}
@@ -96,10 +98,14 @@
 		</div>
 	</div>
 
+	{#if !hasRealSteps}
+		<p class="pipeline-empty">Pipeline ainda não foi executado.</p>
+	{/if}
+
 	<PipelineStepper
 		steps={displaySteps()}
 		activeKey={agentOutputKey}
-		onstepclick={handleStepClick}
+		onStepClick={handleStepClick}
 	/>
 
 	{#if agentOutputKey}
@@ -196,5 +202,13 @@
 	.muted {
 		color: var(--color-neutral-500, #6b7280);
 		font-size: 0.8125rem;
+	}
+
+	.pipeline-empty {
+		font-size: 0.8125rem;
+		color: var(--color-neutral-500, #6b7280);
+		text-align: center;
+		padding: 0.5rem 0 0.75rem;
+		margin: 0;
 	}
 </style>
