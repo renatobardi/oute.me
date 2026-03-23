@@ -52,7 +52,7 @@ async def pipeline_events(request: Request) -> EventSourceResponse:
                         pubsub.get_message(ignore_subscribe_messages=True),
                         timeout=_KEEPALIVE_INTERVAL_S,
                     )
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     yield {"event": "keepalive", "data": ""}
                     continue
                 if message is None:
