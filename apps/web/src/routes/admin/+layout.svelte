@@ -5,6 +5,7 @@
 	const tabs = [
 		{ label: 'Dashboard', href: '/admin/dashboard' },
 		{ label: 'Cockpit', href: '/admin/cockpit' },
+		{ label: 'Pipeline', href: '/admin/pipeline' },
 		{ label: 'Usuários', href: '/admin/usuarios' },
 		{ label: 'Base de Conhecimento', href: '/admin/knowledge' },
 		{ label: 'Agentes', href: '/admin/agents' },
