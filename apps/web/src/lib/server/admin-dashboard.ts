@@ -312,10 +312,36 @@ export async function getAdminAlerts(): Promise<AdminAlert[]> {
 	return alerts.sort((a, b) => new Date(b.occurred_at).getTime() - new Date(a.occurred_at).getTime());
 }
 
+// Vertex AI pricing (USD per 1M tokens) — update as pricing changes
+const PRICING: Record<string, { input: number; output: number }> = {
+	'vertex_ai/gemini-2.5-flash':      { input: 0.15,   output: 0.60 },
+	'vertex_ai/gemini-2.5-flash-lite': { input: 0.075,  output: 0.30 },
+};
+
+export function estimateCostUsd(
+	model: string,
+	inputTokens: number,
+	outputTokens: number
+): number {
+	const p = PRICING[model] ?? PRICING['vertex_ai/gemini-2.5-flash'];
+	return (inputTokens * p.input + outputTokens * p.output) / 1_000_000;
+}
+
+export interface PipelineAgentTokens {
+	agent_key: string;
+	llm_model: string;
+	input_tokens: number;
+	output_tokens: number;
+	estimated_cost_usd: number;
+}
+
 export interface TokenStats {
 	period: number;
+	chat_tokens: number;
+	pipeline_tokens: number;
 	total_tokens: number;
 	avg_tokens_per_interview: number;
+	pipeline_by_agent: PipelineAgentTokens[];
 	daily_trend: { day: string; tokens: number }[];
 	top_interviews: { interview_id: string; title: string | null; user_email: string; tokens: number }[];
 }
@@ -323,7 +349,8 @@ export interface TokenStats {
 export async function getTokenStats(period: PeriodDays = 30): Promise<TokenStats> {
 	const interval = `${period} days`;
 
-	const [summaryRows, trendRows, topRows] = await Promise.all([
+	const [summaryRows, pipelineRows, trendRows, topRows] = await Promise.all([
+		// Chat tokens from interview_messages
 		sql<{ total_tokens: string; distinct_interviews: string }[]>`
 			SELECT
 				COALESCE(SUM(m.tokens_used), 0)::text AS total_tokens,
@@ -332,6 +359,22 @@ export async function getTokenStats(period: PeriodDays = 30): Promise<TokenStats
 			WHERE m.created_at >= NOW() - ${interval}::interval
 			  AND m.tokens_used > 0
 		`,
+		// Pipeline tokens from estimate_runs.agent_steps JSONB (populated by FastAPI)
+		sql<{ agent_key: string; llm_model: string; input_tokens: string; output_tokens: string }[]>`
+			SELECT
+				step->>'agent_key'    AS agent_key,
+				step->>'llm_model'    AS llm_model,
+				SUM((step->>'input_tokens')::int)::text  AS input_tokens,
+				SUM((step->>'output_tokens')::int)::text AS output_tokens
+			FROM public.estimate_runs er,
+			     LATERAL jsonb_array_elements(er.agent_steps) step
+			WHERE er.created_at >= NOW() - ${interval}::interval
+			  AND step->>'input_tokens' IS NOT NULL
+			  AND step->>'llm_model'    IS NOT NULL
+			GROUP BY step->>'agent_key', step->>'llm_model'
+			ORDER BY SUM((step->>'input_tokens')::int + (step->>'output_tokens')::int) DESC
+		`,
+		// Daily combined token trend
 		sql<{ day: string; tokens: string }[]>`
 			SELECT
 				DATE_TRUNC('day', m.created_at)::date::text AS day,
@@ -342,6 +385,7 @@ export async function getTokenStats(period: PeriodDays = 30): Promise<TokenStats
 			GROUP BY 1
 			ORDER BY 1 ASC
 		`,
+		// Top interviews by chat token usage
 		sql<{ interview_id: string; title: string | null; user_email: string; tokens: string }[]>`
 			SELECT
 				i.id AS interview_id,
@@ -359,13 +403,31 @@ export async function getTokenStats(period: PeriodDays = 30): Promise<TokenStats
 		`,
 	]);
 
-	const totalTokens = parseInt(summaryRows[0]?.total_tokens ?? '0');
+	const chatTokens = parseInt(summaryRows[0]?.total_tokens ?? '0');
 	const distinctInterviews = parseInt(summaryRows[0]?.distinct_interviews ?? '0');
+
+	const pipelineByAgent: PipelineAgentTokens[] = pipelineRows.map((r) => {
+		const inp = parseInt(r.input_tokens ?? '0');
+		const out = parseInt(r.output_tokens ?? '0');
+		return {
+			agent_key: r.agent_key,
+			llm_model: r.llm_model,
+			input_tokens: inp,
+			output_tokens: out,
+			estimated_cost_usd: estimateCostUsd(r.llm_model, inp, out),
+		};
+	});
+
+	const pipelineTokens = pipelineByAgent.reduce((s, r) => s + r.input_tokens + r.output_tokens, 0);
+	const totalTokens = chatTokens + pipelineTokens;
 
 	return {
 		period,
+		chat_tokens: chatTokens,
+		pipeline_tokens: pipelineTokens,
 		total_tokens: totalTokens,
-		avg_tokens_per_interview: distinctInterviews > 0 ? Math.round(totalTokens / distinctInterviews) : 0,
+		avg_tokens_per_interview: distinctInterviews > 0 ? Math.round(chatTokens / distinctInterviews) : 0,
+		pipeline_by_agent: pipelineByAgent,
 		daily_trend: trendRows.map((r) => ({ day: r.day, tokens: parseInt(r.tokens) })),
 		top_interviews: topRows.map((r) => ({
 			interview_id: r.interview_id,

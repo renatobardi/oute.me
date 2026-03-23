@@ -28,9 +28,23 @@
 		return String(n);
 	}
 
-	// SVG sparkline for daily trend
+	function fmtCost(usd: number): string {
+		if (usd < 0.01) return `$${(usd * 100).toFixed(3)}¢`;
+		return `$${usd.toFixed(3)}`;
+	}
+
+	const AGENT_LABELS: Record<string, string> = {
+		architecture_interviewer: 'Entrevistador',
+		rag_analyst: 'RAG Analyst',
+		software_architect: 'Arquiteto',
+		cost_specialist: 'Custos',
+		reviewer: 'Revisor',
+		knowledge_manager: 'Knowledge',
+	};
+
+	// SVG sparkline
 	const W = 260;
-	const H = 50;
+	const H = 44;
 	const PAD = 4;
 
 	const sparkPath = $derived(() => {
@@ -42,12 +56,18 @@
 		return xs.map((x, i) => `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${ys[i].toFixed(1)}`).join(' ');
 	});
 
-	const maxTrend = $derived(Math.max(...stats.daily_trend.map((d) => d.tokens), 1));
+	const totalPipelineCost = $derived(
+		stats.pipeline_by_agent.reduce((s, r) => s + r.estimated_cost_usd, 0)
+	);
+
+	const maxAgentTokens = $derived(
+		Math.max(...stats.pipeline_by_agent.map((r) => r.input_tokens + r.output_tokens), 1)
+	);
 </script>
 
 <div class="widget">
 	<div class="widget-header">
-		<span class="widget-title">Tokens de Chat</span>
+		<span class="widget-title">Tokens & Custo</span>
 		<div class="period-group">
 			{#each ([7, 30, 90] as const) as p (p)}
 				<button
@@ -61,31 +81,57 @@
 		</div>
 	</div>
 
+	<!-- Summary row -->
 	<div class="summary-row">
 		<div class="metric">
 			<div class="metric-value">{fmtTokens(stats.total_tokens)}</div>
 			<div class="metric-label">tokens totais</div>
 		</div>
 		<div class="metric">
-			<div class="metric-value">{fmtTokens(stats.avg_tokens_per_interview)}</div>
-			<div class="metric-label">média / entrevista</div>
+			<div class="metric-value cost">{fmtCost(totalPipelineCost)}</div>
+			<div class="metric-label">custo pipeline*</div>
 		</div>
 	</div>
 
-	<!-- Sparkline -->
+	<!-- Chat vs Pipeline split -->
+	{#if stats.total_tokens > 0}
+		<div class="split-bar-wrap">
+			<div class="split-bar">
+				{#if stats.chat_tokens > 0}
+					<div
+						class="split-segment chat"
+						style="width: {Math.round((stats.chat_tokens / stats.total_tokens) * 100)}%"
+						title="Chat: {fmtTokens(stats.chat_tokens)}"
+					></div>
+				{/if}
+				{#if stats.pipeline_tokens > 0}
+					<div
+						class="split-segment pipeline"
+						style="width: {Math.round((stats.pipeline_tokens / stats.total_tokens) * 100)}%"
+						title="Pipeline: {fmtTokens(stats.pipeline_tokens)}"
+					></div>
+				{/if}
+			</div>
+			<div class="split-legend">
+				<span class="legend-dot chat"></span><span class="legend-label">Chat {fmtTokens(stats.chat_tokens)}</span>
+				<span class="legend-dot pipeline"></span><span class="legend-label">Pipeline {fmtTokens(stats.pipeline_tokens)}</span>
+			</div>
+		</div>
+	{/if}
+
+	<!-- Sparkline (chat daily) -->
 	{#if stats.daily_trend.length >= 2}
 		<div class="sparkline-wrap">
 			<svg viewBox="0 0 {W} {H}" width={W} height={H} class="sparkline">
-				<!-- Area fill -->
 				{#if sparkPath()}
 					<defs>
-						<linearGradient id="spark-fill" x1="0" x2="0" y1="0" y2="1">
-							<stop offset="0%" stop-color="#818cf8" stop-opacity="0.25" />
+						<linearGradient id="spark-fill-tcw" x1="0" x2="0" y1="0" y2="1">
+							<stop offset="0%" stop-color="#818cf8" stop-opacity="0.2" />
 							<stop offset="100%" stop-color="#818cf8" stop-opacity="0" />
 						</linearGradient>
 					</defs>
-					{@const areaPath = sparkPath() + ` L${(W - PAD).toFixed(1)},${H - PAD} L${PAD},${H - PAD} Z`}
-					<path d={areaPath} fill="url(#spark-fill)" />
+					{@const area = sparkPath() + ` L${(W - PAD).toFixed(1)},${H - PAD} L${PAD},${H - PAD} Z`}
+					<path d={area} fill="url(#spark-fill-tcw)" />
 					<path d={sparkPath()} fill="none" stroke="#818cf8" stroke-width="1.5" stroke-linejoin="round" />
 				{/if}
 			</svg>
@@ -96,29 +142,42 @@
 		</div>
 	{/if}
 
-	<!-- Top consumers -->
-	{#if stats.top_interviews.length > 0}
-		<div class="top-section">
-			<div class="top-title">Top entrevistas</div>
-			{#each stats.top_interviews as iv (iv.interview_id)}
-				<div class="top-row">
-					<div class="top-info">
-						<a class="top-link" href="/admin/cockpit/{iv.interview_id}">
-							{iv.title ?? iv.interview_id.slice(0, 8)}
-						</a>
-						<span class="top-email">{iv.user_email}</span>
+	<!-- Per-agent pipeline breakdown -->
+	{#if stats.pipeline_by_agent.length > 0}
+		<div class="section">
+			<div class="section-title">Pipeline por agente</div>
+			{#each stats.pipeline_by_agent as row (row.agent_key)}
+				{@const total = row.input_tokens + row.output_tokens}
+				<div class="agent-row">
+					<div class="agent-info">
+						<span class="agent-name">{AGENT_LABELS[row.agent_key] ?? row.agent_key}</span>
+						<span class="agent-cost">{fmtCost(row.estimated_cost_usd)}</span>
 					</div>
-					<div class="top-bar-wrap">
-						<div
-							class="top-bar"
-							style="width: {Math.round((iv.tokens / maxTrend) * 100)}%"
-						></div>
-						<span class="top-tokens">{fmtTokens(iv.tokens)}</span>
+					<div class="agent-bar-wrap">
+						<div class="agent-bar" style="width: {Math.round((total / maxAgentTokens) * 100)}%"></div>
+						<span class="agent-tokens">{fmtTokens(total)}</span>
 					</div>
 				</div>
 			{/each}
 		</div>
 	{/if}
+
+	<!-- Top chat consumers -->
+	{#if stats.top_interviews.length > 0}
+		<div class="section">
+			<div class="section-title">Top entrevistas (chat)</div>
+			{#each stats.top_interviews as iv (iv.interview_id)}
+				<div class="top-row">
+					<a class="top-link" href="/admin/cockpit/{iv.interview_id}">
+						{iv.title ?? iv.interview_id.slice(0, 8)}
+					</a>
+					<span class="top-tokens">{fmtTokens(iv.tokens)}</span>
+				</div>
+			{/each}
+		</div>
+	{/if}
+
+	<div class="disclaimer">* estimativa baseada em pricing Vertex AI (pode divergir)</div>
 </div>
 
 <style>
@@ -129,7 +188,7 @@
 		padding: 1rem 1.125rem;
 		display: flex;
 		flex-direction: column;
-		gap: 0.875rem;
+		gap: 0.75rem;
 	}
 
 	.widget-header {
@@ -144,10 +203,7 @@
 		color: #f3f4f6;
 	}
 
-	.period-group {
-		display: flex;
-		gap: 0.2rem;
-	}
+	.period-group { display: flex; gap: 0.2rem; }
 
 	.period-btn {
 		padding: 0.2rem 0.55rem;
@@ -166,15 +222,9 @@
 		color: #818cf8;
 	}
 
-	.period-btn:disabled {
-		opacity: 0.5;
-		cursor: default;
-	}
+	.period-btn:disabled { opacity: 0.5; cursor: default; }
 
-	.summary-row {
-		display: flex;
-		gap: 1.5rem;
-	}
+	.summary-row { display: flex; gap: 1.5rem; }
 
 	.metric-value {
 		font-size: 1.375rem;
@@ -183,99 +233,108 @@
 		line-height: 1;
 	}
 
-	.metric-label {
-		font-size: 0.7rem;
-		color: #6b7280;
-		margin-top: 0.2rem;
-	}
+	.metric-value.cost { color: #34d399; }
 
-	.sparkline-wrap {
+	.metric-label { font-size: 0.7rem; color: #6b7280; margin-top: 0.2rem; }
+
+	/* Split bar */
+	.split-bar-wrap { display: flex; flex-direction: column; gap: 0.3rem; }
+
+	.split-bar {
+		height: 6px;
+		border-radius: 3px;
+		background: rgba(255,255,255,0.06);
 		display: flex;
-		flex-direction: column;
-		gap: 0.125rem;
+		overflow: hidden;
 	}
 
-	.sparkline {
-		display: block;
-	}
+	.split-segment { height: 100%; transition: width 0.3s; }
+	.split-segment.chat { background: #818cf8; }
+	.split-segment.pipeline { background: #34d399; }
 
-	.sparkline-labels {
+	.split-legend {
 		display: flex;
-		justify-content: space-between;
+		gap: 0.75rem;
+		align-items: center;
 	}
 
-	.spark-label {
-		font-size: 0.65rem;
-		color: #6b7280;
+	.legend-dot {
+		width: 8px;
+		height: 8px;
+		border-radius: 50%;
+		flex-shrink: 0;
 	}
+	.legend-dot.chat { background: #818cf8; }
+	.legend-dot.pipeline { background: #34d399; }
 
-	.top-section {
-		display: flex;
-		flex-direction: column;
-		gap: 0.4rem;
-	}
+	.legend-label { font-size: 0.68rem; color: #9ca3af; }
 
-	.top-title {
+	/* Sparkline */
+	.sparkline-wrap { display: flex; flex-direction: column; gap: 0.125rem; }
+	.sparkline { display: block; }
+	.sparkline-labels { display: flex; justify-content: space-between; }
+	.spark-label { font-size: 0.65rem; color: #6b7280; }
+
+	/* Sections */
+	.section { display: flex; flex-direction: column; gap: 0.35rem; }
+
+	.section-title {
 		font-size: 0.68rem;
 		font-weight: 600;
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
 		color: #6b7280;
-		margin-bottom: 0.15rem;
 	}
 
-	.top-row {
-		display: flex;
-		flex-direction: column;
-		gap: 0.2rem;
-	}
+	/* Agent rows */
+	.agent-row { display: flex; flex-direction: column; gap: 0.15rem; }
 
-	.top-info {
+	.agent-info {
 		display: flex;
 		justify-content: space-between;
 		align-items: baseline;
+	}
+
+	.agent-name { font-size: 0.72rem; color: #d1d5db; }
+	.agent-cost { font-size: 0.68rem; color: #34d399; }
+
+	.agent-bar-wrap { display: flex; align-items: center; gap: 0.4rem; }
+
+	.agent-bar {
+		height: 4px;
+		background: rgba(52, 211, 153, 0.45);
+		border-radius: 2px;
+		min-width: 2px;
+		transition: width 0.3s;
+	}
+
+	.agent-tokens { font-size: 0.65rem; color: #6b7280; white-space: nowrap; }
+
+	/* Top interviews */
+	.top-row {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
 		gap: 0.5rem;
 	}
 
 	.top-link {
-		font-size: 0.75rem;
+		font-size: 0.72rem;
 		color: #818cf8;
 		text-decoration: none;
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
-		max-width: 140px;
+		max-width: 160px;
 	}
 
 	.top-link:hover { text-decoration: underline; }
 
-	.top-email {
-		font-size: 0.68rem;
-		color: #6b7280;
-		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		max-width: 120px;
-	}
+	.top-tokens { font-size: 0.68rem; color: #6b7280; white-space: nowrap; }
 
-	.top-bar-wrap {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-	}
-
-	.top-bar {
-		height: 4px;
-		background: rgba(99, 102, 241, 0.5);
-		border-radius: 2px;
-		min-width: 2px;
-		flex-grow: 0;
-		transition: width 0.3s;
-	}
-
-	.top-tokens {
-		font-size: 0.68rem;
-		color: #9ca3af;
-		white-space: nowrap;
+	.disclaimer {
+		font-size: 0.62rem;
+		color: #4b5563;
+		font-style: italic;
 	}
 </style>

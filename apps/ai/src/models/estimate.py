@@ -306,6 +306,9 @@ class AgentStep(BaseModel):
     duration_s: float | None = None
     output_preview: str | None = None
     error: str | None = None
+    llm_model: str | None = None
+    input_tokens: int | None = None
+    output_tokens: int | None = None
 
 
 # ---------------------------------------------------------------------------
