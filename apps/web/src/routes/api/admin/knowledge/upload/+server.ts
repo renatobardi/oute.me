@@ -16,10 +16,16 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	}
 
 	// Extract text from document via FastAPI
-	const extracted = await postFile('/chat/process-document', file, file.name);
+	let extracted: { extracted_text: string; status: string };
+	try {
+		extracted = await postFile('/chat/process-document', file, file.name, 90_000);
+	} catch (err) {
+		const msg = err instanceof Error ? err.message : 'Unknown error';
+		return jsonError(502, `Falha ao processar documento: ${msg}`);
+	}
 
 	if (extracted.status !== 'completed') {
-		return jsonError(422, 'Failed to extract text from document');
+		return jsonError(422, 'Não foi possível extrair texto do documento. Verifique se o arquivo está legível.');
 	}
 
 	const entry = await createKnowledgeEntry({

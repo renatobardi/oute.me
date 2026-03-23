@@ -28,6 +28,7 @@
 
 	let saving = $state(false);
 	let deleting = $state(false);
+	let saveError = $state('');
 
 	const filtered = $derived(
 		entries.filter((e) => {
@@ -52,6 +53,7 @@
 		fContent = '';
 		fUrl = '';
 		urlStatus = 'idle';
+		saveError = '';
 		if (fileInput) fileInput.value = '';
 	}
 
@@ -62,6 +64,7 @@
 		fContent = entry.content ?? '';
 		fUrl = entry.original_url ?? '';
 		urlStatus = 'idle';
+		saveError = '';
 	}
 
 	function onTypeChange() {
@@ -106,6 +109,7 @@
 	async function save() {
 		if (!fTitle.trim()) return;
 		saving = true;
+		saveError = '';
 		try {
 			const headers = await getHeaders();
 
@@ -113,7 +117,10 @@
 				// CREATE
 				if (fType === 'document') {
 					const file = fileInput?.files?.[0];
-					if (!file) return;
+					if (!file) {
+						saveError = 'Selecione um arquivo antes de salvar.';
+						return;
+					}
 					const formData = new FormData();
 					formData.append('file', file);
 					formData.append('title', fTitle);
@@ -126,6 +133,9 @@
 						const entry: AdminKnowledge = await res.json();
 						entries = [entry, ...entries];
 						mode = entry;
+					} else {
+						const body = await res.json().catch(() => ({}));
+						saveError = body?.error ?? `Erro ao enviar documento (${res.status})`;
 					}
 				} else {
 					const content = fType === 'url' ? fUrl : fContent;
@@ -143,6 +153,9 @@
 						const entry: AdminKnowledge = await res.json();
 						entries = [entry, ...entries];
 						mode = entry;
+					} else {
+						const body = await res.json().catch(() => ({}));
+						saveError = body?.error ?? `Erro ao salvar (${res.status})`;
 					}
 				}
 			} else {
@@ -162,8 +175,13 @@
 					const updated: AdminKnowledge = await res.json();
 					entries = entries.map((e) => (e.id === updated.id ? updated : e));
 					mode = updated;
+				} else {
+					const body = await res.json().catch(() => ({}));
+					saveError = body?.error ?? `Erro ao atualizar (${res.status})`;
 				}
 			}
+		} catch (err) {
+			saveError = err instanceof Error ? err.message : 'Erro inesperado ao salvar.';
 		} finally {
 			saving = false;
 		}
@@ -401,6 +419,10 @@
 
 						<button class="btn-cancel" onclick={() => (mode = null)}>Cancelar</button>
 					</div>
+
+					{#if saveError}
+						<div class="save-error">{saveError}</div>
+					{/if}
 
 					<!-- Content preview (edit mode only) -->
 					{#if isEditing && (mode as AdminKnowledge).content}
@@ -870,6 +892,17 @@
 		overflow-y: auto;
 		margin: 0;
 		font-family: inherit;
+	}
+
+	/* Save error */
+	.save-error {
+		padding: 0.6rem 0.8rem;
+		border-radius: 6px;
+		background: color-mix(in srgb, var(--color-error, #ef4444) 12%, transparent);
+		border: 1px solid color-mix(in srgb, var(--color-error, #ef4444) 30%, transparent);
+		color: var(--color-error, #ef4444);
+		font-size: 0.8125rem;
+		line-height: 1.4;
 	}
 
 	/* ── Badges ── */
