@@ -94,7 +94,7 @@ class _TokenTrackerLogger(CustomLogger):
         _tls.token_store = store
 
     # LiteLLM also calls async variant — provide a no-op to avoid AttributeError
-    async def async_log_success_event(self, *_: Any, **__: Any) -> None:  # noqa: D401
+    async def async_log_success_event(self, *_: Any, **__: Any) -> None:
         pass
 
 
