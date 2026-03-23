@@ -1,11 +1,13 @@
 import type { RequestHandler } from './$types';
 import { error } from '@sveltejs/kit';
+import { validateUuid } from '$lib/server/api-utils';
 import sql from '$lib/server/db';
 import { downloadFile } from '$lib/server/storage';
 
 export const GET: RequestHandler = async ({ locals, params }) => {
 	if (!locals.user) throw error(401, 'Unauthorized');
 	if (!locals.dbUser?.is_admin) throw error(403, 'Forbidden');
+	validateUuid(params.id);
 
 	const rows = await sql<{ filename: string; mime_type: string; storage_path: string }[]>`
 		SELECT filename, mime_type, storage_path

@@ -30,8 +30,8 @@ export async function saveMaturitySnapshot(
 			VALUES (${interviewId}, ${turnNumber}, ${maturity}, ${sql.json(domains)})
 			ON CONFLICT DO NOTHING
 		`;
-	} catch {
-		// Never let snapshot saving break the request
+	} catch (err) {
+		console.warn('[maturity-snapshot] Failed to save:', interviewId, err);
 	}
 }
 

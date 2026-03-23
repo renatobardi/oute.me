@@ -13,10 +13,10 @@
 				<div class="domain-bar-wrap">
 					<div
 						class="domain-bar-fill"
-						style="width:{d.total ? Math.round((d.answered / d.total) * 100) : 0}%"
+						style="width:{d.total ? Math.round(((d.answered ?? 0) / d.total) * 100) : 0}%"
 					></div>
 				</div>
-				<span class="domain-count muted">{d.answered}/{d.total}</span>
+				<span class="domain-count muted">{d.answered ?? 0}/{d.total}</span>
 				{#if d.vital_answered}
 					<span class="vital-ok">✓</span>
 				{:else}
