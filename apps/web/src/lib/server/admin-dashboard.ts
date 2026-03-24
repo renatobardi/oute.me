@@ -62,6 +62,28 @@ export interface AdminAlert {
 
 export type PeriodDays = 7 | 30 | 90;
 
+export function emptyMetrics(): DashboardMetrics {
+	return {
+		users: { total: 0, active: 0, signups_last_7d: 0 },
+		interviews: { total: 0, active: 0, mature: 0, avg_maturity: 0, avg_messages: 0 },
+		estimates: { total: 0, done: 0, failed: 0, pending: 0, avg_duration_s: null, failure_rate: 0 },
+		projects: { total: 0, active: 0 },
+	};
+}
+
+export function emptyTokenStats(period: PeriodDays): TokenStats {
+	return {
+		period,
+		chat_tokens: 0,
+		pipeline_tokens: 0,
+		total_tokens: 0,
+		avg_tokens_per_interview: 0,
+		pipeline_by_agent: [],
+		daily_trend: [],
+		top_interviews: [],
+	};
+}
+
 export async function getAdminDashboardMetrics(): Promise<DashboardMetrics> {
 	const [userRows, interviewRows, estimateRows, projectRows] = await Promise.all([
 		sql<{ total: string; active: string; signups_7d: string }[]>`
@@ -364,15 +386,17 @@ export async function getTokenStats(period: PeriodDays = 30): Promise<TokenStats
 			SELECT
 				step->>'agent_key'    AS agent_key,
 				step->>'llm_model'    AS llm_model,
-				SUM((step->>'input_tokens')::int)::text  AS input_tokens,
-				SUM((step->>'output_tokens')::int)::text AS output_tokens
+				SUM(COALESCE(NULLIF(step->>'input_tokens','')::int, 0))::text  AS input_tokens,
+				SUM(COALESCE(NULLIF(step->>'output_tokens','')::int, 0))::text AS output_tokens
 			FROM public.estimate_runs er,
-			     LATERAL jsonb_array_elements(er.agent_steps) step
+			     LATERAL jsonb_array_elements(
+			       CASE WHEN jsonb_typeof(er.agent_steps) = 'array' THEN er.agent_steps ELSE '[]'::jsonb END
+			     ) step
 			WHERE er.created_at >= NOW() - ${interval}::interval
-			  AND step->>'input_tokens' IS NOT NULL
-			  AND step->>'llm_model'    IS NOT NULL
+			  AND step->>'agent_key' IS NOT NULL
+			  AND step->>'llm_model' IS NOT NULL
 			GROUP BY step->>'agent_key', step->>'llm_model'
-			ORDER BY SUM((step->>'input_tokens')::int + (step->>'output_tokens')::int) DESC
+			ORDER BY SUM(COALESCE(NULLIF(step->>'input_tokens','')::int, 0) + COALESCE(NULLIF(step->>'output_tokens','')::int, 0)) DESC
 		`,
 		// Daily combined token trend
 		sql<{ day: string; tokens: string }[]>`
