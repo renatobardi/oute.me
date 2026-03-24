@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { SvelteSet } from 'svelte';
 	import type { MaturitySnapshot } from '$lib/server/maturity-snapshots';
-	import { SvelteSet } from 'svelte';
 
 	let { snapshots }: { snapshots: MaturitySnapshot[] } = $props();
 

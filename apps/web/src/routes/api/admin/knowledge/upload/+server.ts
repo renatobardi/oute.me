@@ -29,14 +29,21 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		return jsonError(422, 'Não foi possível extrair texto do documento. Verifique se o arquivo está legível.');
 	}
 
-	const entry = await createKnowledgeEntry({
-		type: 'document',
-		title,
-		content: extracted.extracted_text,
-		filename: file.name,
-		mime_type: file.type,
-		created_by: locals.dbUser!.id,
-	});
+	let entry;
+	try {
+		entry = await createKnowledgeEntry({
+			type: 'document',
+			title,
+			content: extracted.extracted_text,
+			filename: file.name,
+			mime_type: file.type,
+			created_by: locals.dbUser!.id,
+		});
+	} catch (err) {
+		console.error('[admin/knowledge/upload] DB insert error:', err);
+		const msg = err instanceof Error ? err.message : 'Unknown error';
+		return jsonError(500, `Erro ao salvar documento: ${msg}`);
+	}
 
 	// Embed in vector store (best-effort)
 	try {

@@ -32,13 +32,20 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		return jsonError(400, 'type, title, and content are required');
 	}
 
-	const entry = await createKnowledgeEntry({
-		type,
-		title,
-		content,
-		original_url: original_url ?? undefined,
-		created_by: locals.dbUser!.id,
-	});
+	let entry;
+	try {
+		entry = await createKnowledgeEntry({
+			type,
+			title,
+			content,
+			original_url: original_url ?? undefined,
+			created_by: locals.dbUser!.id,
+		});
+	} catch (err) {
+		console.error('[admin/knowledge] DB insert error:', err);
+		const msg = err instanceof Error ? err.message : 'Unknown error';
+		return jsonError(500, `Erro ao salvar entrada: ${msg}`);
+	}
 
 	// Embed in vector store (best-effort)
 	try {
