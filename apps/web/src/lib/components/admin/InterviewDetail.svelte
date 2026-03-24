@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { CockpitDetail } from '$lib/server/admin-cockpit';
 	import type { AgentStep } from '$lib/types/estimate';
+	import type { InterviewMessage } from '$lib/types/interview';
 	import { scrollShadow } from '$lib/actions/scroll-shadow';
 	import { fmtDate, maturityColor } from '$lib/utils/admin';
 	import {

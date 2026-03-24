@@ -19,7 +19,6 @@ export const GET: RequestHandler = async ({ locals }) => {
 export const POST: RequestHandler = async ({ request, locals }) => {
 	if (!locals.user) throw error(401, 'Unauthorized');
 	if (!locals.dbUser?.is_admin) throw error(403, 'Forbidden');
-	const user = locals.user;
 
 	const body = await request.json();
 	const { type, title, content, original_url } = body as {
@@ -33,13 +32,20 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		return jsonError(400, 'type, title, and content are required');
 	}
 
-	const entry = await createKnowledgeEntry({
-		type,
-		title,
-		content,
-		original_url: original_url ?? undefined,
-		created_by: user.uid,
-	});
+	let entry;
+	try {
+		entry = await createKnowledgeEntry({
+			type,
+			title,
+			content,
+			original_url: original_url ?? undefined,
+			created_by: locals.dbUser!.id,
+		});
+	} catch (err) {
+		console.error('[admin/knowledge] DB insert error:', err);
+		const msg = err instanceof Error ? err.message : 'Unknown error';
+		return jsonError(500, `Erro ao salvar entrada: ${msg}`);
+	}
 
 	// Embed in vector store (best-effort)
 	try {
