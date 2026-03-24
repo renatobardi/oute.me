@@ -11,7 +11,6 @@ import pytest
 from src.models.interview import calculate_maturity
 from src.services.state_analyzer import (
     MAX_DELTA_PER_DOMAIN,
-    MAX_TOTAL_DELTA_PER_TURN,
     _merge_passes,
     analyze_and_update_state,
 )
@@ -170,9 +169,7 @@ class TestAnalyzeAndUpdateState:
     @pytest.mark.asyncio
     async def test_updates_domain_answered_count(self, mock_analyze_json: AsyncMock) -> None:
         """Incrementa answered_count no domínio baseado em answered_delta."""
-        state = make_interview_state_with_all_domains(
-            answered_counts={"scope": 2}
-        )
+        state = make_interview_state_with_all_domains(answered_counts={"scope": 2})
 
         mock_analyze_json.return_value = make_analysis_result(
             domains_update={
@@ -181,7 +178,7 @@ class TestAnalyzeAndUpdateState:
         )
 
         with patch("src.services.state_analyzer.analyze_json", mock_analyze_json):
-            result_state, maturity = await analyze_and_update_state(
+            result_state, _ = await analyze_and_update_state(
                 state,
                 user_message="Test message",
                 ai_response="Test response",
@@ -194,9 +191,7 @@ class TestAnalyzeAndUpdateState:
         self, mock_analyze_json: AsyncMock
     ) -> None:
         """answered_delta negativo é puxado para 0."""
-        state = make_interview_state_with_all_domains(
-            answered_counts={"scope": 3}
-        )
+        state = make_interview_state_with_all_domains(answered_counts={"scope": 3})
 
         mock_analyze_json.return_value = make_analysis_result(
             domains_update={
@@ -220,11 +215,10 @@ class TestAnalyzeAndUpdateState:
     ) -> None:
         """answered_delta > MAX_DELTA_PER_DOMAIN é cappado — sem disparar rejeição total.
 
-        Usar delta=3: excede MAX_DELTA_PER_DOMAIN(2) mas total_delta=3 == MAX_TOTAL_DELTA_PER_TURN(3).
+        Usar delta=3: excede MAX_DELTA_PER_DOMAIN(2) mas total_delta=3 ==
+        MAX_TOTAL_DELTA_PER_TURN(3).
         """
-        state = make_interview_state_with_all_domains(
-            answered_counts={"scope": 0}
-        )
+        state = make_interview_state_with_all_domains(answered_counts={"scope": 0})
 
         mock_analyze_json.return_value = make_analysis_result(
             domains_update={
@@ -302,9 +296,7 @@ class TestAnalyzeAndUpdateState:
         state = make_interview_state_with_all_domains()
 
         new_summary = "Updated conversation summary"
-        mock_analyze_json.return_value = make_analysis_result(
-            conversation_summary=new_summary
-        )
+        mock_analyze_json.return_value = make_analysis_result(conversation_summary=new_summary)
 
         with patch("src.services.state_analyzer.analyze_json", mock_analyze_json):
             result_state, _ = await analyze_and_update_state(
@@ -321,9 +313,7 @@ class TestAnalyzeAndUpdateState:
         state = make_interview_state_with_all_domains()
 
         new_questions = ["Question 1", "Question 2"]
-        mock_analyze_json.return_value = make_analysis_result(
-            open_questions=new_questions
-        )
+        mock_analyze_json.return_value = make_analysis_result(open_questions=new_questions)
 
         with patch("src.services.state_analyzer.analyze_json", mock_analyze_json):
             result_state, _ = await analyze_and_update_state(
@@ -339,9 +329,7 @@ class TestAnalyzeAndUpdateState:
         self, mock_analyze_json: AsyncMock
     ) -> None:
         """Se LLM falhar, retorna estado atual sem mudanças."""
-        original_state = make_interview_state_with_all_domains(
-            answered_counts={"scope": 2}
-        )
+        original_state = make_interview_state_with_all_domains(answered_counts={"scope": 2})
 
         mock_analyze_json.side_effect = Exception("LLM error")
 
@@ -359,9 +347,7 @@ class TestAnalyzeAndUpdateState:
         self, mock_analyze_json: AsyncMock
     ) -> None:
         """Se LLM retorna não-dict, estado não muda."""
-        original_state = make_interview_state_with_all_domains(
-            answered_counts={"scope": 1}
-        )
+        original_state = make_interview_state_with_all_domains(answered_counts={"scope": 1})
 
         mock_analyze_json.return_value = "invalid string response"
 
@@ -375,9 +361,7 @@ class TestAnalyzeAndUpdateState:
         assert result_state.domains["scope"].answered == 1
 
     @pytest.mark.asyncio
-    async def test_answered_never_exceeds_domain_total(
-        self, mock_analyze_json: AsyncMock
-    ) -> None:
+    async def test_answered_never_exceeds_domain_total(self, mock_analyze_json: AsyncMock) -> None:
         """answered é cappado em domain.total."""
         state = make_interview_state_with_all_domains(
             answered_counts={"scope": 4}  # total é 5
@@ -444,9 +428,7 @@ class TestAnalyzeAndUpdateState:
         assert maturity == expected_maturity
 
     @pytest.mark.asyncio
-    async def test_ignores_updates_for_missing_domains(
-        self, mock_analyze_json: AsyncMock
-    ) -> None:
+    async def test_ignores_updates_for_missing_domains(self, mock_analyze_json: AsyncMock) -> None:
         """Se domains_update menciona domínio não existente, ignora-o.
 
         Manter total_delta ≤ MAX_TOTAL_DELTA_PER_TURN(3) para evitar rejeição total.
@@ -456,7 +438,8 @@ class TestAnalyzeAndUpdateState:
         mock_analyze_json.return_value = make_analysis_result(
             domains_update={
                 "scope": {"answered_delta": 1, "vital_answered": False},
-                # nonexistent tem delta=1 (total=2 ≤ 3): será incluído no total mas ignorado na update
+                # nonexistent delta=1 (total=2 ≤ 3): contado no total,
+                # ignorado na update
                 "nonexistent": {"answered_delta": 1, "vital_answered": False},
             }
         )
@@ -475,9 +458,7 @@ class TestAnalyzeAndUpdateState:
     @pytest.mark.asyncio
     async def test_handles_string_domain_values(self, mock_analyze_json: AsyncMock) -> None:
         """Se domain value não é dict, ignora."""
-        state = make_interview_state_with_all_domains(
-            answered_counts={"scope": 0}
-        )
+        state = make_interview_state_with_all_domains(answered_counts={"scope": 0})
 
         mock_analyze_json.return_value = make_analysis_result(
             domains_update={
@@ -501,9 +482,7 @@ class TestAnalyzeAndUpdateState:
         state = make_interview_state_with_all_domains()
 
         last_questions = ["Question A", "Question B"]
-        mock_analyze_json.return_value = make_analysis_result(
-            last_questions_asked=last_questions
-        )
+        mock_analyze_json.return_value = make_analysis_result(last_questions_asked=last_questions)
 
         with patch("src.services.state_analyzer.analyze_json", mock_analyze_json):
             result_state, _ = await analyze_and_update_state(
