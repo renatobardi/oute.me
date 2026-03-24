@@ -50,7 +50,7 @@
 					<PipelineStepper
 						steps={pipeline.agent_steps as AgentStep[]}
 						activeKey={null}
-						onstepclick={() => {}}
+						onStepClick={() => {}}
 					/>
 				</div>
 			{/each}
