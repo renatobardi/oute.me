@@ -121,6 +121,7 @@ app.add_middleware(
     allow_origins=[
         "https://oute.me",
         "https://oute.pro",
+        "https://dev.oute.pro",
         "http://localhost:5173",
     ],
     allow_methods=["GET", "POST"],

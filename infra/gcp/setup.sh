@@ -276,11 +276,21 @@ phase3() {
       --region="$REGION"
   fi
 
+  # dev.oute.pro → Cloud Run dev
+  log "Creating domain mapping for dev.oute.pro..."
+  if gcloud run domain-mappings describe --domain=dev.oute.pro --region="$REGION" &>/dev/null 2>&1; then
+    warn "Domain mapping 'dev.oute.pro' already exists, skipping."
+  else
+    gcloud run domain-mappings create \
+      --service=oute-web-dev \
+      --domain=dev.oute.pro \
+      --region="$REGION"
+  fi
+
   echo ""
-  warn "DNS records needed for oute.pro (configure at external DNS provider):"
-  gcloud run domain-mappings describe --domain=oute.pro --region="$REGION" \
-    --format='value(status.resourceRecords)' 2>/dev/null || \
-    echo "  CNAME oute.pro → ghs.googlehosted.com"
+  warn "DNS records needed (configure at Hostinger):"
+  echo "  CNAME oute.pro → ghs.googlehosted.com"
+  echo "  CNAME dev      → ghs.googlehosted.com"
 
   log "Phase 3 complete."
 }
