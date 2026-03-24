@@ -150,7 +150,7 @@ export function createMockCostScenario(name: 'conservador' | 'moderado' | 'otimi
 /**
  * Create a mock Milestone
  */
-export function createMockMilestone(overrides?: any) {
+export function createMockMilestone(overrides?: Record<string, unknown>) {
 	return {
 		name: 'Phase 1: Discovery',
 		description: 'Initial requirements gathering and design',
@@ -164,7 +164,7 @@ export function createMockMilestone(overrides?: any) {
 /**
  * Create a mock EstimateResult
  */
-export function createMockEstimateResult(overrides?: any) {
+export function createMockEstimateResult(overrides?: Record<string, unknown>) {
 	return {
 		summary: 'This is a web application requiring...',
 		architecture_overview: 'Modern SPA with Node.js backend',
@@ -345,5 +345,5 @@ export function createMockRequestEvent(overrides?: Record<string, unknown>) {
 		params: {},
 		locals: {},
 		...overrides,
-	} as any;
+	} as unknown as import('@sveltejs/kit').RequestEvent;
 }

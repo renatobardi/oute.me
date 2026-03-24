@@ -13,7 +13,7 @@ import {
 	createMockMessage,
 	createDefaultInterviewState,
 } from '../../tests/fixtures';
-import type { Interview, InterviewMessage } from '$lib/types/interview';
+import type { InterviewState } from '$lib/types/interview';
 
 vi.mock('./db');
 
@@ -100,7 +100,7 @@ describe('interviews.ts', () => {
 
 		it('enforces user_id ownership', async () => {
 			const interviewId = 'int456';
-			const userId = 'user123';
+			const _userId = 'user123';
 			const wrongUserId = 'user999';
 
 			setMockResults({
@@ -130,7 +130,7 @@ describe('interviews.ts', () => {
 		it('throws when state has no domains', async () => {
 			const interviewId = 'int123';
 			const state = createDefaultInterviewState();
-			state.domains = null as any;
+			state.domains = null as unknown as InterviewState['domains'];
 
 			await expect(updateInterviewState(interviewId, state, 0.5)).rejects.toThrow(
 				'Invalid interview state'
@@ -150,7 +150,7 @@ describe('interviews.ts', () => {
 		it('throws when domain has invalid types', async () => {
 			const interviewId = 'int123';
 			const state = createDefaultInterviewState();
-			state.domains.scope.answered = 'invalid' as any;
+			state.domains.scope.answered = 'invalid' as unknown as number;
 
 			await expect(updateInterviewState(interviewId, state, 0.5)).rejects.toThrow(
 				'Invalid interview state'
@@ -160,7 +160,7 @@ describe('interviews.ts', () => {
 		it('throws when domain has invalid total (not number)', async () => {
 			const interviewId = 'int123';
 			const state = createDefaultInterviewState();
-			state.domains.scope.total = 'eight' as any;
+			state.domains.scope.total = 'eight' as unknown as number;
 
 			await expect(updateInterviewState(interviewId, state, 0.5)).rejects.toThrow(
 				'Invalid interview state'
@@ -170,7 +170,7 @@ describe('interviews.ts', () => {
 		it('throws when vital_answered is not boolean', async () => {
 			const interviewId = 'int123';
 			const state = createDefaultInterviewState();
-			state.domains.scope.vital_answered = 'yes' as any;
+			state.domains.scope.vital_answered = 'yes' as unknown as boolean;
 
 			await expect(updateInterviewState(interviewId, state, 0.5)).rejects.toThrow(
 				'Invalid interview state'
@@ -270,11 +270,11 @@ describe('interviews.ts', () => {
 			const hash = 'hash123';
 
 			// First query for filename returns empty, second for hash returns match
-			let callCount = 0;
+			const callCount = 0;
 			setMockResults({
 				'SELECT id FROM public.documents': [
 					callCount === 0 ? null : { id: 'doc1' },
-				].filter((x) => x !== null) as any,
+				].filter((x): x is { id: string } => x !== null),
 			});
 
 			// Mock to return empty for filename, then match for hash
@@ -355,7 +355,7 @@ describe('interviews.ts', () => {
 		it('validates state before persisting', async () => {
 			const interviewId = 'int123';
 			const invalidState = createDefaultInterviewState();
-			invalidState.domains = {} as any;
+			invalidState.domains = {} as unknown as InterviewState['domains'];
 
 			await expect(
 				persistChatTurn(interviewId, 'Content', 100, invalidState, 0.5)

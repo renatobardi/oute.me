@@ -110,7 +110,7 @@ describe('estimates.ts', () => {
 
 		it('enforces user_id ownership', async () => {
 			const estimateId = 'est456';
-			const correctUserId = 'user123';
+			const _correctUserId = 'user123';
 			const wrongUserId = 'user999';
 
 			setMockResults({
