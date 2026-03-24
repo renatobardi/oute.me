@@ -5,11 +5,11 @@
 	let {
 		steps,
 		activeKey,
-		onstepclick,
+		onStepClick,
 	}: {
 		steps: AgentStep[];
 		activeKey: string | null;
-		onstepclick: (agentKey: string) => void;
+		onStepClick: (agentKey: string) => void;
 	} = $props();
 </script>
 
@@ -18,7 +18,7 @@
 		<button
 			class="ck-step ck-step-{step.status}"
 			class:ck-step-active={activeKey === step.agent_key}
-			onclick={() => onstepclick(step.agent_key)}
+			onclick={() => onStepClick(step.agent_key)}
 			title={step.error ?? AGENT_LABELS[step.agent_key] ?? step.agent_key}
 		>
 			<div class="ck-step-track">

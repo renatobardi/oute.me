@@ -17,12 +17,22 @@
 	);
 	const summary = $derived(data?.consolidated_requirements ?? data?.summary ?? null);
 
-	function complexityClass(c?: string) {
+	const COMPLEXITY_CLASS: Record<string, string> = {
+		high: 'badge-high',
+		alta: 'badge-high',
+		'3': 'badge-high',
+		medium: 'badge-medium',
+		media: 'badge-medium',
+		média: 'badge-medium',
+		'2': 'badge-medium',
+		low: 'badge-low',
+		baixa: 'badge-low',
+		'1': 'badge-low',
+	};
+
+	function complexityClass(c?: string): string {
 		if (!c) return 'badge-neutral';
-		const l = c.toLowerCase();
-		if (l === 'high' || l === 'alta') return 'badge-high';
-		if (l === 'medium' || l === 'media' || l === 'média') return 'badge-medium';
-		return 'badge-low';
+		return COMPLEXITY_CLASS[c.toLowerCase()] ?? 'badge-neutral';
 	}
 
 	function reqText(r: Requirement) {
