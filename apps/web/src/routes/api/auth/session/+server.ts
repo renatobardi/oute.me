@@ -7,10 +7,17 @@ const COOKIE_NAME = '__session';
 const MAX_AGE = 60 * 60 * 24 * 5; // 5 dias
 
 export const POST: RequestHandler = async ({ request, cookies }) => {
-	const body = await request.json();
+	// Parseia o body com proteção contra JSON inválido ou body ausente
+	let body: Record<string, unknown>;
+	try {
+		body = await request.json();
+	} catch {
+		return json({ error: 'Invalid request body' }, { status: 400 });
+	}
+
 	const idToken = body?.idToken;
 
-	if (!idToken) {
+	if (!idToken || typeof idToken !== 'string') {
 		return json({ error: 'Missing idToken' }, { status: 400 });
 	}
 

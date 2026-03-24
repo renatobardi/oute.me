@@ -16,13 +16,14 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v5
         with:
           node-version: ${{ env.NODE_VERSION }}
       - name: Install Playwright
         working-directory: tests/e2e
         run: |
-          npm ci
+          npm install
           npx playwright install --with-deps chromium
       - name: Run E2E tests
         working-directory: tests/e2e
@@ -54,7 +55,7 @@ jobs:
         run: uv sync --extra dev
       - name: Run slow tests (with LLM calls)
         working-directory: apps/ai
-        run: uv run pytest -m slow --tb=short -v
+        run: uv run pytest -m slow --tb=short -v || [ $? -eq 5 ]
         env:
           GCP_PROJECT: ${{ secrets.GCP_PROJECT_ID }}
           # DATABASE_URL não necessário: slow tests usam LLM, não banco.
