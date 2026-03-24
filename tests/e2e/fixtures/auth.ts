@@ -102,9 +102,24 @@ type AuthFixtures = {
 export const test = base.extend<AuthFixtures>({
   authenticatedPage: async ({ page, context }, use) => {
     await injectSession(context, TEST_EMAIL, TEST_PASSWORD);
+
+    // Debug: verifica cookie antes do primeiro goto
+    const cookiesBefore = await context.cookies();
+    const sessionBefore = cookiesBefore.find((c) => c.name === '__session');
+    console.log(`[auth-fixture] email=${TEST_EMAIL}`);
+    console.log(`[auth-fixture] cookie before goto: present=${!!sessionBefore}, domain=${sessionBefore?.domain}, cookies_total=${cookiesBefore.length}`);
+
     await page.goto('/interviews');
     await page.waitForURL(/\/interviews/, { timeout: 15000 });
     await page.waitForLoadState('domcontentloaded');
+
+    // Debug: verifica cookie e URL após goto
+    const cookiesAfter = await context.cookies();
+    const sessionAfter = cookiesAfter.find((c) => c.name === '__session');
+    console.log(`[auth-fixture] URL after goto: ${page.url()}`);
+    console.log(`[auth-fixture] cookie after goto: present=${!!sessionAfter}, domain=${sessionAfter?.domain}, cookies_total=${cookiesAfter.length}`);
+    console.log(`[auth-fixture] page title: ${await page.title()}`);
+
     await use(page);
   },
 
