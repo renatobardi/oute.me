@@ -35,7 +35,7 @@ export function resetMockAuth() {
 
 export function getAdminAuth() {
 	return {
-		verifyIdToken: vi.fn(async (token: string) => {
+		verifyIdToken: vi.fn(async (_token: string) => {
 			if (mockConfig.idTokenError) {
 				throw mockConfig.idTokenError;
 			}
@@ -45,7 +45,7 @@ export function getAdminAuth() {
 			throw new Error('Token verification failed');
 		}),
 
-		verifySessionCookie: vi.fn(async (cookie: string, checkRevoked: boolean) => {
+		verifySessionCookie: vi.fn(async (_cookie: string, _checkRevoked: boolean) => {
 			if (mockConfig.sessionCookieError) {
 				throw mockConfig.sessionCookieError;
 			}

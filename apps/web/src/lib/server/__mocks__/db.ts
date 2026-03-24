@@ -1,5 +1,3 @@
-import { vi } from 'vitest';
-
 /**
  * Mock database module for testing
  * Provides configurable query results and transaction support
