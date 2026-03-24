@@ -56,8 +56,9 @@ jobs:
         working-directory: apps/ai
         run: uv run pytest -m slow --tb=short -v
         env:
-          GCP_PROJECT: ${{ vars.GCP_PROJECT }}
-          DATABASE_URL: ${{ secrets.DEV_DATABASE_URL }}
+          GCP_PROJECT: ${{ secrets.GCP_PROJECT_ID }}
+          # DATABASE_URL não necessário: slow tests usam LLM, não banco.
+          # conftest.py define um default para evitar erros de import.
 
   smoke-dev:
     name: Smoke Tests (Dev)
@@ -72,4 +73,4 @@ jobs:
       - name: Run smoke tests
         run: pytest tests/smoke/ -v
         env:
-          DEPLOY_URL: ${{ vars.DEV_URL || 'https://dev.oute.pro' }}
+          DEPLOY_URL: ${{ vars.DEV_URL || 'https://oute-web-dev-ujzimacvza-uc.a.run.app' }}
