@@ -11,7 +11,6 @@ import pytest
 from src.models.interview import calculate_maturity
 from src.services.state_analyzer import (
     MAX_DELTA_PER_DOMAIN,
-    MAX_TOTAL_DELTA_PER_TURN,
     _merge_passes,
     analyze_and_update_state,
 )
@@ -181,7 +180,7 @@ class TestAnalyzeAndUpdateState:
         )
 
         with patch("src.services.state_analyzer.analyze_json", mock_analyze_json):
-            result_state, maturity = await analyze_and_update_state(
+            result_state, _ = await analyze_and_update_state(
                 state,
                 user_message="Test message",
                 ai_response="Test response",
@@ -220,7 +219,8 @@ class TestAnalyzeAndUpdateState:
     ) -> None:
         """answered_delta > MAX_DELTA_PER_DOMAIN é cappado — sem disparar rejeição total.
 
-        Usar delta=3: excede MAX_DELTA_PER_DOMAIN(2) mas total_delta=3 == MAX_TOTAL_DELTA_PER_TURN(3).
+        Usar delta=3: excede MAX_DELTA_PER_DOMAIN(2) mas total_delta=3 ==
+        MAX_TOTAL_DELTA_PER_TURN(3).
         """
         state = make_interview_state_with_all_domains(
             answered_counts={"scope": 0}
@@ -456,7 +456,8 @@ class TestAnalyzeAndUpdateState:
         mock_analyze_json.return_value = make_analysis_result(
             domains_update={
                 "scope": {"answered_delta": 1, "vital_answered": False},
-                # nonexistent tem delta=1 (total=2 ≤ 3): será incluído no total mas ignorado na update
+                # nonexistent delta=1 (total=2 ≤ 3): contado no total,
+                # ignorado na update
                 "nonexistent": {"answered_delta": 1, "vital_answered": False},
             }
         )
