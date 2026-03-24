@@ -273,11 +273,14 @@ class TestImageExtraction:
         mock_response.text = "Description of the image content"
         mock_model.generate_content_async = AsyncMock(return_value=mock_response)
 
-        with patch(
-            "vertexai.generative_models.GenerativeModel",
-            return_value=mock_model,
-        ), patch(
-            "vertexai.generative_models.Part",
+        with (
+            patch(
+                "vertexai.generative_models.GenerativeModel",
+                return_value=mock_model,
+            ),
+            patch(
+                "vertexai.generative_models.Part",
+            ),
         ):
             result = await _extract_image(b"fake image bytes", "image/png")
 
@@ -293,11 +296,14 @@ class TestImageExtraction:
         mock_response.text = "x" * (MAX_EXTRACTED_LENGTH + 100)
         mock_model.generate_content_async = AsyncMock(return_value=mock_response)
 
-        with patch(
-            "vertexai.generative_models.GenerativeModel",
-            return_value=mock_model,
-        ), patch(
-            "vertexai.generative_models.Part",
+        with (
+            patch(
+                "vertexai.generative_models.GenerativeModel",
+                return_value=mock_model,
+            ),
+            patch(
+                "vertexai.generative_models.Part",
+            ),
         ):
             result = await _extract_image(b"fake image bytes", "image/png")
 
@@ -313,11 +319,14 @@ class TestImageExtraction:
         mock_response.text = None
         mock_model.generate_content_async = AsyncMock(return_value=mock_response)
 
-        with patch(
-            "vertexai.generative_models.GenerativeModel",
-            return_value=mock_model,
-        ), patch(
-            "vertexai.generative_models.Part",
+        with (
+            patch(
+                "vertexai.generative_models.GenerativeModel",
+                return_value=mock_model,
+            ),
+            patch(
+                "vertexai.generative_models.Part",
+            ),
         ):
             result = await _extract_image(b"fake image bytes", "image/png")
 
