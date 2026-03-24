@@ -1,6 +1,5 @@
 <script lang="ts">
 	import type { MaturitySnapshot } from '$lib/server/maturity-snapshots';
-	import { SvelteSet } from 'svelte';
 
 	let { snapshots }: { snapshots: MaturitySnapshot[] } = $props();
 
@@ -31,6 +30,7 @@
 
 	// All domain keys present across all snapshots
 	const domainKeys = $derived.by((): string[] => {
+		// svelte-ignore prefer-svelte-reactivity
 		const keys = new Set<string>();
 		for (const snap of snapshots) {
 			for (const k of Object.keys(snap.domains ?? {})) keys.add(k);

@@ -38,6 +38,7 @@ export async function getPipelineRows(
 	period: PipelinePeriod = 30,
 	limit = 100
 ): Promise<PipelineRow[]> {
+	const interval = `${period} days`;
 	return sql<PipelineRow[]>`
 		SELECT
 			er.id                       AS run_id,
@@ -61,7 +62,7 @@ export async function getPipelineRows(
 		JOIN   public.estimates  e  ON e.id  = er.estimate_id
 		JOIN   public.interviews i  ON i.id  = e.interview_id
 		JOIN   public.users      u  ON u.id  = i.user_id
-		WHERE  er.created_at > NOW() - (${period} || ' days')::interval
+		WHERE  er.created_at > NOW() - ${interval}::interval
 		  AND  (${status} = 'all'  OR er.status = ${status})
 		  AND  (${llmModel} IS NULL OR er.llm_model = ${llmModel})
 		ORDER  BY er.created_at DESC
@@ -70,6 +71,7 @@ export async function getPipelineRows(
 }
 
 export async function getAgentHeatmap(period: PipelinePeriod = 30): Promise<AgentHeatmapEntry[]> {
+	const interval = `${period} days`;
 	const rows = await sql<{ agent_key: string; avg_dur: string; failures: string; total: string }[]>`
 		SELECT
 			s->>'agent_key'                                                   AS agent_key,
@@ -79,7 +81,7 @@ export async function getAgentHeatmap(period: PipelinePeriod = 30): Promise<Agen
 		FROM   public.estimate_runs er,
 		       jsonb_array_elements(er.agent_steps::jsonb) s
 		WHERE  er.status = 'done'
-		  AND  er.created_at > NOW() - (${period} || ' days')::interval
+		  AND  er.created_at > NOW() - ${interval}::interval
 		GROUP  BY s->>'agent_key'
 		ORDER  BY agent_key
 	`;
@@ -98,6 +100,7 @@ export async function getAgentHeatmap(period: PipelinePeriod = 30): Promise<Agen
 }
 
 export async function getPipelineTrend(period: PipelinePeriod = 30): Promise<TrendPoint[]> {
+	const interval = `${period} days`;
 	const rows = await sql<{ day: string; avg_dur: string; count: string }[]>`
 		SELECT
 			DATE_TRUNC('day', created_at)::text  AS day,
@@ -105,7 +108,7 @@ export async function getPipelineTrend(period: PipelinePeriod = 30): Promise<Tre
 			COUNT(*)::text                       AS count
 		FROM   public.estimate_runs
 		WHERE  status = 'done'
-		  AND  created_at > NOW() - (${period} || ' days')::interval
+		  AND  created_at > NOW() - ${interval}::interval
 		GROUP  BY 1
 		ORDER  BY 1
 	`;
