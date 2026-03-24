@@ -8,8 +8,6 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from src.models.interview import DomainState, InterviewState
-
 os.environ.setdefault("DATABASE_URL", "postgresql://test:test@localhost:5432/oute_test")
 os.environ.setdefault("GCP_PROJECT", "test-project")
 os.environ.setdefault("REDIS_URL", "redis://localhost:6379")
@@ -36,7 +34,7 @@ async def mock_database_pool() -> AsyncMock:
 @pytest.fixture
 def interview_state_empty():
     """InterviewState vazio — nenhum domínio inicializado."""
-    from src.models.interview import InterviewState
+    from src.models.interview import InterviewState  # noqa: PLC0415
 
     return InterviewState()
 
@@ -44,7 +42,7 @@ def interview_state_empty():
 @pytest.fixture
 def interview_state_partial():
     """InterviewState com alguns domínios parcialmente preenchidos."""
-    from src.models.interview import InterviewState, DomainState
+    from src.models.interview import DomainState, InterviewState  # noqa: PLC0415
 
     return InterviewState(
         domains={
@@ -60,7 +58,7 @@ def interview_state_partial():
 @pytest.fixture
 def interview_state_full():
     """InterviewState com todos os domínios vitais completos."""
-    from src.models.interview import InterviewState, DomainState
+    from src.models.interview import DomainState, InterviewState  # noqa: PLC0415
 
     return InterviewState(
         domains={

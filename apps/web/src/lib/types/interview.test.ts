@@ -114,7 +114,7 @@ describe('interview types (pure functions)', () => {
 				domains: {
 					scope: { answered: 5, total: 8, vital_answered: true },
 					// timeline, budget, integrations, tech_stack missing
-				} as any,
+				} as unknown as InterviewState['domains'],
 				responses: {},
 				open_questions: [],
 				documents_processed: [],
