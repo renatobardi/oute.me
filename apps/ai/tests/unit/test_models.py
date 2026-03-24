@@ -15,7 +15,6 @@ from src.models.interview import (
     calculate_maturity,
 )
 from tests.fixtures.factories import (
-    make_domain_state,
     make_interview_state,
     make_interview_state_with_all_domains,
 )
