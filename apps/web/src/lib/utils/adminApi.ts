@@ -4,6 +4,8 @@
  * Centraliza os paths e evita strings hardcoded nos componentes.
  */
 
+import type { InterviewMessage } from '$lib/types/interview';
+
 type FetchHeaders = Record<string, string>;
 
 function authHeaders(token: string | null | undefined): FetchHeaders {
@@ -24,7 +26,7 @@ export async function loadInterviewMessages(
 	offset: number,
 	limit: number,
 	token: string | null
-): Promise<{ messages: unknown[] }> {
+): Promise<{ messages: InterviewMessage[] }> {
 	const res = await fetch(
 		`/api/admin/cockpit/interviews/${interviewId}/messages?offset=${offset}&limit=${limit}`,
 		{ headers: authHeaders(token) }
