@@ -7,7 +7,6 @@ import { postFile, postJSON } from '$lib/server/ai-client';
 export const POST: RequestHandler = async ({ request, locals }) => {
 	if (!locals.user) throw error(401, 'Unauthorized');
 	if (!locals.dbUser?.is_admin) throw error(403, 'Forbidden');
-	const user = locals.user;
 
 	const formData = await request.formData();
 	const file = formData.get('file') as File | null;
@@ -36,7 +35,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		content: extracted.extracted_text,
 		filename: file.name,
 		mime_type: file.type,
-		created_by: user.uid,
+		created_by: locals.dbUser!.id,
 	});
 
 	// Embed in vector store (best-effort)
