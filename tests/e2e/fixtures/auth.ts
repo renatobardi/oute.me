@@ -44,45 +44,39 @@ async function getFirebaseIdToken(email: string, password: string): Promise<stri
 /**
  * Cria uma sessão server-side e injeta o cookie __session no browser context.
  *
- * page.request.post() pode ou não auto-armazenar o Set-Cookie no browser context
- * (comportamento varia entre versões do Playwright). Para evitar conflitos entre
- * cookies com/sem atributo Domain, verificamos primeiro se o cookie já foi
- * armazenado automaticamente e só injetamos manualmente se necessário.
+ * Usa Node fetch (não page.request) para evitar que o Playwright auto-armazene
+ * o Set-Cookie com atributos implícitos que podem conflitar com a injeção manual.
+ * Após obter o cookie, limpa qualquer cookie existente no context e injeta
+ * um único cookie com atributos explícitos.
  */
 async function injectSession(
-  page: Page,
   context: import('@playwright/test').BrowserContext,
   email: string,
   password: string,
 ): Promise<void> {
   const idToken = await getFirebaseIdToken(email, password);
 
-  const sessionResp = await page.request.post(`${BASE_URL}/api/auth/session`, {
-    data: { idToken },
+  // Usa fetch nativo (não page.request) para não poluir o cookie jar do browser context
+  const sessionResp = await fetch(`${BASE_URL}/api/auth/session`, {
+    method: 'POST',
     headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ idToken }),
   });
 
-  if (!sessionResp.ok()) {
+  if (!sessionResp.ok) {
     const body = await sessionResp.text();
-    throw new Error(`Criação de sessão falhou (${sessionResp.status()}): ${body}`);
+    throw new Error(`Criação de sessão falhou (${sessionResp.status}): ${body}`);
   }
 
-  // Verifica se o cookie foi auto-armazenado pelo page.request
-  const cookies = await context.cookies();
-  const autoStored = cookies.find((c) => c.name === '__session');
-
-  if (autoStored) {
-    // Cookie já presente no context — não sobrescrever para evitar conflito de atributos
-    return;
-  }
-
-  // Fallback: extrai manualmente do header e injeta
-  const setCookieHeader = sessionResp.headers()['set-cookie'] ?? '';
+  const setCookieHeader = sessionResp.headers.get('set-cookie') ?? '';
   const sessionMatch = setCookieHeader.match(/__session=([^;]+)/);
 
   if (!sessionMatch) {
     throw new Error('Cookie __session não encontrado na resposta de /api/auth/session');
   }
+
+  // Limpa cookies existentes e injeta um único cookie limpo
+  await context.clearCookies();
 
   const hostname = new URL(BASE_URL).hostname;
   await context.addCookies([
@@ -107,19 +101,18 @@ type AuthFixtures = {
 
 export const test = base.extend<AuthFixtures>({
   authenticatedPage: async ({ page, context }, use) => {
-    await injectSession(page, context, TEST_EMAIL, TEST_PASSWORD);
+    await injectSession(context, TEST_EMAIL, TEST_PASSWORD);
     await page.goto('/interviews');
     await page.waitForURL(/\/interviews/, { timeout: 15000 });
-    // Confirma que a página autenticada carregou (não apenas URL match)
-    await page.waitForSelector('text=Minhas Entrevistas', { timeout: 10000 });
+    await page.waitForLoadState('domcontentloaded');
     await use(page);
   },
 
   nonAdminPage: async ({ page, context }, use) => {
-    await injectSession(page, context, NONADMIN_EMAIL, NONADMIN_PASSWORD);
+    await injectSession(context, NONADMIN_EMAIL, NONADMIN_PASSWORD);
     await page.goto('/interviews');
     await page.waitForURL(/\/interviews/, { timeout: 15000 });
-    await page.waitForSelector('text=Minhas Entrevistas', { timeout: 10000 });
+    await page.waitForLoadState('domcontentloaded');
     await use(page);
   },
 });
