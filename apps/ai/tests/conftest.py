@@ -4,9 +4,11 @@ qualquer módulo que instancie src.config.Settings.
 """
 
 import os
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
+
+from src.models.interview import DomainState, InterviewState
 
 os.environ.setdefault("DATABASE_URL", "postgresql://test:test@localhost:5432/oute_test")
 os.environ.setdefault("GCP_PROJECT", "test-project")

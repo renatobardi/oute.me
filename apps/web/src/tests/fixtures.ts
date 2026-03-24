@@ -345,5 +345,5 @@ export function createMockRequestEvent(overrides?: Record<string, unknown>) {
 		params: {},
 		locals: {},
 		...overrides,
-	};
+	} as any;
 }
