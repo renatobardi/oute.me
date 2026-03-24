@@ -225,7 +225,7 @@ describe('estimates.ts', () => {
 				'UPDATE public.estimates': [],
 			});
 
-			await updateEstimateStatus(estimateId, 'done', undefined as any, agentSteps);
+			await updateEstimateStatus(estimateId, 'done', undefined, agentSteps);
 
 			expect(true).toBe(true);
 		});
