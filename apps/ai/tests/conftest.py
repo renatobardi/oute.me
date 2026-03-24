@@ -10,6 +10,8 @@ import pytest
 
 os.environ.setdefault("DATABASE_URL", "postgresql://test:test@localhost:5432/oute_test")
 os.environ.setdefault("GCP_PROJECT", "test-project")
+os.environ.setdefault("REDIS_URL", "redis://localhost:6379")
+os.environ.setdefault("ENVIRONMENT", "test")
 
 
 @pytest.fixture

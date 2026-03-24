@@ -1,71 +1,60 @@
-import { vi } from 'vitest';
-
 /**
- * Mock database module for testing
- * Provides configurable query results and transaction support
+ * Mock do módulo db para testes.
+ *
+ * Uso nos testes:
+ *   vi.mock('$lib/server/db', () => import('./__mocks__/db'));
+ *
+ * setMockResults({ 'trecho da query': [resultado] })
+ * A tagged template compara strings raw do template com as chaves para devolver o resultado.
  */
 
-let mockResults: Record<string, unknown[]> = {};
-let mockExecutionOrder: Array<{ query: string; result: unknown }> = [];
+let _mockResults: Record<string, unknown[]> = {};
+const _log: Array<{ query: string; result: unknown[] }> = [];
 
-export function setMockResults(results: Record<string, unknown[]>) {
-	mockResults = results;
+/** Configura resultados por trecho de query. Cada chave é comparada com a query raw. */
+export function setMockResults(results: Record<string, unknown[]>): void {
+	_mockResults = results;
 }
 
-export function setMockQueryExecution(query: string, result: unknown) {
-	mockExecutionOrder.push({ query, result });
+/** Retorna o histórico de queries executadas com seus resultados. */
+export function getMockExecutionOrder(): ReadonlyArray<{ query: string; result: unknown[] }> {
+	return [..._log];
 }
 
-export function getMockExecutionOrder() {
-	return mockExecutionOrder;
+/** Limpa resultados configurados e histórico de execução. */
+export function resetMocks(): void {
+	_mockResults = {};
+	_log.length = 0;
 }
 
-export function resetMocks() {
-	mockResults = {};
-	mockExecutionOrder = [];
-}
+const sql = function (
+	strings: TemplateStringsArray,
+	..._values: unknown[]
+): Promise<unknown[]> {
+	const query = strings.raw.join('?');
+	let result: unknown[] = [];
 
-/**
- * Tagged template function that simulates postgres sql tagged template
- * Returns configurable results and supports .json() method calls
- */
-export const sql = Object.assign(
-	function sql(strings: TemplateStringsArray, ...values: unknown[]): unknown[] {
-		const query = strings.join('?');
-
-		// If specific results are set for this query, return them
-		for (const [key, result] of Object.entries(mockResults)) {
-			if (query.includes(key)) {
-				return result;
-			}
+	for (const [key, value] of Object.entries(_mockResults)) {
+		if (query.includes(key)) {
+			result = value;
+			break;
 		}
-
-		// Default: return empty array
-		return [];
-	},
-	{
-		/**
-		 * Simulate the .json() method for JSONB fields
-		 */
-		json(value: unknown): string {
-			return JSON.stringify(value);
-		},
-
-		/**
-		 * Support sql\`NULL\` syntax
-		 */
-		get NULL() {
-			return null;
-		},
 	}
-);
 
-/**
- * Mock transaction handler - calls the callback with the same mock sql object
- */
-export async function withTransaction<T>(
-	fn: (tx: typeof sql) => Promise<T>
-): Promise<T> {
+	_log.push({ query, result });
+	return Promise.resolve(result);
+} as {
+	(strings: TemplateStringsArray, ...values: unknown[]): Promise<unknown[]>;
+	json(value: unknown): unknown;
+	begin<T>(fn: (tx: typeof sql) => Promise<T>): Promise<T>;
+};
+
+sql.json = (value: unknown): unknown => value;
+
+sql.begin = async <T>(fn: (tx: typeof sql) => Promise<T>): Promise<T> => fn(sql);
+
+/** withTransaction chama fn(sql) diretamente, sem transação real. */
+export async function withTransaction<T>(fn: (tx: typeof sql) => Promise<T>): Promise<T> {
 	return fn(sql);
 }
 

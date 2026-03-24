@@ -95,7 +95,7 @@ class TestMergePasses:
         assert result["open_questions"] == ["Q1 from pass1"]
 
     def test_handles_missing_domains_in_pass(self) -> None:
-        """Se um domínio falta em uma pass, trata como 0."""
+        """Se um domínio falta em uma pass, delta padrão é 0 (conservador)."""
         pass1 = {
             "domains_update": {
                 "scope": {"answered_delta": 2, "vital_answered": False},
@@ -109,15 +109,15 @@ class TestMergePasses:
 
         result = _merge_passes(pass1, pass2)
 
-        # scope e timeline devem aparecer (union de dominios)
+        # scope e timeline devem aparecer (union de domínios)
         assert "scope" in result["domains_update"]
         assert "timeline" in result["domains_update"]
 
-        # scope só em pass1 → delta=2, vital=False
-        assert result["domains_update"]["scope"]["answered_delta"] == 2
+        # scope só em pass1 → min(2, 0) = 0 (comportamento conservador)
+        assert result["domains_update"]["scope"]["answered_delta"] == 0
 
-        # timeline só em pass2 → delta=1, vital=False
-        assert result["domains_update"]["timeline"]["answered_delta"] == 1
+        # timeline só em pass2 → min(0, 1) = 0 (comportamento conservador)
+        assert result["domains_update"]["timeline"]["answered_delta"] == 0
 
     def test_handles_empty_domains_update(self) -> None:
         """Se domains_update está vazio/ausente, não quebra."""
@@ -144,10 +144,10 @@ class TestMergePasses:
         assert "scope" in result["domains_update"]
 
     def test_handles_non_dict_domain_values(self) -> None:
-        """Se um domínio não é dict, trata como {}."""
+        """Se um domínio não é dict, trata como {} (delta=0 padrão)."""
         pass1 = {
             "domains_update": {
-                "scope": "invalid string",
+                "scope": "invalid string",  # não é dict → d1 = {}
             }
         }
         pass2 = {
@@ -159,7 +159,9 @@ class TestMergePasses:
         result = _merge_passes(pass1, pass2)
 
         merged_scope = result["domains_update"]["scope"]
-        assert merged_scope["answered_delta"] == 2
+        # min(0_from_invalid_pass1, 2_from_pass2) = 0
+        assert merged_scope["answered_delta"] == 0
+        assert merged_scope["vital_answered"] is False
 
 
 class TestAnalyzeAndUpdateState:
@@ -216,14 +218,18 @@ class TestAnalyzeAndUpdateState:
     async def test_clamps_per_domain_delta_exceeding_max(
         self, mock_analyze_json: AsyncMock
     ) -> None:
-        """answered_delta > MAX_DELTA_PER_DOMAIN é cappado."""
+        """answered_delta > MAX_DELTA_PER_DOMAIN é cappado — sem disparar rejeição total.
+
+        Usar delta=3: excede MAX_DELTA_PER_DOMAIN(2) mas total_delta=3 == MAX_TOTAL_DELTA_PER_TURN(3).
+        """
         state = make_interview_state_with_all_domains(
             answered_counts={"scope": 0}
         )
 
         mock_analyze_json.return_value = make_analysis_result(
             domains_update={
-                "scope": {"answered_delta": 10, "vital_answered": False},  # > MAX (2)
+                # delta=3: > MAX_DELTA_PER_DOMAIN(2) mas total=3 não excede MAX_TOTAL(3)
+                "scope": {"answered_delta": 3, "vital_answered": False},
             }
         )
 
@@ -441,13 +447,17 @@ class TestAnalyzeAndUpdateState:
     async def test_ignores_updates_for_missing_domains(
         self, mock_analyze_json: AsyncMock
     ) -> None:
-        """Se domains_update menciona domínio não existente, ignora."""
+        """Se domains_update menciona domínio não existente, ignora-o.
+
+        Manter total_delta ≤ MAX_TOTAL_DELTA_PER_TURN(3) para evitar rejeição total.
+        """
         state = make_interview_state_with_all_domains()
 
         mock_analyze_json.return_value = make_analysis_result(
             domains_update={
                 "scope": {"answered_delta": 1, "vital_answered": False},
-                "nonexistent": {"answered_delta": 5, "vital_answered": False},
+                # nonexistent tem delta=1 (total=2 ≤ 3): será incluído no total mas ignorado na update
+                "nonexistent": {"answered_delta": 1, "vital_answered": False},
             }
         )
 
@@ -458,8 +468,9 @@ class TestAnalyzeAndUpdateState:
                 ai_response="Test",
             )
 
-        # Apenas scope deve ser atualizado
+        # scope deve ser atualizado; nonexistent não existe em state.domains → ignorado
         assert result_state.domains["scope"].answered == 1
+        assert "nonexistent" not in result_state.domains
 
     @pytest.mark.asyncio
     async def test_handles_string_domain_values(self, mock_analyze_json: AsyncMock) -> None:

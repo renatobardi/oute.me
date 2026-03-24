@@ -7,7 +7,7 @@ Testes para document_processor.py:
 """
 
 import io
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -57,7 +57,8 @@ class TestExtractTextDispatch:
     @pytest.mark.asyncio
     async def test_routes_xlsx_to_extract_xlsx(self) -> None:
         """MIME type application/vnd.openxmlformats-officedocument.spreadsheetml.sheet → _extract_xlsx"""
-        mock_extract = AsyncMock(return_value="XLSX content")
+        # _extract_xlsx é síncrono — usar MagicMock, não AsyncMock
+        mock_extract = MagicMock(return_value="XLSX content")
 
         with patch("src.services.document_processor._extract_xlsx", mock_extract):
             result = await extract_text(
@@ -66,14 +67,14 @@ class TestExtractTextDispatch:
                 "test.xlsx",
             )
 
-        # Note: _extract_xlsx is NOT async in the real code
-        # So we patch it as a regular mock that returns awaitable
-        mock_extract.return_value = "XLSX content"
+        mock_extract.assert_called_once_with(b"fake xlsx bytes")
+        assert result == "XLSX content"
 
     @pytest.mark.asyncio
     async def test_routes_csv_to_extract_csv(self) -> None:
         """MIME type text/csv → _extract_csv"""
-        mock_extract = AsyncMock(return_value="CSV content")
+        # _extract_csv é síncrono — usar MagicMock, não AsyncMock
+        mock_extract = MagicMock(return_value="CSV content")
 
         with patch("src.services.document_processor._extract_csv", mock_extract):
             result = await extract_text(
@@ -82,12 +83,14 @@ class TestExtractTextDispatch:
                 "test.csv",
             )
 
-        # Note: _extract_csv is NOT async; it gets called directly
+        mock_extract.assert_called_once_with(b"fake csv bytes")
+        assert result == "CSV content"
 
     @pytest.mark.asyncio
     async def test_routes_pptx_to_extract_pptx(self) -> None:
         """MIME type application/vnd.openxmlformats-officedocument.presentationml.presentation → _extract_pptx"""
-        mock_extract = AsyncMock(return_value="PPTX content")
+        # _extract_pptx é síncrono — usar MagicMock, não AsyncMock
+        mock_extract = MagicMock(return_value="PPTX content")
 
         with patch("src.services.document_processor._extract_pptx", mock_extract):
             result = await extract_text(
@@ -95,6 +98,9 @@ class TestExtractTextDispatch:
                 "application/vnd.openxmlformats-officedocument.presentationml.presentation",
                 "test.pptx",
             )
+
+        mock_extract.assert_called_once_with(b"fake pptx bytes")
+        assert result == "PPTX content"
 
     @pytest.mark.asyncio
     async def test_routes_image_to_extract_image(self) -> None:
