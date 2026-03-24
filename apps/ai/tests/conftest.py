@@ -34,7 +34,7 @@ async def mock_database_pool() -> AsyncMock:
 @pytest.fixture
 def interview_state_empty():
     """InterviewState vazio — nenhum domínio inicializado."""
-    from src.models.interview import InterviewState  # noqa: PLC0415
+    from src.models.interview import InterviewState
 
     return InterviewState()
 
@@ -42,7 +42,7 @@ def interview_state_empty():
 @pytest.fixture
 def interview_state_partial():
     """InterviewState com alguns domínios parcialmente preenchidos."""
-    from src.models.interview import DomainState, InterviewState  # noqa: PLC0415
+    from src.models.interview import DomainState, InterviewState
 
     return InterviewState(
         domains={
@@ -58,7 +58,7 @@ def interview_state_partial():
 @pytest.fixture
 def interview_state_full():
     """InterviewState com todos os domínios vitais completos."""
-    from src.models.interview import DomainState, InterviewState  # noqa: PLC0415
+    from src.models.interview import DomainState, InterviewState
 
     return InterviewState(
         domains={

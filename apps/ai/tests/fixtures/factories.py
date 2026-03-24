@@ -79,14 +79,24 @@ def make_interview_state_with_all_domains(
     vital_flags = {**defaults_vital, **(vital_flags or {})}
 
     domains = {
-        "scope": DomainState(answered=answered_counts["scope"], total=5, vital_answered=vital_flags["scope"]),
-        "timeline": DomainState(answered=answered_counts["timeline"], total=3, vital_answered=vital_flags["timeline"]),
-        "budget": DomainState(answered=answered_counts["budget"], total=2, vital_answered=vital_flags["budget"]),
+        "scope": DomainState(
+            answered=answered_counts["scope"], total=5, vital_answered=vital_flags["scope"]
+        ),
+        "timeline": DomainState(
+            answered=answered_counts["timeline"], total=3, vital_answered=vital_flags["timeline"]
+        ),
+        "budget": DomainState(
+            answered=answered_counts["budget"], total=2, vital_answered=vital_flags["budget"]
+        ),
         "integrations": DomainState(
-            answered=answered_counts["integrations"], total=4, vital_answered=vital_flags["integrations"]
+            answered=answered_counts["integrations"],
+            total=4,
+            vital_answered=vital_flags["integrations"],
         ),
         "tech_stack": DomainState(
-            answered=answered_counts["tech_stack"], total=4, vital_answered=vital_flags["tech_stack"]
+            answered=answered_counts["tech_stack"],
+            total=4,
+            vital_answered=vital_flags["tech_stack"],
         ),
     }
 
