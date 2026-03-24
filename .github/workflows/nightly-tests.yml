@@ -16,6 +16,9 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+        with:
+          version: latest
       - uses: actions/setup-node@v5
         with:
           node-version: ${{ env.NODE_VERSION }}
@@ -54,7 +57,7 @@ jobs:
         run: uv sync --extra dev
       - name: Run slow tests (with LLM calls)
         working-directory: apps/ai
-        run: uv run pytest -m slow --tb=short -v
+        run: uv run pytest -m slow --tb=short -v || [ $? -eq 5 ]
         env:
           GCP_PROJECT: ${{ secrets.GCP_PROJECT_ID }}
           # DATABASE_URL não necessário: slow tests usam LLM, não banco.
