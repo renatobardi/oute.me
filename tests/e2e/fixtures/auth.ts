@@ -78,16 +78,14 @@ async function injectSession(
   // Limpa cookies existentes e injeta um único cookie limpo
   await context.clearCookies();
 
-  const hostname = new URL(BASE_URL).hostname;
   await context.addCookies([
     {
       name: '__session',
       value: sessionMatch[1],
-      domain: hostname,
-      path: '/',
+      url: BASE_URL,
       httpOnly: true,
       secure: BASE_URL.startsWith('https'),
-      sameSite: 'Strict',
+      sameSite: 'Lax',
     },
   ]);
 }
@@ -103,24 +101,22 @@ export const test = base.extend<AuthFixtures>({
   authenticatedPage: async ({ page, context }, use) => {
     await injectSession(context, TEST_EMAIL, TEST_PASSWORD);
 
-    // Debug: verifica cookie antes do primeiro goto
+    // Debug: verifica cookie antes do goto
     const cookiesBefore = await context.cookies();
     const sessionBefore = cookiesBefore.find((c) => c.name === '__session');
     console.log(`[auth-fixture] email=${TEST_EMAIL}`);
-    console.log(`[auth-fixture] cookie before goto: present=${!!sessionBefore}, domain=${sessionBefore?.domain}, cookies_total=${cookiesBefore.length}`);
+    console.log(`[auth-fixture] cookie: domain=${sessionBefore?.domain}, path=${sessionBefore?.path}, secure=${sessionBefore?.secure}, sameSite=${sessionBefore?.sameSite}`);
 
-    await page.goto('/interviews');
+    // Captura response status
+    const response = await page.goto('/interviews');
+    console.log(`[auth-fixture] response status: ${response?.status()}`);
+    console.log(`[auth-fixture] response url: ${response?.url()}`);
+
     await page.waitForURL(/\/interviews/, { timeout: 15000 });
-    await page.waitForLoadState('domcontentloaded');
+    await page.waitForLoadState('networkidle');
 
-    // Debug: verifica cookie, URL e conteúdo da página
-    const cookiesAfter = await context.cookies();
-    const sessionAfter = cookiesAfter.find((c) => c.name === '__session');
-    console.log(`[auth-fixture] URL after goto: ${page.url()}`);
-    console.log(`[auth-fixture] cookie after goto: present=${!!sessionAfter}, domain=${sessionAfter?.domain}, cookies_total=${cookiesAfter.length}`);
+    console.log(`[auth-fixture] final URL: ${page.url()}`);
     console.log(`[auth-fixture] page title: ${await page.title()}`);
-    const bodyText = await page.textContent('body').catch(() => 'ERROR_READING_BODY');
-    console.log(`[auth-fixture] body text (first 500 chars): ${bodyText?.slice(0, 500)}`);
 
     await use(page);
   },
