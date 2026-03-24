@@ -43,6 +43,11 @@ async function getFirebaseIdToken(email: string, password: string): Promise<stri
 
 /**
  * Cria uma sessão server-side e injeta o cookie __session no browser context.
+ *
+ * page.request.post() pode ou não auto-armazenar o Set-Cookie no browser context
+ * (comportamento varia entre versões do Playwright). Para evitar conflitos entre
+ * cookies com/sem atributo Domain, verificamos primeiro se o cookie já foi
+ * armazenado automaticamente e só injetamos manualmente se necessário.
  */
 async function injectSession(
   page: Page,
@@ -62,6 +67,16 @@ async function injectSession(
     throw new Error(`Criação de sessão falhou (${sessionResp.status()}): ${body}`);
   }
 
+  // Verifica se o cookie foi auto-armazenado pelo page.request
+  const cookies = await context.cookies();
+  const autoStored = cookies.find((c) => c.name === '__session');
+
+  if (autoStored) {
+    // Cookie já presente no context — não sobrescrever para evitar conflito de atributos
+    return;
+  }
+
+  // Fallback: extrai manualmente do header e injeta
   const setCookieHeader = sessionResp.headers()['set-cookie'] ?? '';
   const sessionMatch = setCookieHeader.match(/__session=([^;]+)/);
 
@@ -95,6 +110,8 @@ export const test = base.extend<AuthFixtures>({
     await injectSession(page, context, TEST_EMAIL, TEST_PASSWORD);
     await page.goto('/interviews');
     await page.waitForURL(/\/interviews/, { timeout: 15000 });
+    // Confirma que a página autenticada carregou (não apenas URL match)
+    await page.waitForSelector('text=Minhas Entrevistas', { timeout: 10000 });
     await use(page);
   },
 
@@ -102,6 +119,7 @@ export const test = base.extend<AuthFixtures>({
     await injectSession(page, context, NONADMIN_EMAIL, NONADMIN_PASSWORD);
     await page.goto('/interviews');
     await page.waitForURL(/\/interviews/, { timeout: 15000 });
+    await page.waitForSelector('text=Minhas Entrevistas', { timeout: 10000 });
     await use(page);
   },
 });
