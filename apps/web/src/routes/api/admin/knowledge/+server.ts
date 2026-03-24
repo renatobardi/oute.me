@@ -19,7 +19,6 @@ export const GET: RequestHandler = async ({ locals }) => {
 export const POST: RequestHandler = async ({ request, locals }) => {
 	if (!locals.user) throw error(401, 'Unauthorized');
 	if (!locals.dbUser?.is_admin) throw error(403, 'Forbidden');
-	const user = locals.user;
 
 	const body = await request.json();
 	const { type, title, content, original_url } = body as {
@@ -38,7 +37,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		title,
 		content,
 		original_url: original_url ?? undefined,
-		created_by: user.uid,
+		created_by: locals.dbUser!.id,
 	});
 
 	// Embed in vector store (best-effort)

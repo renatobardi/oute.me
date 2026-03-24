@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { SvelteSet } from 'svelte';
 	import type { MaturitySnapshot } from '$lib/server/maturity-snapshots';
 	import { SvelteSet } from 'svelte';
 
@@ -31,8 +32,7 @@
 
 	// All domain keys present across all snapshots
 	const domainKeys = $derived.by((): string[] => {
-		// svelte-ignore prefer-svelte-reactivity
-		const keys = new Set<string>();
+		const keys = new SvelteSet<string>();
 		for (const snap of snapshots) {
 			for (const k of Object.keys(snap.domains ?? {})) keys.add(k);
 		}
@@ -69,7 +69,7 @@
 	interface Marker { x: number; y: number; label: string; color: string }
 	const markers = $derived.by((): Marker[] => {
 		const result: Marker[] = [];
-		const vitalReached = new Set<string>();
+		const vitalReached = new SvelteSet<string>();
 		snapshots.forEach((snap, i) => {
 			for (const [key, dom] of Object.entries(snap.domains ?? {})) {
 				if (dom.vital_answered && !vitalReached.has(key)) {

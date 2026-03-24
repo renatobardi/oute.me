@@ -11,16 +11,21 @@ export const load: PageServerLoad = async ({ locals }) => {
 	if (!locals.user) throw redirect(302, '/login');
 	if (!locals.dbUser?.is_admin) throw redirect(302, '/interviews');
 
-	const [events, eventTypes, actors] = await Promise.all([
-		getAuditEvents(null, null, null, 30),
-		getDistinctEventTypes(),
-		getDistinctActors(),
-	]);
+	try {
+		const [events, eventTypes, actors] = await Promise.all([
+			getAuditEvents(null, null, null, 30),
+			getDistinctEventTypes(),
+			getDistinctActors(),
+		]);
 
-	return {
-		sessions: groupIntoSessions(events),
-		total: events.length,
-		eventTypes,
-		actors,
-	};
+		return {
+			sessions: groupIntoSessions(events),
+			total: events.length,
+			eventTypes,
+			actors,
+		};
+	} catch (err) {
+		console.error('[admin/audit] load error:', err);
+		return { sessions: [], total: 0, eventTypes: [], actors: [] };
+	}
 };

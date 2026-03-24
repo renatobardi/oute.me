@@ -54,7 +54,7 @@ export async function getPipelineRows(
 			u.email                     AS user_email,
 			(
 				SELECT s->>'agent_key'
-				FROM   jsonb_array_elements(er.agent_steps::jsonb) s
+				FROM   jsonb_array_elements(COALESCE(er.agent_steps, '[]'::jsonb)) s
 				WHERE  s->>'status' = 'running'
 				LIMIT  1
 			)                           AS current_agent
@@ -75,11 +75,11 @@ export async function getAgentHeatmap(period: PipelinePeriod = 30): Promise<Agen
 	const rows = await sql<{ agent_key: string; avg_dur: string; failures: string; total: string }[]>`
 		SELECT
 			s->>'agent_key'                                                   AS agent_key,
-			AVG((s->>'duration_s')::float)::text                              AS avg_dur,
+			AVG(NULLIF(s->>'duration_s', '')::float)::text                     AS avg_dur,
 			COUNT(*) FILTER (WHERE s->>'status' = 'failed')::text             AS failures,
 			COUNT(*)::text                                                     AS total
 		FROM   public.estimate_runs er,
-		       jsonb_array_elements(er.agent_steps::jsonb) s
+		       jsonb_array_elements(COALESCE(er.agent_steps, '[]'::jsonb)) s
 		WHERE  er.status = 'done'
 		  AND  er.created_at > NOW() - ${interval}::interval
 		GROUP  BY s->>'agent_key'
