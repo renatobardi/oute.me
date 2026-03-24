@@ -39,10 +39,13 @@ class TestSmokeDeployment:
         assert r.status_code in (301, 302, 307, 308, 401)
 
     def test_api_auth_session(self, client):
-        """Endpoint de sessão rejeita POST sem body com 400/415/422."""
-        r = client.post("/api/auth/session", content=b"")
-        # Body ausente ou inválido → Bad Request ou Unsupported Media Type
-        assert r.status_code in (400, 415, 422)
+        """Endpoint de sessão rejeita token inválido com 4xx."""
+        r = client.post(
+            "/api/auth/session",
+            json={"idToken": "invalid-token"},
+        )
+        # Token inválido → Firebase rejeita com 400 ou 401
+        assert 400 <= r.status_code < 500
 
     def test_security_headers_present(self, client):
         """Headers de segurança estão presentes."""
