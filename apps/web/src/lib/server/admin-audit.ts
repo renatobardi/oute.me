@@ -28,6 +28,7 @@ export async function getAuditEvents(
 	limit = 100,
 	offset = 0
 ): Promise<AuditEvent[]> {
+	const interval = `${period} days`;
 	return sql<AuditEvent[]>`
 		SELECT
 			e.id::text,
@@ -40,7 +41,7 @@ export async function getAuditEvents(
 			e.created_at
 		FROM   audit.event_log e
 		LEFT JOIN public.users u ON u.id = e.actor_id
-		WHERE  e.created_at > NOW() - (${period} || ' days')::interval
+		WHERE  e.created_at > NOW() - ${interval}::interval
 		  AND  (${eventType} IS NULL OR e.event_type = ${eventType})
 		  AND  (${actorId}   IS NULL OR e.actor_id::text = ${actorId})
 		  AND  (${resourceType} IS NULL OR e.resource_type = ${resourceType})
@@ -56,10 +57,11 @@ export async function countAuditEvents(
 	resourceType: string | null,
 	period: AuditPeriod = 30
 ): Promise<number> {
+	const interval = `${period} days`;
 	const [row] = await sql<{ count: string }[]>`
 		SELECT COUNT(*)::text AS count
 		FROM   audit.event_log e
-		WHERE  e.created_at > NOW() - (${period} || ' days')::interval
+		WHERE  e.created_at > NOW() - ${interval}::interval
 		  AND  (${eventType} IS NULL OR e.event_type = ${eventType})
 		  AND  (${actorId}   IS NULL OR e.actor_id::text = ${actorId})
 		  AND  (${resourceType} IS NULL OR e.resource_type = ${resourceType})

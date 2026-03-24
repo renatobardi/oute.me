@@ -7,7 +7,6 @@ import { postFile, postJSON } from '$lib/server/ai-client';
 export const POST: RequestHandler = async ({ request, locals }) => {
 	if (!locals.user) throw error(401, 'Unauthorized');
 	if (!locals.dbUser?.is_admin) throw error(403, 'Forbidden');
-	const user = locals.user;
 
 	const formData = await request.formData();
 	const file = formData.get('file') as File | null;
@@ -30,14 +29,21 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		return jsonError(422, 'Não foi possível extrair texto do documento. Verifique se o arquivo está legível.');
 	}
 
-	const entry = await createKnowledgeEntry({
-		type: 'document',
-		title,
-		content: extracted.extracted_text,
-		filename: file.name,
-		mime_type: file.type,
-		created_by: user.uid,
-	});
+	let entry;
+	try {
+		entry = await createKnowledgeEntry({
+			type: 'document',
+			title,
+			content: extracted.extracted_text,
+			filename: file.name,
+			mime_type: file.type,
+			created_by: locals.dbUser!.id,
+		});
+	} catch (err) {
+		console.error('[admin/knowledge/upload] DB insert error:', err);
+		const msg = err instanceof Error ? err.message : 'Unknown error';
+		return jsonError(500, `Erro ao salvar documento: ${msg}`);
+	}
 
 	// Embed in vector store (best-effort)
 	try {

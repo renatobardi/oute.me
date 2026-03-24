@@ -28,10 +28,11 @@
 				</a>
 			{/each}
 		</div>
-		<div class="nav-right">
-			<ServiceHealth />
-		</div>
 	</nav>
+
+	<div class="status-bar">
+		<ServiceHealth />
+	</div>
 
 	<div class="admin-content">
 		{@render children()}
@@ -45,9 +46,6 @@
 	}
 
 	.tab-nav {
-		display: flex;
-		justify-content: space-between;
-		align-items: center;
 		border-bottom: 1px solid var(--color-dark-border, rgba(255, 255, 255, 0.08));
 		padding: 0 1.5rem;
 		background: var(--color-dark-surface, #1a1d27);
@@ -81,9 +79,13 @@
 		border-bottom-color: var(--color-primary-500, #6366f1);
 	}
 
-	.nav-right {
+	.status-bar {
 		display: flex;
+		justify-content: flex-end;
 		align-items: center;
+		padding: 0.375rem 1.5rem;
+		background: var(--color-dark-surface, #1a1d27);
+		border-bottom: 1px solid var(--color-dark-border, rgba(255, 255, 255, 0.08));
 	}
 
 	.admin-content {
