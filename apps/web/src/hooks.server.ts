@@ -37,6 +37,18 @@ const cacheControl: Handle = async ({ event, resolve }) => {
 	return response;
 };
 
+const ALLOWED_HOSTS = new Set(
+	(process.env.ALLOWED_HOSTS ?? 'oute.pro,dev.oute.pro,localhost').split(',')
+);
+
+const blockRunAppUrl: Handle = async ({ event, resolve }) => {
+	const host = (event.request.headers.get('host') ?? '').split(':')[0];
+	if (!ALLOWED_HOSTS.has(host)) {
+		return new Response('Forbidden', { status: 403 });
+	}
+	return resolve(event);
+};
+
 const redirectWww: Handle = async ({ event, resolve }) => {
 	const host = event.request.headers.get('host') ?? '';
 	if (host.startsWith('www.')) {
@@ -115,4 +127,4 @@ const gateUser: Handle = async ({ event, resolve }) => {
 	return resolve(event);
 };
 
-export const handle = sequence(redirectWww, rateLimit, authenticate, gateUser, cacheControl, securityHeaders);
+export const handle = sequence(blockRunAppUrl, redirectWww, rateLimit, authenticate, gateUser, cacheControl, securityHeaders);
