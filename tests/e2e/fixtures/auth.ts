@@ -1,44 +1,107 @@
 import { test as base, type Page } from '@playwright/test';
 
 /**
- * Firebase test user credentials.
- * Set via environment variables:
- *   TEST_USER_EMAIL, TEST_USER_PASSWORD
+ * Credenciais via env vars:
  *
- * For CI, create a test user in Firebase with known credentials.
+ *   E2E_TEST_EMAIL / E2E_TEST_PASSWORD       — usuário admin (e2e-test@oute.pro)
+ *   E2E_NONADMIN_EMAIL / E2E_NONADMIN_PASSWORD — usuário não-admin (e2e-nonadmin@oute.pro)
+ *   E2E_FIREBASE_API_KEY                     — Web API key do projeto Firebase
+ *   E2E_BASE_URL                             — URL base da aplicação
  */
-export const TEST_USER = {
-  email: process.env.TEST_USER_EMAIL || 'test@oute.pro',
-  password: process.env.TEST_USER_PASSWORD || 'test-password-change-me',
-};
+const FIREBASE_API_KEY = process.env.E2E_FIREBASE_API_KEY ?? '';
+const BASE_URL = process.env.E2E_BASE_URL ?? 'http://localhost:5173';
+
+// --- usuário admin ---
+const TEST_EMAIL = process.env.E2E_TEST_EMAIL ?? 'e2e-test@oute.pro';
+const TEST_PASSWORD = process.env.E2E_TEST_PASSWORD ?? '';
+
+// --- usuário não-admin ---
+const NONADMIN_EMAIL = process.env.E2E_NONADMIN_EMAIL ?? 'e2e-nonadmin@oute.pro';
+const NONADMIN_PASSWORD = process.env.E2E_NONADMIN_PASSWORD ?? '';
 
 /**
- * Extended test fixture with authenticated page.
- *
- * Usage:
- *   import { test, expect } from '../fixtures/auth';
- *   test('my test', async ({ authenticatedPage }) => { ... });
+ * Obtém um Firebase idToken via REST API (sem UI, sem client SDK).
  */
-export const test = base.extend<{ authenticatedPage: Page }>({
-  authenticatedPage: async ({ page }, use) => {
-    // Navigate to login
-    await page.goto('/login');
+async function getFirebaseIdToken(email: string, password: string): Promise<string> {
+  const url =
+    `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${FIREBASE_API_KEY}`;
 
-    // Wait for Firebase UI to load
-    await page.waitForSelector('[data-testid="email-input"], input[type="email"]', {
-      timeout: 10000,
-    });
+  const resp = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password, returnSecureToken: true }),
+  });
 
-    // Fill in credentials
-    await page.fill('input[type="email"]', TEST_USER.email);
-    await page.fill('input[type="password"]', TEST_USER.password);
+  if (!resp.ok) {
+    const body = await resp.text();
+    throw new Error(`Firebase REST auth falhou (${resp.status}): ${body}`);
+  }
 
-    // Submit
-    await page.click('button[type="submit"]');
+  const json = (await resp.json()) as { idToken: string };
+  return json.idToken;
+}
 
-    // Wait for redirect to dashboard/projects
-    await page.waitForURL(/\/(projects|$)/, { timeout: 15000 });
+/**
+ * Cria uma sessão server-side e injeta o cookie __session no browser context.
+ */
+async function injectSession(
+  page: Page,
+  context: import('@playwright/test').BrowserContext,
+  email: string,
+  password: string,
+): Promise<void> {
+  const idToken = await getFirebaseIdToken(email, password);
 
+  const sessionResp = await page.request.post(`${BASE_URL}/api/auth/session`, {
+    data: { idToken },
+    headers: { 'Content-Type': 'application/json' },
+  });
+
+  if (!sessionResp.ok()) {
+    const body = await sessionResp.text();
+    throw new Error(`Criação de sessão falhou (${sessionResp.status()}): ${body}`);
+  }
+
+  const setCookieHeader = sessionResp.headers()['set-cookie'] ?? '';
+  const sessionMatch = setCookieHeader.match(/__session=([^;]+)/);
+
+  if (!sessionMatch) {
+    throw new Error('Cookie __session não encontrado na resposta de /api/auth/session');
+  }
+
+  const hostname = new URL(BASE_URL).hostname;
+  await context.addCookies([
+    {
+      name: '__session',
+      value: sessionMatch[1],
+      domain: hostname,
+      path: '/',
+      httpOnly: true,
+      secure: BASE_URL.startsWith('https'),
+      sameSite: 'Strict',
+    },
+  ]);
+}
+
+type AuthFixtures = {
+  /** Page autenticada como usuário admin (e2e-test@oute.pro). */
+  authenticatedPage: Page;
+  /** Page autenticada como usuário não-admin (e2e-nonadmin@oute.pro). */
+  nonAdminPage: Page;
+};
+
+export const test = base.extend<AuthFixtures>({
+  authenticatedPage: async ({ page, context }, use) => {
+    await injectSession(page, context, TEST_EMAIL, TEST_PASSWORD);
+    await page.goto('/interviews');
+    await page.waitForURL(/\/interviews/, { timeout: 15000 });
+    await use(page);
+  },
+
+  nonAdminPage: async ({ page, context }, use) => {
+    await injectSession(page, context, NONADMIN_EMAIL, NONADMIN_PASSWORD);
+    await page.goto('/interviews');
+    await page.waitForURL(/\/interviews/, { timeout: 15000 });
     await use(page);
   },
 });

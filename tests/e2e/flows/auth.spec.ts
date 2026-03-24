@@ -1,50 +1,46 @@
 import { test, expect } from '@playwright/test';
+import { test as authTest } from '../fixtures/auth';
 
 test.describe('Authentication', () => {
-  test('redirects unauthenticated user to login', async ({ page }) => {
-    await page.goto('/projects');
+  test('rota protegida redireciona para /login sem autenticação', async ({ page }) => {
+    await page.goto('/interviews');
 
-    // Should redirect to login page
     await page.waitForURL(/\/login/, { timeout: 10000 });
     expect(page.url()).toContain('/login');
   });
 
-  test('login page has email and password fields', async ({ page }) => {
+  test('página de login tem campos de email e password', async ({ page }) => {
     await page.goto('/login');
-
-    // Wait for the page to load
     await page.waitForLoadState('networkidle');
 
-    // Look for login form elements (Firebase Auth UI)
     const emailInput = page.locator('input[type="email"]');
     const passwordInput = page.locator('input[type="password"]');
 
-    // At least the email field should be present
     await expect(emailInput).toBeVisible({ timeout: 10000 });
+    await expect(passwordInput).toBeVisible({ timeout: 10000 });
   });
 
-  test('shows error on invalid credentials', async ({ page }) => {
+  test('credenciais inválidas exibem mensagem de erro', async ({ page }) => {
     await page.goto('/login');
     await page.waitForLoadState('networkidle');
 
-    // Fill with invalid credentials
-    const emailInput = page.locator('input[type="email"]');
-    if (await emailInput.isVisible({ timeout: 5000 })) {
-      await emailInput.fill('invalid@example.com');
+    await page.locator('input[type="email"]').fill('invalido@example.com');
+    await page.locator('input[type="password"]').fill('senha-errada');
+    await page.locator('button[type="submit"]').click();
 
-      const passwordInput = page.locator('input[type="password"]');
-      if (await passwordInput.isVisible({ timeout: 2000 })) {
-        await passwordInput.fill('wrong-password');
-
-        const submitButton = page.locator('button[type="submit"]');
-        if (await submitButton.isVisible({ timeout: 2000 })) {
-          await submitButton.click();
-
-          // Should show an error message
-          const errorMessage = page.locator('[class*="error"], [role="alert"], .error');
-          await expect(errorMessage).toBeVisible({ timeout: 10000 });
-        }
-      }
-    }
+    // O login page exibe erros via classe .error ou role="alert"
+    const errorMessage = page.locator('[class*="error"], [role="alert"], .error').first();
+    await expect(errorMessage).toBeVisible({ timeout: 15000 });
   });
+});
+
+// Teste de login válido usa o fixture para não depender da UI do Firebase
+authTest.describe('Login com credenciais válidas', () => {
+  authTest(
+    'redireciona para /interviews após autenticação bem-sucedida',
+    async ({ authenticatedPage: page }) => {
+      // O fixture já autenticou e navegou para /interviews
+      await expect(page).toHaveURL(/\/interviews/, { timeout: 10000 });
+    },
+  );
 });

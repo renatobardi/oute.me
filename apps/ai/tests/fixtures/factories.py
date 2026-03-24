@@ -8,39 +8,50 @@ from typing import Any
 from src.models.interview import ChatRequest, DomainState, InterviewState, MessageEntry
 
 
-def make_domain_state(
-    answered: int = 0,
-    total: int = 5,
-    vital_answered: bool = False,
-) -> DomainState:
+def make_domain_state(**overrides: object) -> DomainState:
     """Factory para DomainState com valores customizáveis."""
-    return DomainState(
-        answered=answered,
-        total=total,
-        vital_answered=vital_answered,
-    )
+    defaults: dict[str, object] = {"answered": 0, "total": 5, "vital_answered": False}
+    defaults.update(overrides)
+    return DomainState(**defaults)  # type: ignore[arg-type]
 
 
-def make_interview_state(
-    project_type: str = "new",
-    setup_confirmed: bool = False,
-    domains: dict[str, DomainState] | None = None,
-    responses: dict[str, dict[str, str | bool]] | None = None,
-    conversation_summary: str = "",
-    open_questions: list[str] | None = None,
-    documents_processed: list[str] | None = None,
-    last_questions_asked: list[str] | None = None,
-) -> InterviewState:
-    """Factory para InterviewState com valores customizáveis."""
+def make_interview_state(**kwargs: object) -> InterviewState:
+    """Factory para InterviewState.
+
+    Suporta dois padrões:
+    1. Keyword puro: make_interview_state(project_type="new", conversation_summary="...")
+    2. Domain overrides via dicts: make_interview_state(scope={"answered": 3, "total": 5, ...})
+       — cada kwarg cujo valor é dict é tratado como domain override.
+    """
+    domain_names = {"scope", "timeline", "budget", "integrations", "tech_stack"}
+    domain_overrides: dict[str, dict[str, object]] = {}
+    state_kwargs: dict[str, object] = {}
+
+    for key, value in kwargs.items():
+        if key in domain_names and isinstance(value, dict):
+            domain_overrides[key] = value
+        else:
+            state_kwargs[key] = value
+
+    if domain_overrides:
+        domains: dict[str, DomainState] = {}
+        for name in domain_names:
+            if name in domain_overrides:
+                domains[name] = make_domain_state(**domain_overrides[name])
+        state_kwargs["domains"] = domains
+
+    if "domains" not in state_kwargs:
+        state_kwargs.setdefault("domains", {})
+
     return InterviewState(
-        project_type=project_type,
-        setup_confirmed=setup_confirmed,
-        domains=domains or {},
-        responses=responses or {},
-        conversation_summary=conversation_summary,
-        open_questions=open_questions or [],
-        documents_processed=documents_processed or [],
-        last_questions_asked=last_questions_asked or [],
+        project_type=str(state_kwargs.pop("project_type", "new")),
+        setup_confirmed=bool(state_kwargs.pop("setup_confirmed", False)),
+        domains=state_kwargs.pop("domains"),  # type: ignore[arg-type]
+        responses=state_kwargs.pop("responses", {}),  # type: ignore[arg-type]
+        conversation_summary=str(state_kwargs.pop("conversation_summary", "")),
+        open_questions=list(state_kwargs.pop("open_questions", [])),  # type: ignore[arg-type]
+        documents_processed=list(state_kwargs.pop("documents_processed", [])),  # type: ignore[arg-type]
+        last_questions_asked=list(state_kwargs.pop("last_questions_asked", [])),  # type: ignore[arg-type]
     )
 
 

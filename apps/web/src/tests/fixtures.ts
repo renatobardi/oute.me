@@ -317,17 +317,23 @@ export function createMockProjectTask(overrides?: Partial<ProjectTask>): Project
 }
 
 /**
- * Create a mock SvelteKit RequestEvent
+ * Create a mock SvelteKit RequestEvent.
+ * Por padrão inclui Bearer token no header — sobrescreva request.headers.get para testar sem auth.
  */
-export function createMockRequestEvent(overrides?: any) {
+export function createMockRequestEvent(overrides?: Record<string, unknown>) {
 	return {
 		request: {
-			headers: new Map([['authorization', 'Bearer test-token']]),
+			headers: {
+				get: (name: string): string | null => {
+					if (name.toLowerCase() === 'authorization') return 'Bearer test-token';
+					return null;
+				},
+			},
 			method: 'GET',
 			url: 'http://localhost:5173/api/test',
 		},
 		cookies: {
-			get: (name: string) => {
+			get: (name: string): string | undefined => {
 				if (name === '__session') return 'test-session-cookie';
 				return undefined;
 			},
@@ -339,5 +345,5 @@ export function createMockRequestEvent(overrides?: any) {
 		params: {},
 		locals: {},
 		...overrides,
-	};
+	} as any;
 }

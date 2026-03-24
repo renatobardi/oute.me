@@ -2,8 +2,10 @@ import { vi } from 'vitest';
 import type { DecodedIdToken } from 'firebase-admin/auth';
 
 /**
- * Mock Firebase Admin SDK for testing
- * Provides configurable token verification
+ * Mock do Firebase Admin SDK para testes.
+ *
+ * Uso nos testes:
+ *   vi.mock('$lib/server/firebase-admin', () => import('./__mocks__/firebase-admin'));
  */
 
 interface MockAuthConfig {
@@ -11,48 +13,45 @@ interface MockAuthConfig {
 	sessionCookieResult?: DecodedIdToken | null;
 	idTokenError?: Error | null;
 	sessionCookieError?: Error | null;
+	sessionCookieValue?: string | null;
 }
 
-let mockConfig: MockAuthConfig = {
-	idTokenResult: null,
-	sessionCookieResult: null,
-	idTokenError: null,
-	sessionCookieError: null,
-};
+let _config: MockAuthConfig = {};
 
-export function setMockAuthConfig(config: Partial<MockAuthConfig>) {
-	mockConfig = { ...mockConfig, ...config };
+/** Configura o comportamento dos métodos mockados. */
+export function setMockAuthConfig(config: Partial<MockAuthConfig>): void {
+	_config = { ..._config, ...config };
 }
 
-export function resetMockAuth() {
-	mockConfig = {
-		idTokenResult: null,
-		sessionCookieResult: null,
-		idTokenError: null,
-		sessionCookieError: null,
-	};
+/** Reseta para o estado inicial: todos os métodos rejeitam. */
+export function resetMockAuthConfig(): void {
+	_config = {};
 }
+
+/** Alias para compatibilidade. */
+export const resetMockAuth = resetMockAuthConfig;
 
 export function getAdminAuth() {
 	return {
-		verifyIdToken: vi.fn(async (token: string) => {
-			if (mockConfig.idTokenError) {
-				throw mockConfig.idTokenError;
-			}
-			if (mockConfig.idTokenResult) {
-				return mockConfig.idTokenResult;
-			}
-			throw new Error('Token verification failed');
+		verifyIdToken: vi.fn(async (_token: string): Promise<DecodedIdToken> => {
+			if (_config.idTokenError) throw _config.idTokenError;
+			if (_config.idTokenResult) return _config.idTokenResult;
+			throw new Error('auth/invalid-token');
 		}),
 
-		verifySessionCookie: vi.fn(async (cookie: string, checkRevoked: boolean) => {
-			if (mockConfig.sessionCookieError) {
-				throw mockConfig.sessionCookieError;
+		verifySessionCookie: vi.fn(
+			async (_cookie: string, _checkRevoked: boolean): Promise<DecodedIdToken> => {
+				if (_config.sessionCookieError) throw _config.sessionCookieError;
+				if (_config.sessionCookieResult) return _config.sessionCookieResult;
+				throw new Error('auth/invalid-session-cookie');
 			}
-			if (mockConfig.sessionCookieResult) {
-				return mockConfig.sessionCookieResult;
+		),
+
+		createSessionCookie: vi.fn(
+			async (_idToken: string, _options: { expiresIn: number }): Promise<string> => {
+				if (_config.sessionCookieValue) return _config.sessionCookieValue;
+				throw new Error('auth/invalid-token');
 			}
-			throw new Error('Session cookie verification failed');
-		}),
+		),
 	};
 }

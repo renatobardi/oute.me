@@ -168,6 +168,22 @@ describe('interview types (pure functions)', () => {
 			expect(Math.abs(maturity - 0.255) < 0.001).toBe(true);
 		});
 
+		it('returns 0 for domain with total=0 (avoids division by zero)', () => {
+			const state = createDefaultState();
+
+			// Override scope with total=0
+			state.domains.scope = { answered: 0, total: 0, vital_answered: false };
+			state.domains.timeline = { answered: 0, total: 5, vital_answered: false };
+			state.domains.budget = { answered: 0, total: 4, vital_answered: false };
+			state.domains.integrations = { answered: 0, total: 6, vital_answered: false };
+			state.domains.tech_stack = { answered: 0, total: 5, vital_answered: false };
+
+			const maturity = calculateMaturity(state);
+
+			// scope contributes 0 (total=0 → progress=0), others also 0
+			expect(maturity).toBe(0);
+		});
+
 		it('handles max answered > total (capped at 1.0 per domain)', () => {
 			const state = createDefaultState();
 

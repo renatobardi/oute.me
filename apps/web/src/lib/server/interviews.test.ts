@@ -157,6 +157,16 @@ describe('interviews.ts', () => {
 			);
 		});
 
+		it('throws when domain has invalid total (not number)', async () => {
+			const interviewId = 'int123';
+			const state = createDefaultInterviewState();
+			state.domains.scope.total = 'eight' as any;
+
+			await expect(updateInterviewState(interviewId, state, 0.5)).rejects.toThrow(
+				'Invalid interview state'
+			);
+		});
+
 		it('throws when vital_answered is not boolean', async () => {
 			const interviewId = 'int123';
 			const state = createDefaultInterviewState();
