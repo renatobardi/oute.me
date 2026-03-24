@@ -113,12 +113,14 @@ export const test = base.extend<AuthFixtures>({
     await page.waitForURL(/\/interviews/, { timeout: 15000 });
     await page.waitForLoadState('domcontentloaded');
 
-    // Debug: verifica cookie e URL após goto
+    // Debug: verifica cookie, URL e conteúdo da página
     const cookiesAfter = await context.cookies();
     const sessionAfter = cookiesAfter.find((c) => c.name === '__session');
     console.log(`[auth-fixture] URL after goto: ${page.url()}`);
     console.log(`[auth-fixture] cookie after goto: present=${!!sessionAfter}, domain=${sessionAfter?.domain}, cookies_total=${cookiesAfter.length}`);
     console.log(`[auth-fixture] page title: ${await page.title()}`);
+    const bodyText = await page.textContent('body').catch(() => 'ERROR_READING_BODY');
+    console.log(`[auth-fixture] body text (first 500 chars): ${bodyText?.slice(0, 500)}`);
 
     await use(page);
   },
