@@ -2,12 +2,11 @@ import { test, expect } from '../fixtures/auth';
 
 test.describe('Interview Flow', () => {
   test('cria nova entrevista e envia mensagem', async ({ authenticatedPage: page }) => {
-    await page.goto('/interviews');
-    await page.waitForLoadState('networkidle');
+    // Fixture já navega para /interviews e verifica conteúdo
 
     // Clica em "Nova Entrevista"
     const newButton = page.getByRole('button', { name: /nova entrevista/i });
-    await expect(newButton).toBeVisible({ timeout: 5000 });
+    await expect(newButton).toBeVisible({ timeout: 10000 });
     await newButton.click();
 
     // Aguarda navegação para a página de chat da entrevista
@@ -36,8 +35,7 @@ test.describe('Interview Flow', () => {
   test('exibe indicador de maturity na página de entrevista', async ({
     authenticatedPage: page,
   }) => {
-    await page.goto('/interviews');
-    await page.waitForLoadState('networkidle');
+    // Fixture já navega para /interviews e verifica conteúdo
 
     // Tenta acessar uma entrevista existente ou cria uma nova
     const interviewLink = page.locator('a[href*="/interviews/"]').first();

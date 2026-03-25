@@ -6,8 +6,6 @@ Testes para interview_initializer.py:
 - DEFAULT_DOMAIN_TOTALS
 """
 
-import pytest
-
 from src.models.interview import DomainState
 from src.services.interview_initializer import (
     DEFAULT_DOMAIN_TOTALS,

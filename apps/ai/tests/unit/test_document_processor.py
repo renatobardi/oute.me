@@ -41,7 +41,7 @@ class TestExtractTextDispatch:
 
     @pytest.mark.asyncio
     async def test_routes_docx_to_extract_docx(self) -> None:
-        """MIME type application/vnd.openxmlformats-officedocument.wordprocessingml.document → _extract_docx"""
+        """Route MIME application/vnd.openxmlformats-officedocument.wordprocessingml.document"""
         mock_extract = AsyncMock(return_value="DOCX content")
 
         with patch("src.services.document_processor._extract_docx", mock_extract):
@@ -56,7 +56,7 @@ class TestExtractTextDispatch:
 
     @pytest.mark.asyncio
     async def test_routes_xlsx_to_extract_xlsx(self) -> None:
-        """MIME type application/vnd.openxmlformats-officedocument.spreadsheetml.sheet → _extract_xlsx"""
+        """Route MIME application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"""
         # _extract_xlsx é síncrono — usar MagicMock, não AsyncMock
         mock_extract = MagicMock(return_value="XLSX content")
 
@@ -88,7 +88,7 @@ class TestExtractTextDispatch:
 
     @pytest.mark.asyncio
     async def test_routes_pptx_to_extract_pptx(self) -> None:
-        """MIME type application/vnd.openxmlformats-officedocument.presentationml.presentation → _extract_pptx"""
+        """Route MIME application/vnd.openxmlformats-officedocument.presentationml.pres"""
         # _extract_pptx é síncrono — usar MagicMock, não AsyncMock
         mock_extract = MagicMock(return_value="PPTX content")
 
@@ -119,7 +119,7 @@ class TestExtractTextDispatch:
         mock_extract = AsyncMock(return_value="JPEG description")
 
         with patch("src.services.document_processor._extract_image", mock_extract):
-            result = await extract_text(b"fake jpeg bytes", "image/jpeg", "test.jpg")
+            await extract_text(b"fake jpeg bytes", "image/jpeg", "test.jpg")
 
         mock_extract.assert_called_once()
 
@@ -243,7 +243,7 @@ class TestMicrosoftLegacyFormats:
         mock_extract = AsyncMock(return_value="Legacy DOC content")
 
         with patch("src.services.document_processor._extract_docx", mock_extract):
-            result = await extract_text(b"bytes", "application/msword", "test.doc")
+            await extract_text(b"bytes", "application/msword", "test.doc")
 
         mock_extract.assert_called_once()
 
@@ -273,11 +273,14 @@ class TestImageExtraction:
         mock_response.text = "Description of the image content"
         mock_model.generate_content_async = AsyncMock(return_value=mock_response)
 
-        with patch(
-            "vertexai.generative_models.GenerativeModel",
-            return_value=mock_model,
-        ), patch(
-            "vertexai.generative_models.Part",
+        with (
+            patch(
+                "vertexai.generative_models.GenerativeModel",
+                return_value=mock_model,
+            ),
+            patch(
+                "vertexai.generative_models.Part",
+            ),
         ):
             result = await _extract_image(b"fake image bytes", "image/png")
 
@@ -293,11 +296,14 @@ class TestImageExtraction:
         mock_response.text = "x" * (MAX_EXTRACTED_LENGTH + 100)
         mock_model.generate_content_async = AsyncMock(return_value=mock_response)
 
-        with patch(
-            "vertexai.generative_models.GenerativeModel",
-            return_value=mock_model,
-        ), patch(
-            "vertexai.generative_models.Part",
+        with (
+            patch(
+                "vertexai.generative_models.GenerativeModel",
+                return_value=mock_model,
+            ),
+            patch(
+                "vertexai.generative_models.Part",
+            ),
         ):
             result = await _extract_image(b"fake image bytes", "image/png")
 
@@ -313,11 +319,14 @@ class TestImageExtraction:
         mock_response.text = None
         mock_model.generate_content_async = AsyncMock(return_value=mock_response)
 
-        with patch(
-            "vertexai.generative_models.GenerativeModel",
-            return_value=mock_model,
-        ), patch(
-            "vertexai.generative_models.Part",
+        with (
+            patch(
+                "vertexai.generative_models.GenerativeModel",
+                return_value=mock_model,
+            ),
+            patch(
+                "vertexai.generative_models.Part",
+            ),
         ):
             result = await _extract_image(b"fake image bytes", "image/png")
 

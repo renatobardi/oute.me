@@ -33,6 +33,7 @@ describe('auth.ts', () => {
 				email_verified: user.emailVerified,
 				name: user.name,
 				uid: user.uid,
+				firebase: { sign_in_provider: 'custom', identities: {} },
 			};
 
 			setMockAuthConfig({ idTokenResult: decodedToken });
@@ -96,6 +97,7 @@ describe('auth.ts', () => {
 				email: user.email,
 				email_verified: user.emailVerified,
 				uid: user.uid,
+				firebase: { sign_in_provider: 'custom', identities: {} },
 			};
 
 			setMockAuthConfig({ sessionCookieResult: decodedToken });
@@ -165,6 +167,7 @@ describe('auth.ts', () => {
 				email_verified: false,
 				name: 'Custom Name',
 				uid: 'custom-uid',
+				firebase: { sign_in_provider: 'custom', identities: {} },
 			};
 
 			setMockAuthConfig({ idTokenResult: decodedToken });
@@ -188,6 +191,7 @@ describe('auth.ts', () => {
 				iat: Math.floor(Date.now() / 1000),
 				exp: Math.floor(Date.now() / 1000) + 3600,
 				uid: 'user789',
+				firebase: { sign_in_provider: 'custom', identities: {} },
 				// email is undefined
 			};
 
@@ -211,6 +215,7 @@ describe('auth.ts', () => {
 				email: 'bearer@example.com',
 				email_verified: true,
 				uid: 'bearer-user',
+				firebase: { sign_in_provider: 'custom', identities: {} },
 			};
 
 			setMockAuthConfig({ idTokenResult: bearerDecodedToken });

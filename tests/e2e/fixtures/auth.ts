@@ -43,42 +43,49 @@ async function getFirebaseIdToken(email: string, password: string): Promise<stri
 
 /**
  * Cria uma sessão server-side e injeta o cookie __session no browser context.
+ *
+ * Usa Node fetch (não page.request) para evitar que o Playwright auto-armazene
+ * o Set-Cookie com atributos implícitos que podem conflitar com a injeção manual.
+ * Após obter o cookie, limpa qualquer cookie existente no context e injeta
+ * um único cookie com atributos explícitos.
  */
 async function injectSession(
-  page: Page,
   context: import('@playwright/test').BrowserContext,
   email: string,
   password: string,
 ): Promise<void> {
   const idToken = await getFirebaseIdToken(email, password);
 
-  const sessionResp = await page.request.post(`${BASE_URL}/api/auth/session`, {
-    data: { idToken },
+  // Usa fetch nativo (não page.request) para não poluir o cookie jar do browser context
+  const sessionResp = await fetch(`${BASE_URL}/api/auth/session`, {
+    method: 'POST',
     headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ idToken }),
   });
 
-  if (!sessionResp.ok()) {
+  if (!sessionResp.ok) {
     const body = await sessionResp.text();
-    throw new Error(`Criação de sessão falhou (${sessionResp.status()}): ${body}`);
+    throw new Error(`Criação de sessão falhou (${sessionResp.status}): ${body}`);
   }
 
-  const setCookieHeader = sessionResp.headers()['set-cookie'] ?? '';
+  const setCookieHeader = sessionResp.headers.get('set-cookie') ?? '';
   const sessionMatch = setCookieHeader.match(/__session=([^;]+)/);
 
   if (!sessionMatch) {
     throw new Error('Cookie __session não encontrado na resposta de /api/auth/session');
   }
 
-  const hostname = new URL(BASE_URL).hostname;
+  // Limpa cookies existentes e injeta um único cookie limpo
+  await context.clearCookies();
+
   await context.addCookies([
     {
       name: '__session',
       value: sessionMatch[1],
-      domain: hostname,
-      path: '/',
+      url: BASE_URL,
       httpOnly: true,
       secure: BASE_URL.startsWith('https'),
-      sameSite: 'Strict',
+      sameSite: 'Lax',
     },
   ]);
 }
@@ -92,16 +99,33 @@ type AuthFixtures = {
 
 export const test = base.extend<AuthFixtures>({
   authenticatedPage: async ({ page, context }, use) => {
-    await injectSession(page, context, TEST_EMAIL, TEST_PASSWORD);
-    await page.goto('/interviews');
+    await injectSession(context, TEST_EMAIL, TEST_PASSWORD);
+
+    // Debug: verifica cookie antes do goto
+    const cookiesBefore = await context.cookies();
+    const sessionBefore = cookiesBefore.find((c) => c.name === '__session');
+    console.log(`[auth-fixture] email=${TEST_EMAIL}`);
+    console.log(`[auth-fixture] cookie: domain=${sessionBefore?.domain}, path=${sessionBefore?.path}, secure=${sessionBefore?.secure}, sameSite=${sessionBefore?.sameSite}`);
+
+    // Captura response status
+    const response = await page.goto('/interviews');
+    console.log(`[auth-fixture] response status: ${response?.status()}`);
+    console.log(`[auth-fixture] response url: ${response?.url()}`);
+
     await page.waitForURL(/\/interviews/, { timeout: 15000 });
+    await page.waitForLoadState('networkidle');
+
+    console.log(`[auth-fixture] final URL: ${page.url()}`);
+    console.log(`[auth-fixture] page title: ${await page.title()}`);
+
     await use(page);
   },
 
   nonAdminPage: async ({ page, context }, use) => {
-    await injectSession(page, context, NONADMIN_EMAIL, NONADMIN_PASSWORD);
+    await injectSession(context, NONADMIN_EMAIL, NONADMIN_PASSWORD);
     await page.goto('/interviews');
     await page.waitForURL(/\/interviews/, { timeout: 15000 });
+    await page.waitForLoadState('domcontentloaded');
     await use(page);
   },
 });
