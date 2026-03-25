@@ -1,0 +1,21 @@
+fase,milestone,responsavel,inicio,fim,status,horas_estimadas,descricao
+Fundação,Setup do projeto,Tech Lead,2024-01-08,2024-01-12,done,40,Configuração inicial do repositório e ambiente
+Fundação,Configuração CI/CD,DevOps,2024-01-08,2024-01-15,done,32,Pipeline de integração e deploy contínuo
+Fundação,Modelagem do banco,Backend Lead,2024-01-15,2024-01-19,done,24,Schema inicial do PostgreSQL
+Auth,Autenticação JWT,Backend Dev,2024-01-22,2024-01-26,done,32,Login e registro com Firebase Auth
+Auth,Controle de acesso,Backend Dev,2024-01-26,2024-01-31,done,24,RBAC com middleware de autorização
+Core,API de produtos,Backend Dev,2024-02-05,2024-02-16,in_progress,64,CRUD completo com paginação e filtros
+Core,Interface de listagem,Frontend Dev,2024-02-05,2024-02-12,in_progress,40,Tela de produtos com busca e filtros
+Core,Interface de detalhe,Frontend Dev,2024-02-12,2024-02-19,todo,32,Página de detalhes do produto
+Integrações,Gateway de pagamento,Backend Dev,2024-02-19,2024-03-01,todo,48,Integração com Stripe e PagSeguro
+Integrações,API de CEP/Frete,Backend Dev,2024-02-26,2024-03-04,todo,24,Cálculo de frete via Correios e transportadoras
+Notificações,Email transacional,Backend Dev,2024-03-04,2024-03-08,todo,20,Templates e envio via SendGrid
+Notificações,Push notifications,Mobile Dev,2024-03-04,2024-03-15,todo,40,Firebase Cloud Messaging
+Relatórios,Dashboard de vendas,Frontend Dev,2024-03-11,2024-03-22,todo,56,Gráficos e métricas de negócio
+Relatórios,Exportação CSV/PDF,Backend Dev,2024-03-18,2024-03-25,todo,24,Relatórios exportáveis
+QA,Testes de integração,QA Engineer,2024-03-11,2024-03-25,todo,48,Cobertura de 80% dos endpoints
+QA,Testes E2E,QA Engineer,2024-03-18,2024-03-29,todo,40,Fluxos críticos com Playwright
+Performance,Otimização de queries,DBA,2024-03-25,2024-03-29,todo,20,Índices e query optimization
+Performance,Cache com Redis,Backend Dev,2024-03-25,2024-04-01,todo,24,Caching de sessões e consultas frequentes
+Deploy,Configuração Cloud Run,DevOps,2024-04-01,2024-04-05,todo,24,Deploy em GCP Cloud Run com autoscaling
+Deploy,Go-live e monitoramento,Tech Lead,2024-04-05,2024-04-08,todo,16,Lançamento e monitoramento com Grafana
