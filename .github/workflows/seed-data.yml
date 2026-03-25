@@ -1,0 +1,71 @@
+name: Seed Dev Data
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - staging
+      clean_before:
+        description: 'Limpar dados [SEED] existentes antes do seed'
+        required: false
+        default: false
+        type: boolean
+
+jobs:
+  seed:
+    name: Generate Seed Data (${{ inputs.environment }})
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright browsers
+        run: cd tests/e2e && npx playwright install chromium --with-deps
+
+      - name: Cleanup existing seed data
+        if: ${{ inputs.clean_before == 'true' }}
+        run: pnpm seed:clean
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
+      - name: Generate fixture files
+        run: pnpm seed:fixtures
+        env:
+          # As fixtures são geradas localmente — não precisam de credenciais externas
+
+      - name: Run seed
+        run: pnpm seed:e2e
+        env:
+          E2E_BASE_URL: ${{ vars.E2E_BASE_URL }}
+          E2E_TEST_EMAIL: ${{ secrets.E2E_TEST_EMAIL }}
+          E2E_TEST_PASSWORD: ${{ secrets.E2E_TEST_PASSWORD }}
+          E2E_FIREBASE_API_KEY: ${{ secrets.E2E_FIREBASE_API_KEY }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: seed-screenshots-${{ inputs.environment }}-${{ github.run_number }}
+          path: tests/e2e/seed/screenshots/
+          retention-days: 30
