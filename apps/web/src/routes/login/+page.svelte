@@ -98,16 +98,8 @@
 			context: 'signin',
 		});
 
-		window.google.accounts.id.prompt((notification) => {
+		window.google.accounts.id.prompt(() => {
 			// One Tap não disponível neste browser/sessão — o botão fallback permanece visível
-			if (notification.isNotDisplayed()) {
-				console.warn('[One Tap] not displayed:', notification.getNotDisplayedReason());
-				return;
-			}
-			if (notification.isSkippedMoment()) {
-				console.warn('[One Tap] skipped:', notification.getSkippedReason());
-				return;
-			}
 		});
 	}
 
@@ -124,10 +116,10 @@
 	async function loginWithGoogle() {
 		if (window.google?.accounts?.id) {
 			window.google.accounts.id.prompt((notification) => {
-				if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
+				// FedCM: cai no popup apenas se o prompt não foi exibido
+				if (notification.isNotDisplayed()) {
 					doPopupLogin();
 				}
-				// Se One Tap aparecer, handleOneTapCredential cuida do resto
 			});
 			return;
 		}
