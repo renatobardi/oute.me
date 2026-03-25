@@ -94,15 +94,12 @@
 			callback: handleOneTapCredential,
 			auto_select: false,
 			cancel_on_tap_outside: true,
-			use_fedcm_for_prompt: false,
-			itp_support: true,
+			use_fedcm_for_prompt: true,
 			context: 'signin',
 		});
 
-		window.google.accounts.id.prompt((notification) => {
-			// One Tap não disponível neste browser/sessão — o botão fallback permanece visível
-			if (notification.isNotDisplayed() || notification.isSkippedMoment()) return;
-		});
+		// FedCM gerencia o prompt nativamente — sem callback para evitar métodos depreciados
+		window.google.accounts.id.prompt();
 	}
 
 	onMount(() => {
@@ -114,17 +111,10 @@
 		}
 	});
 
-	// ── Botão fallback: tenta re-prompt One Tap antes de abrir popup ─────────
+	// ── Botão "Entrar com Google": abre popup diretamente ────────────────────
+	// O FedCM já foi tentado automaticamente no onMount via initOneTap.
+	// O botão é o fallback explícito — vai direto pro popup sem re-tentar FedCM.
 	async function loginWithGoogle() {
-		if (window.google?.accounts?.id) {
-			window.google.accounts.id.prompt((notification) => {
-				if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
-					doPopupLogin();
-				}
-				// Se One Tap aparecer, handleOneTapCredential cuida do resto
-			});
-			return;
-		}
 		await doPopupLogin();
 	}
 
