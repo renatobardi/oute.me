@@ -5,9 +5,18 @@
     "test": "playwright test",
     "test:headed": "playwright test --headed",
     "test:debug": "playwright test --debug",
-    "report": "playwright show-report"
+    "report": "playwright show-report",
+    "seed": "playwright test --config=playwright.seed.config.ts",
+    "seed:fixtures": "npx tsx seed/generate-fixtures.ts"
   },
   "devDependencies": {
-    "@playwright/test": "^1.50.0"
+    "@playwright/test": "^1.50.0",
+    "@types/node": "^22.0.0",
+    "@types/pg": "^8.11.0",
+    "docx": "^9.0.0",
+    "exceljs": "^4.4.0",
+    "pdfkit": "^0.15.0",
+    "pg": "^8.13.0",
+    "pptxgenjs": "^3.12.0"
   }
 }

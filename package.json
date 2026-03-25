@@ -20,7 +20,10 @@
 		"typecheck:py": "cd apps/ai && uv run mypy src/",
 		"migrate": "tsx database/migrate.ts",
 		"migrate:status": "tsx database/migrate.ts status",
-		"migrate:dry": "tsx database/migrate.ts up --dry-run"
+		"migrate:dry": "tsx database/migrate.ts up --dry-run",
+		"seed:e2e": "cd tests/e2e && pnpm seed",
+		"seed:fixtures": "cd tests/e2e && pnpm seed:fixtures",
+		"seed:clean": "tsx scripts/seed-clean.ts"
 	},
 	"dependencies": {
 		"postgres": "^3.4.8"
