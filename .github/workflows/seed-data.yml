@@ -50,8 +50,6 @@ jobs:
 
       - name: Generate fixture files
         run: pnpm seed:fixtures
-        env:
-          # As fixtures são geradas localmente — não precisam de credenciais externas
 
       - name: Run seed
         run: pnpm seed:e2e
