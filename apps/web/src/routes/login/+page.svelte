@@ -116,8 +116,8 @@
 	async function loginWithGoogle() {
 		if (window.google?.accounts?.id) {
 			window.google.accounts.id.prompt((notification) => {
-				// FedCM: cai no popup apenas se o prompt não foi exibido
-				if (notification.isNotDisplayed()) {
+				// FedCM: cai no popup apenas se o prompt não foi exibido pelo browser
+				if (!notification.isDisplayMoment()) {
 					doPopupLogin();
 				}
 			});
