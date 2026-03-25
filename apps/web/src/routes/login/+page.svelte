@@ -98,9 +98,8 @@
 			context: 'signin',
 		});
 
-		window.google.accounts.id.prompt((notification) => {
+		window.google.accounts.id.prompt(() => {
 			// One Tap não disponível neste browser/sessão — o botão fallback permanece visível
-			if (notification.isNotDisplayed() || notification.isSkippedMoment()) return;
 		});
 	}
 
@@ -117,10 +116,11 @@
 	async function loginWithGoogle() {
 		if (window.google?.accounts?.id) {
 			window.google.accounts.id.prompt((notification) => {
-				if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
+				// FedCM: cai no popup apenas se o prompt não foi exibido (browser sem suporte, sem conta Google)
+				// isDismissedMoment: usuário fechou o FedCM — não abre popup automaticamente
+				if (notification.isNotDisplayed()) {
 					doPopupLogin();
 				}
-				// Se One Tap aparecer, handleOneTapCredential cuida do resto
 			});
 			return;
 		}
