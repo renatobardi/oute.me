@@ -101,7 +101,14 @@
 
 		window.google.accounts.id.prompt((notification) => {
 			// One Tap não disponível neste browser/sessão — o botão fallback permanece visível
-			if (notification.isNotDisplayed() || notification.isSkippedMoment()) return;
+			if (notification.isNotDisplayed()) {
+				console.warn('[One Tap] not displayed:', notification.getNotDisplayedReason());
+				return;
+			}
+			if (notification.isSkippedMoment()) {
+				console.warn('[One Tap] skipped:', notification.getSkippedReason());
+				return;
+			}
 		});
 	}
 
